@@ -8,7 +8,7 @@
         <attribute name="payPeriodKind" optional="NO" attributeType="String"/>
         <attribute name="payPeriodAnchorDate" optional="YES" attributeType="Date"/>
         <attribute name="createdAt" optional="NO" attributeType="Date"/>
-        <relationship name="payRates" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="PayRateEntity" inverseName="job" inverseEntity="PayRateEntity"/>
+        <relationship name="payRates" optional="NO" minCount="1" toMany="YES" deletionRule="Cascade" destinationEntity="PayRateEntity" inverseName="job" inverseEntity="PayRateEntity"/>
     </entity>
     <entity name="PayRateEntity" representedClassName="PayRateEntity" customModuleProvider="target" codeGenerationType="none">
         <attribute name="id" optional="NO" attributeType="UUID"/>
