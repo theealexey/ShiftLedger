@@ -8,7 +8,8 @@ struct JobStorageTests {
     @Test("Job сохраняется в SQLite и восстанавливается новым Core Data stack")
     func persistsJobAcrossNewCoreDataStack() async throws {
         let storeURL = try makeTemporaryStoreURL()
-        defer { removeTemporaryStoreDirectory(for: storeURL) }
+        var stacks: [CoreDataStack] = []
+        defer { removeTemporaryStoreDirectory(for: storeURL, stacks: stacks) }
 
         let jobID = try #require(UUID(uuidString: "7F807529-1C39-4980-A9C1-237D56B6A407"))
         let earlierPayRateID = try #require(UUID(uuidString: "E11289B7-AFBF-4688-ACF2-F7B343EF2CF4"))
@@ -42,13 +43,13 @@ struct JobStorageTests {
             createdAt: createdAt
         )
 
-        do {
-            let stackA = try await CoreDataStack.load(storeURL: storeURL)
-            let storageA = JobStorage(stack: stackA)
-            try storageA.save(job)
-        }
+        let stackA = try await CoreDataStack.load(storeURL: storeURL)
+        stacks.append(stackA)
+        let storageA = JobStorage(stack: stackA)
+        try storageA.save(job)
 
         let stackB = try await CoreDataStack.load(storeURL: storeURL)
+        stacks.append(stackB)
         let storageB = JobStorage(stack: stackB)
         let restoredJob = try #require(try storageB.load())
 
@@ -65,9 +66,11 @@ struct JobStorageTests {
     @Test("Пустой SQLite store не содержит Job")
     func loadsNilFromEmptyStore() async throws {
         let storeURL = try makeTemporaryStoreURL()
-        defer { removeTemporaryStoreDirectory(for: storeURL) }
+        var stacks: [CoreDataStack] = []
+        defer { removeTemporaryStoreDirectory(for: storeURL, stacks: stacks) }
 
         let stack = try await CoreDataStack.load(storeURL: storeURL)
+        stacks.append(stack)
         let storage = JobStorage(stack: stack)
         let loadedJob = try storage.load()
 
@@ -77,7 +80,8 @@ struct JobStorageTests {
     @Test("Вторая Job отклоняется без потери первой")
     func rejectsSecondJobAndPreservesFirstJob() async throws {
         let storeURL = try makeTemporaryStoreURL()
-        defer { removeTemporaryStoreDirectory(for: storeURL) }
+        var stacks: [CoreDataStack] = []
+        defer { removeTemporaryStoreDirectory(for: storeURL, stacks: stacks) }
 
         let firstPayRate = try PayRate(
             id: try #require(UUID(uuidString: "38A1902D-198E-4DA0-BDC8-A3FDCD08FA60")),
@@ -101,6 +105,7 @@ struct JobStorageTests {
         )
 
         let stackA = try await CoreDataStack.load(storeURL: storeURL)
+        stacks.append(stackA)
         let storageA = JobStorage(stack: stackA)
         try storageA.save(firstJob)
 
@@ -116,6 +121,7 @@ struct JobStorageTests {
         #expect(loadedFromStackA == firstJob)
 
         let stackB = try await CoreDataStack.load(storeURL: storeURL)
+        stacks.append(stackB)
         let storageB = JobStorage(stack: stackB)
         let loadedFromStackB = try #require(try storageB.load())
         #expect(loadedFromStackB == firstJob)
@@ -124,7 +130,8 @@ struct JobStorageTests {
     @Test("Неканоническая дата ставки в SQLite отклоняется")
     func rejectsNonCanonicalPayRateEffectiveFrom() async throws {
         let storeURL = try makeTemporaryStoreURL()
-        defer { removeTemporaryStoreDirectory(for: storeURL) }
+        var stacks: [CoreDataStack] = []
+        defer { removeTemporaryStoreDirectory(for: storeURL, stacks: stacks) }
 
         let timeZone = try #require(TimeZone(identifier: "Europe/Stockholm"))
         let anchorDate = try LocalDate(year: 2026, month: 9, day: 1)
@@ -132,8 +139,9 @@ struct JobStorageTests {
         let canonicalPayRateDate = try anchorDate.startOfDay(in: timeZone)
         let nonCanonicalPayRateDate = canonicalPayRateDate.addingTimeInterval(60 * 60)
         let stack = try await CoreDataStack.load(storeURL: storeURL)
+        stacks.append(stack)
 
-        insertPersistedJob(
+        try insertPersistedJob(
             id: try #require(UUID(uuidString: "EF86AAAC-F75C-4E1F-AE61-D53A483FC4F4")),
             name: "Повреждённая работа",
             payRateID: try #require(UUID(uuidString: "1E8C105B-11D7-4BD1-B95D-E27A2B3DDFCA")),
@@ -157,7 +165,8 @@ struct JobStorageTests {
     @Test("Несколько Job в SQLite отклоняются как corruption")
     func rejectsMultiplePersistedJobs() async throws {
         let storeURL = try makeTemporaryStoreURL()
-        defer { removeTemporaryStoreDirectory(for: storeURL) }
+        var stacks: [CoreDataStack] = []
+        defer { removeTemporaryStoreDirectory(for: storeURL, stacks: stacks) }
 
         let timeZone = try #require(TimeZone(identifier: "Europe/Stockholm"))
         let anchorDate = try LocalDate(year: 2026, month: 9, day: 1)
@@ -165,8 +174,9 @@ struct JobStorageTests {
         let firstPayRateDate = try LocalDate(year: 2026, month: 9, day: 1).startOfDay(in: timeZone)
         let secondPayRateDate = try LocalDate(year: 2026, month: 10, day: 1).startOfDay(in: timeZone)
         let stack = try await CoreDataStack.load(storeURL: storeURL)
+        stacks.append(stack)
 
-        insertPersistedJob(
+        try insertPersistedJob(
             id: try #require(UUID(uuidString: "F2C97089-8A9D-4705-8370-2CF7796E9F85")),
             name: "Первая сохранённая работа",
             payRateID: try #require(UUID(uuidString: "A00C6FB1-A739-4752-80E3-380F6DB0C1EF")),
@@ -174,7 +184,7 @@ struct JobStorageTests {
             payPeriodAnchorDate: canonicalAnchorDate,
             in: stack.viewContext
         )
-        insertPersistedJob(
+        try insertPersistedJob(
             id: try #require(UUID(uuidString: "5FF3F4FA-43F0-4343-B645-D73E5A858A34")),
             name: "Вторая сохранённая работа",
             payRateID: try #require(UUID(uuidString: "4FB0D747-EA47-49A2-BD66-A0E2CF3C1E5D")),
@@ -209,8 +219,29 @@ struct JobStorageTests {
         return directory.appendingPathComponent("ShiftLedger.sqlite")
     }
 
-    private func removeTemporaryStoreDirectory(for storeURL: URL) {
-        try? FileManager.default.removeItem(at: storeURL.deletingLastPathComponent())
+    private func removeTemporaryStoreDirectory(for storeURL: URL, stacks: [CoreDataStack]) {
+        for stack in stacks {
+            let context = stack.viewContext
+            context.reset()
+
+            guard let coordinator = context.persistentStoreCoordinator else {
+                continue
+            }
+
+            for persistentStore in coordinator.persistentStores {
+                do {
+                    try coordinator.remove(persistentStore)
+                } catch {
+                    Issue.record(error)
+                }
+            }
+        }
+
+        do {
+            try FileManager.default.removeItem(at: storeURL.deletingLastPathComponent())
+        } catch {
+            Issue.record(error)
+        }
     }
 
     private func makeJob(id: UUID, name: String, payRates: [PayRate]) throws -> Job {
@@ -232,8 +263,15 @@ struct JobStorageTests {
         payRateEffectiveFrom: Date,
         payPeriodAnchorDate: Date,
         in context: NSManagedObjectContext
-    ) {
-        let jobEntity = JobEntity(context: context)
+    ) throws {
+        let jobEntityDescription = try #require(
+            NSEntityDescription.entity(forEntityName: "JobEntity", in: context)
+        )
+        let payRateEntityDescription = try #require(
+            NSEntityDescription.entity(forEntityName: "PayRateEntity", in: context)
+        )
+
+        let jobEntity = JobEntity(entity: jobEntityDescription, insertInto: context)
         jobEntity.id = id
         jobEntity.name = name
         jobEntity.currencyCode = "EUR"
@@ -242,7 +280,7 @@ struct JobStorageTests {
         jobEntity.payPeriodAnchorDate = payPeriodAnchorDate
         jobEntity.createdAt = Date(timeIntervalSinceReferenceDate: 900_000)
 
-        let payRateEntity = PayRateEntity(context: context)
+        let payRateEntity = PayRateEntity(entity: payRateEntityDescription, insertInto: context)
         payRateEntity.id = payRateID
         payRateEntity.amount = NSDecimalNumber(decimal: 120)
         payRateEntity.effectiveFrom = payRateEffectiveFrom

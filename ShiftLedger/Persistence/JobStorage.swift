@@ -22,6 +22,11 @@ enum JobStorageError: Error {
     case corruptedData(Corruption)
 }
 
+private enum ManagedObjectCreationError: Error {
+    case missingJobEntityDescription
+    case missingPayRateEntityDescription
+}
+
 @MainActor
 final class JobStorage {
     private enum StoredPayPeriodKind: String {
@@ -52,7 +57,24 @@ final class JobStorage {
             (payRate: payRate, effectiveFrom: try payRate.effectiveFrom.startOfDay(in: timeZone))
         }
 
-        let jobEntity = JobEntity(context: context)
+        guard let jobEntityDescription = NSEntityDescription.entity(
+            forEntityName: "JobEntity",
+            in: context
+        ) else {
+            throw JobStorageError.saveFailed(
+                underlying: ManagedObjectCreationError.missingJobEntityDescription
+            )
+        }
+        guard let payRateEntityDescription = NSEntityDescription.entity(
+            forEntityName: "PayRateEntity",
+            in: context
+        ) else {
+            throw JobStorageError.saveFailed(
+                underlying: ManagedObjectCreationError.missingPayRateEntityDescription
+            )
+        }
+
+        let jobEntity = JobEntity(entity: jobEntityDescription, insertInto: context)
         jobEntity.id = job.id
         jobEntity.name = job.name
         jobEntity.currencyCode = job.currencyCode
@@ -63,7 +85,7 @@ final class JobStorage {
 
         for storedPayRate in storedPayRates {
             let payRate = storedPayRate.payRate
-            let payRateEntity = PayRateEntity(context: context)
+            let payRateEntity = PayRateEntity(entity: payRateEntityDescription, insertInto: context)
             payRateEntity.id = payRate.id
             payRateEntity.amount = NSDecimalNumber(decimal: payRate.amount)
             payRateEntity.effectiveFrom = storedPayRate.effectiveFrom
