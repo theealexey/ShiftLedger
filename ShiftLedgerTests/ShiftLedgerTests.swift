@@ -209,10 +209,35 @@ struct ShiftLedgerTests {
         }
     }
 
+    @Test("Положительная ставка принимается")
+    func acceptsPositivePayRate() throws {
+        let payRate = try makePayRate(amount: 17)
+
+        #expect(payRate.amount == 17)
+    }
+
+    @Test("Дробная ставка принимается без округления")
+    func acceptsFractionalPayRateWithoutRounding() throws {
+        let amount = try #require(
+            Decimal(string: "17.125", locale: Locale(identifier: "en_US_POSIX"))
+        )
+
+        let payRate = try makePayRate(amount: amount)
+
+        #expect(payRate.amount == amount)
+    }
+
     @Test("Отрицательная ставка отклоняется")
     func rejectsNegativePayRate() {
-        #expect(throws: PayRateValidationError.negativeAmount) {
+        #expect(throws: PayRateValidationError.nonPositiveAmount) {
             try makePayRate(amount: -1)
+        }
+    }
+
+    @Test("Нулевая ставка отклоняется")
+    func rejectsZeroPayRate() {
+        #expect(throws: PayRateValidationError.nonPositiveAmount) {
+            try makePayRate(amount: .zero)
         }
     }
 

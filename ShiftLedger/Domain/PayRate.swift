@@ -1,7 +1,7 @@
 import Foundation
 
 enum PayRateValidationError: Error, Equatable {
-    case negativeAmount
+    case nonPositiveAmount
 }
 
 struct PayRate: Equatable {
@@ -10,8 +10,8 @@ struct PayRate: Equatable {
     let effectiveFrom: LocalDate
 
     init(id: UUID = UUID(), amount: Decimal, effectiveFrom: LocalDate) throws {
-        guard amount >= .zero else {
-            throw PayRateValidationError.negativeAmount
+        guard amount > .zero else {
+            throw PayRateValidationError.nonPositiveAmount
         }
 
         self.id = id
