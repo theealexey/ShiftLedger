@@ -73,26 +73,26 @@ final class JobSetupView: UIView {
         scrollView.alwaysBounceVertical = true
         scrollView.keyboardDismissMode = .interactive
 
-        brandLabel.text = "SHIFTLEDGER"
+        brandLabel.text = JobSetupStrings.brandName
         brandLabel.font = ShiftLedgerTypography.caption
         brandLabel.textColor = ShiftLedgerColors.accentPrimary
         brandLabel.adjustsFontForContentSizeCategory = true
         brandLabel.isAccessibilityElement = false
 
-        titleLabel.text = "Настроим вашу работу"
+        titleLabel.text = JobSetupStrings.title
         titleLabel.font = ShiftLedgerTypography.largeTitle
         titleLabel.textColor = ShiftLedgerColors.textPrimary
         titleLabel.numberOfLines = 0
         titleLabel.adjustsFontForContentSizeCategory = true
         titleLabel.accessibilityTraits = .header
 
-        supportingTextLabel.text = "Укажите основные данные для расчёта начислений."
+        supportingTextLabel.text = JobSetupStrings.subtitle
         supportingTextLabel.font = ShiftLedgerTypography.body
         supportingTextLabel.textColor = ShiftLedgerColors.textSecondary
         supportingTextLabel.numberOfLines = 0
         supportingTextLabel.adjustsFontForContentSizeCategory = true
 
-        nameLabel.text = "Название работы"
+        nameLabel.text = JobSetupStrings.nameTitle
         nameLabel.font = ShiftLedgerTypography.headline
         nameLabel.textColor = ShiftLedgerColors.textPrimary
         nameLabel.adjustsFontForContentSizeCategory = true
@@ -103,7 +103,7 @@ final class JobSetupView: UIView {
         nameTextField.font = ShiftLedgerTypography.body
         nameTextField.textColor = ShiftLedgerColors.textPrimary
         nameTextField.attributedPlaceholder = NSAttributedString(
-            string: "Например, Karolinska Hospital",
+            string: JobSetupStrings.namePlaceholder,
             attributes: [.foregroundColor: ShiftLedgerColors.textTertiary]
         )
         nameTextField.borderStyle = .none
@@ -113,18 +113,26 @@ final class JobSetupView: UIView {
         nameTextField.autocapitalizationType = .words
         nameTextField.adjustsFontForContentSizeCategory = true
         nameTextField.delegate = self
-        nameTextField.accessibilityLabel = "Название работы"
-        nameTextField.accessibilityHint = "Введите название вашей работы"
+        nameTextField.accessibilityLabel = JobSetupStrings.nameTitle
+        nameTextField.accessibilityHint = JobSetupStrings.nameAccessibilityHint
 
         selectionGroup.backgroundColor = ShiftLedgerColors.surfacePrimary
         selectionGroup.layer.cornerRadius = 12
         selectionSeparator.backgroundColor = ShiftLedgerColors.separator
 
-        configureSelectionButton(currencyButton, title: "Валюта", hint: "Открывает выбор валюты")
-        configureSelectionButton(timeZoneButton, title: "Часовой пояс", hint: "Открывает выбор часового пояса")
+        configureSelectionButton(
+            currencyButton,
+            title: JobSetupStrings.currencyTitle,
+            hint: JobSetupStrings.currencyAccessibilityHint
+        )
+        configureSelectionButton(
+            timeZoneButton,
+            title: JobSetupStrings.timeZoneTitle,
+            hint: JobSetupStrings.timeZoneAccessibilityHint
+        )
 
         var continueConfiguration = UIButton.Configuration.filled()
-        continueConfiguration.title = "Продолжить"
+        continueConfiguration.title = JobSetupStrings.continueTitle
         continueConfiguration.baseBackgroundColor = ShiftLedgerColors.accentPrimary
         continueConfiguration.baseForegroundColor = ShiftLedgerColors.backgroundPrimary
         continueConfiguration.cornerStyle = .medium
@@ -141,7 +149,7 @@ final class JobSetupView: UIView {
         }
         continueButton.configuration = continueConfiguration
         continueButton.titleLabel?.adjustsFontForContentSizeCategory = true
-        continueButton.accessibilityLabel = "Продолжить"
+        continueButton.accessibilityLabel = JobSetupStrings.continueTitle
     }
 
     private func configureSubviews() {
