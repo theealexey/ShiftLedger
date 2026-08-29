@@ -38,6 +38,129 @@ struct ShiftLedgerTests {
         }
     }
 
+    @Test("Недельный период включает anchor и последний день")
+    func weeklyPeriodIncludesAnchorAndLastDay() throws {
+        let anchor = try makeLocalDate(year: 2026, month: 8, day: 3)
+        let schedule = PayPeriodSchedule.weekly(anchorDate: anchor)
+        let expectedPeriod = PayPeriod(
+            start: try makeLocalDate(year: 2026, month: 8, day: 3),
+            endExclusive: try makeLocalDate(year: 2026, month: 8, day: 10)
+        )
+
+        #expect(try schedule.period(containing: anchor) == expectedPeriod)
+        #expect(try schedule.period(containing: try makeLocalDate(year: 2026, month: 8, day: 9)) == expectedPeriod)
+    }
+
+    @Test("Недельный период меняется на endExclusive")
+    func weeklyPeriodAdvancesAtEndExclusive() throws {
+        let anchor = try makeLocalDate(year: 2026, month: 8, day: 3)
+        let schedule = PayPeriodSchedule.weekly(anchorDate: anchor)
+        let previousPeriod = try schedule.period(containing: anchor)
+        let followingPeriod = try schedule.period(containing: previousPeriod.endExclusive)
+
+        #expect(followingPeriod == PayPeriod(
+            start: try makeLocalDate(year: 2026, month: 8, day: 10),
+            endExclusive: try makeLocalDate(year: 2026, month: 8, day: 17)
+        ))
+    }
+
+    @Test("Недельный период корректно считается до anchor")
+    func weeklyPeriodBeforeAnchorUsesFloorDivision() throws {
+        let anchor = try makeLocalDate(year: 2026, month: 8, day: 3)
+        let schedule = PayPeriodSchedule.weekly(anchorDate: anchor)
+
+        #expect(try schedule.period(containing: try makeLocalDate(year: 2026, month: 8, day: 2)) == PayPeriod(
+            start: try makeLocalDate(year: 2026, month: 7, day: 27),
+            endExclusive: anchor
+        ))
+        #expect(try schedule.period(containing: try makeLocalDate(year: 2026, month: 6, day: 1)) == PayPeriod(
+            start: try makeLocalDate(year: 2026, month: 6, day: 1),
+            endExclusive: try makeLocalDate(year: 2026, month: 6, day: 8)
+        ))
+    }
+
+    @Test("Недельный период корректно считается после anchor")
+    func weeklyPeriodAfterAnchor() throws {
+        let schedule = PayPeriodSchedule.weekly(anchorDate: try makeLocalDate(year: 2026, month: 8, day: 3))
+
+        #expect(try schedule.period(containing: try makeLocalDate(year: 2026, month: 9, day: 1)) == PayPeriod(
+            start: try makeLocalDate(year: 2026, month: 8, day: 31),
+            endExclusive: try makeLocalDate(year: 2026, month: 9, day: 7)
+        ))
+    }
+
+    @Test("Двухнедельный период включает anchor и последний день")
+    func biweeklyPeriodIncludesAnchorAndLastDay() throws {
+        let anchor = try makeLocalDate(year: 2026, month: 8, day: 3)
+        let schedule = PayPeriodSchedule.biweekly(anchorDate: anchor)
+        let expectedPeriod = PayPeriod(
+            start: anchor,
+            endExclusive: try makeLocalDate(year: 2026, month: 8, day: 17)
+        )
+
+        #expect(try schedule.period(containing: anchor) == expectedPeriod)
+        #expect(try schedule.period(containing: try makeLocalDate(year: 2026, month: 8, day: 16)) == expectedPeriod)
+    }
+
+    @Test("Двухнедельный период меняется на endExclusive")
+    func biweeklyPeriodAdvancesAtEndExclusive() throws {
+        let anchor = try makeLocalDate(year: 2026, month: 8, day: 3)
+        let schedule = PayPeriodSchedule.biweekly(anchorDate: anchor)
+        let previousPeriod = try schedule.period(containing: anchor)
+        let followingPeriod = try schedule.period(containing: previousPeriod.endExclusive)
+
+        #expect(followingPeriod == PayPeriod(
+            start: try makeLocalDate(year: 2026, month: 8, day: 17),
+            endExclusive: try makeLocalDate(year: 2026, month: 8, day: 31)
+        ))
+    }
+
+    @Test("Двухнедельный период корректно считается до anchor")
+    func biweeklyPeriodBeforeAnchor() throws {
+        let anchor = try makeLocalDate(year: 2026, month: 8, day: 3)
+        let schedule = PayPeriodSchedule.biweekly(anchorDate: anchor)
+
+        #expect(try schedule.period(containing: try makeLocalDate(year: 2026, month: 8, day: 2)) == PayPeriod(
+            start: try makeLocalDate(year: 2026, month: 7, day: 20),
+            endExclusive: anchor
+        ))
+    }
+
+    @Test("Календарный месячный период соответствует обычному месяцу")
+    func calendarMonthlyPeriodMatchesMonth() throws {
+        let schedule = PayPeriodSchedule.calendarMonthly
+        let period = try schedule.period(containing: try makeLocalDate(year: 2026, month: 8, day: 29))
+
+        #expect(period == PayPeriod(
+            start: try makeLocalDate(year: 2026, month: 8, day: 1),
+            endExclusive: try makeLocalDate(year: 2026, month: 9, day: 1)
+        ))
+        #expect(try schedule.period(containing: period.endExclusive) == PayPeriod(
+            start: try makeLocalDate(year: 2026, month: 9, day: 1),
+            endExclusive: try makeLocalDate(year: 2026, month: 10, day: 1)
+        ))
+    }
+
+    @Test("Календарный месячный период учитывает високосный февраль")
+    func calendarMonthlyPeriodHandlesLeapYearFebruary() throws {
+        let schedule = PayPeriodSchedule.calendarMonthly
+
+        #expect(try schedule.period(containing: try makeLocalDate(year: 2024, month: 2, day: 29)) == PayPeriod(
+            start: try makeLocalDate(year: 2024, month: 2, day: 1),
+            endExclusive: try makeLocalDate(year: 2024, month: 3, day: 1)
+        ))
+    }
+
+    @Test("Календарный месячный период переходит из декабря в январь")
+    func calendarMonthlyPeriodCrossesYearBoundary() throws {
+        let schedule = PayPeriodSchedule.calendarMonthly
+
+        #expect(try schedule.period(containing: try makeLocalDate(year: 2026, month: 12, day: 31)) == PayPeriod(
+            start: try makeLocalDate(year: 2026, month: 12, day: 1),
+            endExclusive: try makeLocalDate(year: 2027, month: 1, day: 1)
+        ))
+    }
+
     @Test("Корректная календарная дата принимается")
     func acceptsValidLocalDate() throws {
         let date = try LocalDate(year: 2026, month: 9, day: 1)

@@ -7,6 +7,7 @@ enum LocalDateValidationError: Error, Equatable {
 enum LocalDateConversionError: Error, Equatable {
     case missingGregorianDateComponents
     case dateDoesNotExistInTimeZone
+    case calendarArithmeticFailed
 }
 
 struct LocalDate: Equatable, Hashable, Comparable {
@@ -70,6 +71,41 @@ struct LocalDate: Equatable, Hashable, Comparable {
         }
 
         return startOfDay
+    }
+
+    func addingDays(_ days: Int) throws -> LocalDate {
+        let calendar = Self.gregorianCalendar(in: .gmt)
+        let date = try startOfDay(in: .gmt)
+
+        guard let shiftedDate = calendar.date(byAdding: .day, value: days, to: date) else {
+            throw LocalDateConversionError.calendarArithmeticFailed
+        }
+
+        return try LocalDate(date: shiftedDate, in: .gmt)
+    }
+
+    func daysUntil(_ other: LocalDate) throws -> Int {
+        let calendar = Self.gregorianCalendar(in: .gmt)
+        let startDate = try startOfDay(in: .gmt)
+        let endDate = try other.startOfDay(in: .gmt)
+
+        guard let days = calendar.dateComponents([.day], from: startDate, to: endDate).day else {
+            throw LocalDateConversionError.calendarArithmeticFailed
+        }
+
+        return days
+    }
+
+    func firstDayOfNextMonth() throws -> LocalDate {
+        let calendar = Self.gregorianCalendar(in: .gmt)
+        let firstDayOfMonth = try LocalDate(year: year, month: month, day: 1)
+        let date = try firstDayOfMonth.startOfDay(in: .gmt)
+
+        guard let nextMonthDate = calendar.date(byAdding: .month, value: 1, to: date) else {
+            throw LocalDateConversionError.calendarArithmeticFailed
+        }
+
+        return try LocalDate(date: nextMonthDate, in: .gmt)
     }
 
     static func < (lhs: LocalDate, rhs: LocalDate) -> Bool {
