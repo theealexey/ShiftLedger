@@ -93,6 +93,36 @@ struct ShiftLedgerTests {
         }
     }
 
+    @Test("Ставки с разными датами начала действия принимаются")
+    func acceptsPayRatesWithDifferentEffectiveFrom() throws {
+        let firstPayRate = try makePayRate()
+        let secondPayRate = try PayRate(amount: 130, effectiveFrom: date.addingTimeInterval(1))
+
+        let job = try makeJob(payRates: [firstPayRate, secondPayRate])
+
+        #expect(job.payRates == [firstPayRate, secondPayRate])
+    }
+
+    @Test("Две ставки с одинаковой датой начала действия отклоняются")
+    func rejectsDuplicatePayRateEffectiveFrom() throws {
+        let firstPayRate = try makePayRate()
+        let secondPayRate = try PayRate(amount: 130, effectiveFrom: date)
+
+        #expect(throws: JobValidationError.duplicatePayRateEffectiveFrom) {
+            try makeJob(payRates: [firstPayRate, secondPayRate])
+        }
+    }
+
+    @Test("Порядок ставок не влияет на обнаружение повторяющейся даты")
+    func rejectsDuplicatePayRateEffectiveFromInAnyOrder() throws {
+        let firstPayRate = try makePayRate()
+        let secondPayRate = try PayRate(amount: 130, effectiveFrom: date)
+
+        #expect(throws: JobValidationError.duplicatePayRateEffectiveFrom) {
+            try makeJob(payRates: [secondPayRate, firstPayRate])
+        }
+    }
+
     @Test("Отрицательная ставка отклоняется")
     func rejectsNegativePayRate() {
         #expect(throws: PayRateValidationError.negativeAmount) {

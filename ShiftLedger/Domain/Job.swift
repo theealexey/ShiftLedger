@@ -5,6 +5,7 @@ enum JobValidationError: Error, Equatable {
     case invalidCurrencyCode
     case invalidTimeZoneIdentifier
     case missingPayRates
+    case duplicatePayRateEffectiveFrom
 }
 
 struct Job: Equatable {
@@ -41,6 +42,11 @@ struct Job: Equatable {
 
         guard payRates.isEmpty == false else {
             throw JobValidationError.missingPayRates
+        }
+
+        let effectiveFromDates = Set(payRates.map(\.effectiveFrom))
+        guard effectiveFromDates.count == payRates.count else {
+            throw JobValidationError.duplicatePayRateEffectiveFrom
         }
 
         self.id = id

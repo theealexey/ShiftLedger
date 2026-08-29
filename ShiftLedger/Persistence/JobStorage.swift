@@ -113,12 +113,7 @@ final class JobStorage {
             payRates.append(try makePayRate(from: payRateEntity))
         }
 
-        payRates.sort {
-            if $0.effectiveFrom == $1.effectiveFrom {
-                return $0.id.uuidString < $1.id.uuidString
-            }
-            return $0.effectiveFrom < $1.effectiveFrom
-        }
+        let sortedPayRates = payRates.sorted { $0.effectiveFrom < $1.effectiveFrom }
 
         do {
             return try Job(
@@ -127,7 +122,7 @@ final class JobStorage {
                 currencyCode: jobEntity.currencyCode,
                 timeZoneIdentifier: jobEntity.timeZoneIdentifier,
                 payPeriodSchedule: payPeriodSchedule,
-                payRates: payRates,
+                payRates: sortedPayRates,
                 createdAt: jobEntity.createdAt
             )
         } catch {
