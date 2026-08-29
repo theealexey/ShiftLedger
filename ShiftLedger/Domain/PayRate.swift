@@ -7,9 +7,9 @@ enum PayRateValidationError: Error, Equatable {
 struct PayRate: Equatable {
     let id: UUID
     let amount: Decimal
-    let effectiveFrom: Date
+    let effectiveFrom: LocalDate
 
-    init(id: UUID = UUID(), amount: Decimal, effectiveFrom: Date) throws {
+    init(id: UUID = UUID(), amount: Decimal, effectiveFrom: LocalDate) throws {
         guard amount >= .zero else {
             throw PayRateValidationError.negativeAmount
         }

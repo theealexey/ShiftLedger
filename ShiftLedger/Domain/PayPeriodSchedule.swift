@@ -1,7 +1,7 @@
 import Foundation
 
 enum PayPeriodSchedule: Equatable {
-    case weekly(anchorDate: Date)
-    case biweekly(anchorDate: Date)
+    case weekly(anchorDate: LocalDate)
+    case biweekly(anchorDate: LocalDate)
     case calendarMonthly
 }
