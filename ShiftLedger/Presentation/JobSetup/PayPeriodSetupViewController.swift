@@ -47,12 +47,12 @@ final class PayPeriodSetupViewController: UIViewController {
         payPeriodSetupView.onBackTapped = { [weak self] in
             self?.onBack?()
         }
-        payPeriodSetupView.onFrequencySelected = { [weak self] frequency in
+        payPeriodSetupView.onCycleKindSelected = { [weak self] cycleKind in
             guard let self else {
                 return
             }
 
-            viewModel.selectFrequency(frequency)
+            viewModel.selectCycleKind(cycleKind)
             render()
         }
         payPeriodSetupView.onAnchorTapped = { [weak self] in
@@ -69,7 +69,7 @@ final class PayPeriodSetupViewController: UIViewController {
 
     private func render() {
         payPeriodSetupView.render(
-            frequency: viewModel.selectedFrequency,
+            cycleKind: viewModel.selectedCycleKind,
             anchorDateText: formattedAnchorDate,
             canContinue: viewModel.canContinue
         )

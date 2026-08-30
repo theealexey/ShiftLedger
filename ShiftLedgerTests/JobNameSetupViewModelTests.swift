@@ -44,7 +44,7 @@ struct JobNameSetupViewModelTests {
         #expect(viewModel.draft.hourlyRateText == draft.hourlyRateText)
         #expect(viewModel.draft.currencyCode == draft.currencyCode)
         #expect(viewModel.draft.timeZoneIdentifier == draft.timeZoneIdentifier)
-        #expect(viewModel.draft.payPeriodFrequency == draft.payPeriodFrequency)
+        #expect(viewModel.draft.payCalculationCycleKind == draft.payCalculationCycleKind)
         #expect(viewModel.draft.payPeriodAnchorDate == draft.payPeriodAnchorDate)
     }
 
@@ -56,7 +56,7 @@ struct JobNameSetupViewModelTests {
             hourlyRateText: "24.50",
             currencyCode: "AUD",
             timeZoneIdentifier: "Europe/Stockholm",
-            payPeriodFrequency: .biweekly,
+            payCalculationCycleKind: .biweekly,
             payPeriodAnchorDate: anchor
         )
         let viewModel = JobNameSetupViewModel(draft: draft)
@@ -69,7 +69,7 @@ struct JobNameSetupViewModelTests {
             hourlyRateText: "24.50",
             currencyCode: "AUD",
             timeZoneIdentifier: "Europe/Stockholm",
-            payPeriodFrequency: .biweekly,
+            payCalculationCycleKind: .biweekly,
             payPeriodAnchorDate: anchor
         ))
     }
@@ -80,7 +80,7 @@ struct JobNameSetupViewModelTests {
             hourlyRateText: "24.50",
             currencyCode: "EUR",
             timeZoneIdentifier: "Europe/Stockholm",
-            payPeriodFrequency: .calendarMonthly,
+            payCalculationCycleKind: .calendarMonthly,
             payPeriodAnchorDate: nil
         )
     }
@@ -92,7 +92,7 @@ struct JobNameSetupViewModelTests {
             hourlyRateText: "24.50",
             currencyCode: "AUD",
             timeZoneIdentifier: "Europe/Stockholm",
-            payPeriodFrequency: .biweekly,
+            payCalculationCycleKind: .biweekly,
             payPeriodAnchorDate: anchor
         )
     }

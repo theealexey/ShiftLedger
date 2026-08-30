@@ -4,111 +4,164 @@ import Testing
 
 @MainActor
 struct PayPeriodSetupViewModelTests {
+    @Test("Оплата за смену готова без anchor")
+    func perShiftEnablesContinueWithoutAnchor() {
+        let viewModel = makeViewModel()
+        viewModel.selectCycleKind(.perShift)
+
+        #expect(viewModel.requiresAnchorDate == false)
+        #expect(viewModel.canContinue)
+        #expect(viewModel.payCalculationCycle == .perShift)
+    }
+
+    @Test("Оплата за смену не передаёт anchor в Domain")
+    func perShiftIgnoresPreservedAnchorInDomain() throws {
+        let anchor = try makeDate(year: 2026, month: 8, day: 30)
+        let viewModel = makeViewModel()
+        viewModel.selectCycleKind(.weekly)
+        viewModel.selectAnchorDate(anchor)
+        viewModel.selectCycleKind(.perShift)
+
+        #expect(viewModel.anchorDate == anchor)
+        #expect(viewModel.payCalculationCycle == .perShift)
+    }
+
+    @Test("Выбор расчётного цикла сохраняет данные предыдущих шагов")
+    func cycleSelectionPreservesPreviousStepValues() throws {
+        let anchor = try makeDate(year: 2026, month: 8, day: 30)
+        var draft = makeViewModel().draft
+        draft.name = "Karolinska Hospital"
+        draft.currencyCode = "AUD"
+        draft.timeZoneIdentifier = "Europe/Stockholm"
+        draft.payPeriodAnchorDate = anchor
+        let viewModel = PayPeriodSetupViewModel(draft: draft)
+
+        viewModel.selectCycleKind(.perShift)
+
+        #expect(viewModel.draft.hourlyRateText == "24.50")
+        #expect(viewModel.draft.currencyCode == "AUD")
+        #expect(viewModel.draft.timeZoneIdentifier == "Europe/Stockholm")
+        #expect(viewModel.draft.name == "Karolinska Hospital")
+        #expect(viewModel.draft.payPeriodAnchorDate == anchor)
+    }
+
+    @Test("Переключение обратно на неделю восстанавливает anchor")
+    func switchingBackFromPerShiftRestoresScheduledWeekly() throws {
+        let anchor = try makeDate(year: 2026, month: 8, day: 30)
+        let viewModel = makeViewModel()
+        viewModel.selectCycleKind(.weekly)
+        viewModel.selectAnchorDate(anchor)
+        viewModel.selectCycleKind(.perShift)
+        viewModel.selectCycleKind(.weekly)
+
+        #expect(viewModel.payCalculationCycle == .scheduled(.weekly(anchorDate: anchor)))
+    }
+
     @Test("Без выбора периода продолжить нельзя")
     func noFrequencyDisablesContinue() {
         let viewModel = makeViewModel()
 
-        #expect(viewModel.selectedFrequency == nil)
+        #expect(viewModel.selectedCycleKind == nil)
         #expect(viewModel.canContinue == false)
-        #expect(viewModel.payPeriodSchedule == nil)
+        #expect(viewModel.payCalculationCycle == nil)
     }
 
     @Test("Недельный период без anchor не готов")
     func weeklyWithoutAnchorDisablesContinue() {
         let viewModel = makeViewModel()
-        viewModel.selectFrequency(.weekly)
+        viewModel.selectCycleKind(.weekly)
 
         #expect(viewModel.requiresAnchorDate)
         #expect(viewModel.canContinue == false)
-        #expect(viewModel.payPeriodSchedule == nil)
+        #expect(viewModel.payCalculationCycle == nil)
     }
 
     @Test("Недельный период с anchor готов")
     func weeklyWithAnchorEnablesContinue() throws {
         let anchor = try makeDate(year: 2026, month: 8, day: 3)
         let viewModel = makeViewModel()
-        viewModel.selectFrequency(.weekly)
+        viewModel.selectCycleKind(.weekly)
         viewModel.selectAnchorDate(anchor)
 
         #expect(viewModel.canContinue)
-        #expect(viewModel.payPeriodSchedule == .weekly(anchorDate: anchor))
+        #expect(viewModel.payCalculationCycle == .scheduled(.weekly(anchorDate: anchor)))
     }
 
     @Test("Двухнедельный период без anchor не готов")
     func biweeklyWithoutAnchorDisablesContinue() {
         let viewModel = makeViewModel()
-        viewModel.selectFrequency(.biweekly)
+        viewModel.selectCycleKind(.biweekly)
 
         #expect(viewModel.requiresAnchorDate)
         #expect(viewModel.canContinue == false)
-        #expect(viewModel.payPeriodSchedule == nil)
+        #expect(viewModel.payCalculationCycle == nil)
     }
 
     @Test("Двухнедельный период с anchor готов")
     func biweeklyWithAnchorEnablesContinue() throws {
         let anchor = try makeDate(year: 2026, month: 8, day: 3)
         let viewModel = makeViewModel()
-        viewModel.selectFrequency(.biweekly)
+        viewModel.selectCycleKind(.biweekly)
         viewModel.selectAnchorDate(anchor)
 
         #expect(viewModel.canContinue)
-        #expect(viewModel.payPeriodSchedule == .biweekly(anchorDate: anchor))
+        #expect(viewModel.payCalculationCycle == .scheduled(.biweekly(anchorDate: anchor)))
     }
 
     @Test("Календарный месяц не требует anchor")
     func calendarMonthlyEnablesContinueWithoutAnchor() {
         let viewModel = makeViewModel()
-        viewModel.selectFrequency(.calendarMonthly)
+        viewModel.selectCycleKind(.calendarMonthly)
 
         #expect(viewModel.requiresAnchorDate == false)
         #expect(viewModel.canContinue)
-        #expect(viewModel.payPeriodSchedule == .calendarMonthly)
+        #expect(viewModel.payCalculationCycle == .scheduled(.calendarMonthly))
     }
 
     @Test("Выбранный недельный период точно маппится в Domain")
     func weeklyMappingIsExact() throws {
         let anchor = try makeDate(year: 2026, month: 8, day: 3)
         let viewModel = makeViewModel()
-        viewModel.selectFrequency(.weekly)
+        viewModel.selectCycleKind(.weekly)
         viewModel.selectAnchorDate(anchor)
 
-        #expect(viewModel.payPeriodSchedule == PayPeriodSchedule.weekly(anchorDate: anchor))
+        #expect(viewModel.payCalculationCycle == .scheduled(.weekly(anchorDate: anchor)))
     }
 
     @Test("Выбранный двухнедельный период точно маппится в Domain")
     func biweeklyMappingIsExact() throws {
         let anchor = try makeDate(year: 2026, month: 8, day: 3)
         let viewModel = makeViewModel()
-        viewModel.selectFrequency(.biweekly)
+        viewModel.selectCycleKind(.biweekly)
         viewModel.selectAnchorDate(anchor)
 
-        #expect(viewModel.payPeriodSchedule == PayPeriodSchedule.biweekly(anchorDate: anchor))
+        #expect(viewModel.payCalculationCycle == .scheduled(.biweekly(anchorDate: anchor)))
     }
 
     @Test("Выбранный календарный месяц точно маппится в Domain")
     func calendarMonthlyMappingIsExact() {
         let viewModel = makeViewModel()
-        viewModel.selectFrequency(.calendarMonthly)
+        viewModel.selectCycleKind(.calendarMonthly)
 
-        #expect(viewModel.payPeriodSchedule == PayPeriodSchedule.calendarMonthly)
+        #expect(viewModel.payCalculationCycle == .scheduled(.calendarMonthly))
     }
 
     @Test("Переключение частоты сохраняет anchor")
     func switchingFrequencyPreservesAnchor() throws {
         let anchor = try makeDate(year: 2026, month: 8, day: 14)
         let viewModel = makeViewModel()
-        viewModel.selectFrequency(.weekly)
+        viewModel.selectCycleKind(.weekly)
         viewModel.selectAnchorDate(anchor)
-        viewModel.selectFrequency(.biweekly)
+        viewModel.selectCycleKind(.biweekly)
 
         #expect(viewModel.anchorDate == anchor)
-        #expect(viewModel.payPeriodSchedule == .biweekly(anchorDate: anchor))
+        #expect(viewModel.payCalculationCycle == .scheduled(.biweekly(anchorDate: anchor)))
     }
 
     @Test("Состояние ставки и валюты из Step 1 сохраняется")
     func stepOneValuesArePreserved() {
         let viewModel = makeViewModel()
-        viewModel.selectFrequency(.calendarMonthly)
+        viewModel.selectCycleKind(.calendarMonthly)
 
         #expect(viewModel.draft.hourlyRateText == "24.50")
         #expect(viewModel.draft.currencyCode == "EUR")
@@ -118,7 +171,7 @@ struct PayPeriodSetupViewModelTests {
     func anchorLocalDateIsPreservedExactly() throws {
         let anchor = try makeDate(year: 2026, month: 12, day: 31)
         let viewModel = makeViewModel()
-        viewModel.selectFrequency(.weekly)
+        viewModel.selectCycleKind(.weekly)
         viewModel.selectAnchorDate(anchor)
 
         #expect(viewModel.anchorDate == anchor)
@@ -131,10 +184,15 @@ struct PayPeriodSetupViewModelTests {
         let date = try makeDate(year: 2026, month: 8, day: 16)
         let expectedEnd = try makeDate(year: 2026, month: 8, day: 17)
         let viewModel = makeViewModel()
-        viewModel.selectFrequency(.biweekly)
+        viewModel.selectCycleKind(.biweekly)
         viewModel.selectAnchorDate(anchor)
 
-        let schedule = try #require(viewModel.payPeriodSchedule)
+        let cycle = try #require(viewModel.payCalculationCycle)
+        let schedule: PayPeriodSchedule
+        switch cycle {
+        case let .scheduled(value): schedule = value
+        case .perShift: return
+        }
         let period = try schedule.period(containing: date)
 
         #expect(period == PayPeriod(start: anchor, endExclusive: expectedEnd))

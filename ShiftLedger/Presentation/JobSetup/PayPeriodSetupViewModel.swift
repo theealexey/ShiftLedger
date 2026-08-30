@@ -8,8 +8,8 @@ final class PayPeriodSetupViewModel {
         self.draft = draft
     }
 
-    var selectedFrequency: PayPeriodFrequency? {
-        draft.payPeriodFrequency
+    var selectedCycleKind: PayCalculationCycleKind? {
+        draft.payCalculationCycleKind
     }
 
     var anchorDate: LocalDate? {
@@ -17,40 +17,42 @@ final class PayPeriodSetupViewModel {
     }
 
     var requiresAnchorDate: Bool {
-        switch draft.payPeriodFrequency {
+        switch draft.payCalculationCycleKind {
         case .weekly, .biweekly:
             true
-        case .calendarMonthly, nil:
+        case .perShift, .calendarMonthly, nil:
             false
         }
     }
 
     var canContinue: Bool {
-        switch draft.payPeriodFrequency {
+        switch draft.payCalculationCycleKind {
+        case .perShift, .calendarMonthly:
+            true
         case .weekly, .biweekly:
             draft.payPeriodAnchorDate != nil
-        case .calendarMonthly:
-            true
         case nil:
             false
         }
     }
 
-    var payPeriodSchedule: PayPeriodSchedule? {
-        switch (draft.payPeriodFrequency, draft.payPeriodAnchorDate) {
+    var payCalculationCycle: PayCalculationCycle? {
+        switch (draft.payCalculationCycleKind, draft.payPeriodAnchorDate) {
+        case (.perShift, _):
+            return .perShift
         case let (.weekly, anchorDate?):
-            return .weekly(anchorDate: anchorDate)
+            return .scheduled(.weekly(anchorDate: anchorDate))
         case let (.biweekly, anchorDate?):
-            return .biweekly(anchorDate: anchorDate)
+            return .scheduled(.biweekly(anchorDate: anchorDate))
         case (.calendarMonthly, _):
-            return .calendarMonthly
+            return .scheduled(.calendarMonthly)
         case (nil, _), (.weekly, nil), (.biweekly, nil):
             return nil
         }
     }
 
-    func selectFrequency(_ frequency: PayPeriodFrequency) {
-        draft.payPeriodFrequency = frequency
+    func selectCycleKind(_ kind: PayCalculationCycleKind) {
+        draft.payCalculationCycleKind = kind
     }
 
     func selectAnchorDate(_ date: LocalDate) {

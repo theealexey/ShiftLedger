@@ -8,6 +8,7 @@ enum PayPeriodSetupStrings {
     static var stepIndicatorAccessibilityLabel: String { String(localized: "jobSetup.step2.stepIndicator.accessibilityLabel", table: "Localizable") }
     static var title: String { String(localized: "jobSetup.step2.title", table: "Localizable") }
     static var subtitle: String { String(localized: "jobSetup.step2.subtitle", table: "Localizable") }
+    static var perShift: String { String(localized: "jobSetup.payCalculation.perShift", table: "Localizable") }
     static var weekly: String { String(localized: "jobSetup.payPeriod.weekly", table: "Localizable") }
     static var biweekly: String { String(localized: "jobSetup.payPeriod.biweekly", table: "Localizable") }
     static var calendarMonthly: String { String(localized: "jobSetup.payPeriod.calendarMonthly", table: "Localizable") }

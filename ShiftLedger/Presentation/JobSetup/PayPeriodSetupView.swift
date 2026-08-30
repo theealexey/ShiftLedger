@@ -2,7 +2,7 @@ import UIKit
 
 final class PayPeriodSetupView: UIView {
     var onBackTapped: (() -> Void)?
-    var onFrequencySelected: ((PayPeriodFrequency) -> Void)?
+    var onCycleKindSelected: ((PayCalculationCycleKind) -> Void)?
     var onAnchorTapped: (() -> Void)?
     var onContinueTapped: (() -> Void)?
 
@@ -28,6 +28,7 @@ final class PayPeriodSetupView: UIView {
     private let weeklyControl = FrequencyOptionControl(title: PayPeriodSetupStrings.weekly)
     private let biweeklyControl = FrequencyOptionControl(title: PayPeriodSetupStrings.biweekly)
     private let calendarMonthlyControl = FrequencyOptionControl(title: PayPeriodSetupStrings.calendarMonthly)
+    private let perShiftControl = FrequencyOptionControl(title: PayPeriodSetupStrings.perShift)
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -43,11 +44,12 @@ final class PayPeriodSetupView: UIView {
         nil
     }
 
-    func render(frequency: PayPeriodFrequency?, anchorDateText: String?, canContinue: Bool) {
-        weeklyControl.isSelected = frequency == .weekly
-        biweeklyControl.isSelected = frequency == .biweekly
-        calendarMonthlyControl.isSelected = frequency == .calendarMonthly
-        let showsAnchor = frequency == .weekly || frequency == .biweekly
+    func render(cycleKind: PayCalculationCycleKind?, anchorDateText: String?, canContinue: Bool) {
+        perShiftControl.isSelected = cycleKind == .perShift
+        weeklyControl.isSelected = cycleKind == .weekly
+        biweeklyControl.isSelected = cycleKind == .biweekly
+        calendarMonthlyControl.isSelected = cycleKind == .calendarMonthly
+        let showsAnchor = cycleKind == .weekly || cycleKind == .biweekly
         anchorTitleLabel.isHidden = !showsAnchor
         anchorSubtitleLabel.isHidden = !showsAnchor
         anchorRow.isHidden = !showsAnchor
@@ -109,6 +111,7 @@ final class PayPeriodSetupView: UIView {
         optionsStack.addArrangedSubview(weeklyControl)
         optionsStack.addArrangedSubview(biweeklyControl)
         optionsStack.addArrangedSubview(calendarMonthlyControl)
+        optionsStack.insertArrangedSubview(perShiftControl, at: 0)
 
         anchorSection.axis = .vertical
         anchorSection.spacing = 0
@@ -246,9 +249,10 @@ final class PayPeriodSetupView: UIView {
 
     private func configureInteractions() {
         backButton.addAction(UIAction { [weak self] _ in self?.onBackTapped?() }, for: .primaryActionTriggered)
-        weeklyControl.addAction(UIAction { [weak self] _ in self?.onFrequencySelected?(.weekly) }, for: .touchUpInside)
-        biweeklyControl.addAction(UIAction { [weak self] _ in self?.onFrequencySelected?(.biweekly) }, for: .touchUpInside)
-        calendarMonthlyControl.addAction(UIAction { [weak self] _ in self?.onFrequencySelected?(.calendarMonthly) }, for: .touchUpInside)
+        perShiftControl.addAction(UIAction { [weak self] _ in self?.onCycleKindSelected?(.perShift) }, for: .touchUpInside)
+        weeklyControl.addAction(UIAction { [weak self] _ in self?.onCycleKindSelected?(.weekly) }, for: .touchUpInside)
+        biweeklyControl.addAction(UIAction { [weak self] _ in self?.onCycleKindSelected?(.biweekly) }, for: .touchUpInside)
+        calendarMonthlyControl.addAction(UIAction { [weak self] _ in self?.onCycleKindSelected?(.calendarMonthly) }, for: .touchUpInside)
         anchorRow.addAction(UIAction { [weak self] _ in self?.onAnchorTapped?() }, for: .touchUpInside)
         continueButton.addAction(UIAction { [weak self] _ in self?.onContinueTapped?() }, for: .primaryActionTriggered)
     }

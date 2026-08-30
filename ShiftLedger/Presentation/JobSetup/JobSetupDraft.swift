@@ -1,4 +1,5 @@
-enum PayPeriodFrequency: Equatable {
+enum PayCalculationCycleKind: Equatable {
+    case perShift
     case weekly
     case biweekly
     case calendarMonthly
@@ -9,6 +10,6 @@ struct JobSetupDraft: Equatable {
     var hourlyRateText: String
     var currencyCode: String
     var timeZoneIdentifier: String
-    var payPeriodFrequency: PayPeriodFrequency?
+    var payCalculationCycleKind: PayCalculationCycleKind?
     var payPeriodAnchorDate: LocalDate?
 }

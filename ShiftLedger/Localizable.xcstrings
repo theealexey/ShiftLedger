@@ -277,15 +277,22 @@
     "jobSetup.step2.subtitle" : {
       "extractionState" : "manual",
       "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "It determines which shifts are grouped together when we calculate your expected pay." } },
-        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Он определяет, какие смены объединяются в один расчёт зарплаты." } }
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "This determines which shifts we group into one calculation." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Это определяет, какие смены мы объединяем в один расчёт." } }
       }
     },
     "jobSetup.step2.title" : {
       "extractionState" : "manual",
       "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "What is your pay period?" } },
-        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Какой у вас расчётный период?" } }
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "How is your pay calculated?" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Как вам начисляют оплату?" } }
+      }
+    },
+    "jobSetup.payCalculation.perShift" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Per shift" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "За каждую смену" } }
       }
     },
     "jobSetup.payPeriod.weekly" : {
