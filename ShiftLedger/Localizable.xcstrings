@@ -35,6 +35,27 @@
         }
       }
     },
+    "common.back" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Back" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Назад" } }
+      }
+    },
+    "common.cancel" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Cancel" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Отмена" } }
+      }
+    },
+    "common.done" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Done" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Готово" } }
+      }
+    },
     "currencySelection.noResults" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -237,6 +258,83 @@
             "value" : "Какая у вас почасовая ставка?"
           }
         }
+      }
+    },
+    "jobSetup.step2.stepIndicator" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "2 / 4" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "2 / 4" } }
+      }
+    },
+    "jobSetup.step2.stepIndicator.accessibilityLabel" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Step 2 of 4" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Шаг 2 из 4" } }
+      }
+    },
+    "jobSetup.step2.subtitle" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "It determines which shifts are grouped together when we calculate your expected pay." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Он определяет, какие смены объединяются в один расчёт зарплаты." } }
+      }
+    },
+    "jobSetup.step2.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "What is your pay period?" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Какой у вас расчётный период?" } }
+      }
+    },
+    "jobSetup.payPeriod.weekly" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Every week" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Каждую неделю" } }
+      }
+    },
+    "jobSetup.payPeriod.biweekly" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Every two weeks" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Каждые две недели" } }
+      }
+    },
+    "jobSetup.payPeriod.calendarMonthly" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Calendar month" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Календарный месяц" } }
+      }
+    },
+    "jobSetup.payPeriod.anchor.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Pay period start" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Начало расчётного периода" } }
+      }
+    },
+    "jobSetup.payPeriod.anchor.subtitle" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Choose the first day of your current or another known period." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Выберите первый день текущего или другого известного периода." } }
+      }
+    },
+    "jobSetup.payPeriod.anchor.choose" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Choose date" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Выбрать дату" } }
+      }
+    },
+    "jobSetup.payPeriod.anchorPicker.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Period start" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Начало периода" } }
       }
     },
     "jobSetup.stepIndicator" : {

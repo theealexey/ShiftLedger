@@ -14,7 +14,9 @@ final class JobSetupViewModel {
             name: "",
             hourlyRateText: "",
             currencyCode: initialCurrencyCode,
-            timeZoneIdentifier: initialTimeZoneIdentifier
+            timeZoneIdentifier: initialTimeZoneIdentifier,
+            payPeriodFrequency: nil,
+            payPeriodAnchorDate: nil
         )
         self.decimalInputLocale = decimalInputLocale
     }
