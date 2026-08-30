@@ -4,6 +4,14 @@ enum JobSetupStrings {
     static var brandName: String { String(localized: "app.brandName", table: "Localizable") }
     static var stepIndicator: String { String(localized: "jobSetup.stepIndicator", table: "Localizable") }
     static var stepIndicatorAccessibilityLabel: String { String(localized: "jobSetup.stepIndicator.accessibilityLabel", table: "Localizable") }
+    static var step3Title: String { String(localized: "jobSetup.step3.title", table: "Localizable") }
+    static var step3Subtitle: String { String(localized: "jobSetup.step3.subtitle", table: "Localizable") }
+    static var step3StepIndicator: String { String(localized: "jobSetup.step3.stepIndicator", table: "Localizable") }
+    static var step3StepIndicatorAccessibilityLabel: String { String(localized: "jobSetup.step3.stepIndicator.accessibilityLabel", table: "Localizable") }
+    static var nameTitle: String { String(localized: "jobSetup.name.title", table: "Localizable") }
+    static var namePlaceholder: String { String(localized: "jobSetup.name.placeholder", table: "Localizable") }
+    static var nameAccessibilityHint: String { String(localized: "jobSetup.name.accessibilityHint", table: "Localizable") }
+    static var back: String { String(localized: "common.back", table: "Localizable") }
     static var step1Title: String { String(localized: "jobSetup.step1.title", table: "Localizable") }
     static var step1Subtitle: String { String(localized: "jobSetup.step1.subtitle", table: "Localizable") }
     static var hourlyRateAccessibilityHint: String { String(localized: "jobSetup.rate.accessibilityHint", table: "Localizable") }

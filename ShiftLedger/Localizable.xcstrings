@@ -337,6 +337,34 @@
         "ru" : { "stringUnit" : { "state" : "translated", "value" : "Начало периода" } }
       }
     },
+    "jobSetup.step3.stepIndicator" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "3 / 4" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "3 / 4" } }
+      }
+    },
+    "jobSetup.step3.stepIndicator.accessibilityLabel" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Step 3 of 4" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Шаг 3 из 4" } }
+      }
+    },
+    "jobSetup.step3.subtitle" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "This name is only visible to you." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Это имя будет видно только вам." } }
+      }
+    },
+    "jobSetup.step3.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "What should we call this job?" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Как назвать эту работу?" } }
+      }
+    },
     "jobSetup.stepIndicator" : {
       "extractionState" : "manual",
       "localizations" : {
