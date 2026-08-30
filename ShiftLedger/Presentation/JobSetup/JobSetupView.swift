@@ -29,7 +29,6 @@ final class JobSetupView: UIView {
     private let currencyValueLabel = UILabel()
     private let currencyChevron = UIImageView(image: UIImage(systemName: "chevron.right"))
     private let currencySeparator = UIView()
-    private let actionSeparator = UIView()
     private let continueButton = UIButton(type: .system)
 
     override init(frame: CGRect) {
@@ -127,7 +126,7 @@ final class JobSetupView: UIView {
         hourlyRateUnderline.backgroundColor = ShiftLedgerColors.separator
 
         currencyTitleLabel.text = JobSetupStrings.currencyTitle
-        currencyTitleLabel.font = ShiftLedgerTypography.headline
+        currencyTitleLabel.font = ShiftLedgerTypography.body
         currencyTitleLabel.textColor = ShiftLedgerColors.textPrimary
         currencyTitleLabel.numberOfLines = 0
         currencyTitleLabel.adjustsFontForContentSizeCategory = true
@@ -136,7 +135,7 @@ final class JobSetupView: UIView {
         currencyValueLabel.textColor = ShiftLedgerColors.textSecondary
         currencyValueLabel.adjustsFontForContentSizeCategory = true
 
-        currencyChevron.tintColor = ShiftLedgerColors.textTertiary
+        currencyChevron.tintColor = ShiftLedgerColors.textSecondary
         currencyChevron.contentMode = .scaleAspectFit
         currencyChevron.isAccessibilityElement = false
 
@@ -146,7 +145,6 @@ final class JobSetupView: UIView {
         currencyRow.accessibilityTraits = .button
 
         currencySeparator.backgroundColor = ShiftLedgerColors.separator
-        actionSeparator.backgroundColor = ShiftLedgerColors.separator
 
         var continueConfiguration = UIButton.Configuration.plain()
         continueConfiguration.title = JobSetupStrings.continueTitle
@@ -192,7 +190,6 @@ final class JobSetupView: UIView {
             currencyValueLabel,
             currencyChevron,
             currencySeparator,
-            actionSeparator,
             continueButton
         ].forEach {
             $0.translatesAutoresizingMaskIntoConstraints = false
@@ -208,7 +205,7 @@ final class JobSetupView: UIView {
         progressStack.axis = .horizontal
         progressStack.alignment = .fill
         progressStack.distribution = .fillEqually
-        progressStack.spacing = 4
+        progressStack.spacing = 3
         progressSegments.forEach(progressStack.addArrangedSubview)
 
         heroMoneyStack.axis = .horizontal
@@ -228,7 +225,6 @@ final class JobSetupView: UIView {
             hourlyRateUnderline,
             currencyRow,
             currencySeparator,
-            actionSeparator,
             continueButton
         ].forEach(contentView.addSubview)
 
@@ -265,7 +261,7 @@ final class JobSetupView: UIView {
             progressStack.topAnchor.constraint(equalTo: topRow.bottomAnchor, constant: 16),
             progressStack.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 24),
             progressStack.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -24),
-            progressStack.heightAnchor.constraint(equalToConstant: 2),
+            progressStack.heightAnchor.constraint(equalToConstant: 1),
 
             questionLabel.topAnchor.constraint(equalTo: progressStack.bottomAnchor, constant: 40),
             questionLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 24),
@@ -277,12 +273,14 @@ final class JobSetupView: UIView {
 
             heroMoneyStack.topAnchor.constraint(equalTo: supportingTextLabel.bottomAnchor, constant: 36),
             heroMoneyStack.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 24),
-            heroMoneyStack.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -24),
+            heroMoneyStack.trailingAnchor.constraint(lessThanOrEqualTo: contentView.trailingAnchor, constant: -24),
             hourlyRateTextField.heightAnchor.constraint(greaterThanOrEqualToConstant: 56),
+            hourlyRateTextField.widthAnchor.constraint(greaterThanOrEqualToConstant: 220),
+            hourlyRateTextField.widthAnchor.constraint(lessThanOrEqualTo: contentView.widthAnchor, constant: -48),
 
             hourlyRateUnderline.topAnchor.constraint(equalTo: heroMoneyStack.bottomAnchor, constant: 8),
             hourlyRateUnderline.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 24),
-            hourlyRateUnderline.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -24),
+            hourlyRateUnderline.trailingAnchor.constraint(equalTo: heroMoneyStack.trailingAnchor),
             hourlyRateUnderline.heightAnchor.constraint(equalToConstant: 1 / UIScreen.main.scale),
 
             currencyRow.topAnchor.constraint(equalTo: hourlyRateUnderline.bottomAnchor, constant: 28),
@@ -297,8 +295,8 @@ final class JobSetupView: UIView {
 
             currencyChevron.trailingAnchor.constraint(equalTo: currencyRow.trailingAnchor),
             currencyChevron.centerYAnchor.constraint(equalTo: currencyRow.centerYAnchor),
-            currencyChevron.widthAnchor.constraint(equalToConstant: 12),
-            currencyChevron.heightAnchor.constraint(equalToConstant: 18),
+            currencyChevron.widthAnchor.constraint(equalToConstant: 9),
+            currencyChevron.heightAnchor.constraint(equalToConstant: 13),
 
             currencyValueLabel.trailingAnchor.constraint(equalTo: currencyChevron.leadingAnchor, constant: -12),
             currencyValueLabel.centerYAnchor.constraint(equalTo: currencyRow.centerYAnchor),
@@ -308,14 +306,9 @@ final class JobSetupView: UIView {
             currencySeparator.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -24),
             currencySeparator.heightAnchor.constraint(equalToConstant: 1 / UIScreen.main.scale),
 
-            actionSeparator.topAnchor.constraint(greaterThanOrEqualTo: currencySeparator.bottomAnchor, constant: 44),
-            actionSeparator.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 24),
-            actionSeparator.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -24),
-            actionSeparator.bottomAnchor.constraint(equalTo: continueButton.topAnchor, constant: -16),
-            actionSeparator.heightAnchor.constraint(equalToConstant: 1 / UIScreen.main.scale),
-
             continueButton.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 24),
             continueButton.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -24),
+            continueButton.topAnchor.constraint(greaterThanOrEqualTo: currencySeparator.bottomAnchor, constant: 44),
             continueButton.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -24),
             continueButton.heightAnchor.constraint(greaterThanOrEqualToConstant: 44)
         ])
