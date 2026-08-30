@@ -41,7 +41,7 @@ struct JobNameSetupViewModelTests {
         viewModel.updateName("  Karolinska Hospital  ")
 
         #expect(viewModel.draft.name == "  Karolinska Hospital  ")
-        #expect(viewModel.draft.hourlyRateText == draft.hourlyRateText)
+        #expect(viewModel.draft.basePayAmountText == draft.basePayAmountText)
         #expect(viewModel.draft.currencyCode == draft.currencyCode)
         #expect(viewModel.draft.timeZoneIdentifier == draft.timeZoneIdentifier)
         #expect(viewModel.draft.payCalculationCycleKind == draft.payCalculationCycleKind)
@@ -53,9 +53,10 @@ struct JobNameSetupViewModelTests {
         let anchor = try LocalDate(year: 2026, month: 8, day: 30)
         let draft = JobSetupDraft(
             name: "",
-            hourlyRateText: "24.50",
+            basePayAmountText: "24.50",
             currencyCode: "AUD",
             timeZoneIdentifier: "Europe/Stockholm",
+            basePayBasis: .hourly,
             payCalculationCycleKind: .biweekly,
             payPeriodAnchorDate: anchor
         )
@@ -66,9 +67,10 @@ struct JobNameSetupViewModelTests {
         #expect(viewModel.canContinue)
         #expect(viewModel.draft == JobSetupDraft(
             name: "Karolinska Hospital",
-            hourlyRateText: "24.50",
+            basePayAmountText: "24.50",
             currencyCode: "AUD",
             timeZoneIdentifier: "Europe/Stockholm",
+            basePayBasis: .hourly,
             payCalculationCycleKind: .biweekly,
             payPeriodAnchorDate: anchor
         ))
@@ -77,9 +79,10 @@ struct JobNameSetupViewModelTests {
     private func makeDraft(name: String) -> JobSetupDraft {
         JobSetupDraft(
             name: name,
-            hourlyRateText: "24.50",
+            basePayAmountText: "24.50",
             currencyCode: "EUR",
             timeZoneIdentifier: "Europe/Stockholm",
+            basePayBasis: .hourly,
             payCalculationCycleKind: .calendarMonthly,
             payPeriodAnchorDate: nil
         )
@@ -89,9 +92,10 @@ struct JobNameSetupViewModelTests {
         let anchor = try LocalDate(year: 2026, month: 8, day: 30)
         return JobSetupDraft(
             name: "",
-            hourlyRateText: "24.50",
+            basePayAmountText: "24.50",
             currencyCode: "AUD",
             timeZoneIdentifier: "Europe/Stockholm",
+            basePayBasis: .hourly,
             payCalculationCycleKind: .biweekly,
             payPeriodAnchorDate: anchor
         )

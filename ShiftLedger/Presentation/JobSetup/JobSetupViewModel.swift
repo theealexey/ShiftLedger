@@ -12,9 +12,10 @@ final class JobSetupViewModel {
     ) {
         draft = JobSetupDraft(
             name: "",
-            hourlyRateText: "",
+            basePayAmountText: "",
             currencyCode: initialCurrencyCode,
             timeZoneIdentifier: initialTimeZoneIdentifier,
+            basePayBasis: nil,
             payCalculationCycleKind: nil,
             payPeriodAnchorDate: nil
         )
@@ -22,15 +23,19 @@ final class JobSetupViewModel {
     }
 
     var canContinue: Bool {
-        hourlyRate.map { $0 > .zero } ?? false
+        basePayBasis != nil && (basePayAmount.map { $0 > .zero } ?? false)
+    }
+
+    var basePayBasis: BasePayBasis? {
+        draft.basePayBasis
     }
 
     var hasValidName: Bool {
         draft.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
     }
 
-    var hourlyRate: Decimal? {
-        let text = draft.hourlyRateText
+    var basePayAmount: Decimal? {
+        let text = draft.basePayAmountText
         let decimalSeparator = decimalInputLocale.decimalSeparator ?? "."
         let components = text.components(separatedBy: decimalSeparator)
 
@@ -51,8 +56,17 @@ final class JobSetupViewModel {
         draft.name = value
     }
 
-    func updateHourlyRateText(_ value: String) {
-        draft.hourlyRateText = value
+    func updateBasePayAmountText(_ value: String) {
+        draft.basePayAmountText = value
+    }
+
+    func selectBasePayBasis(_ basis: BasePayBasis) {
+        guard draft.basePayBasis != basis else {
+            return
+        }
+
+        draft.basePayBasis = basis
+        draft.basePayAmountText = ""
     }
 
     func selectCurrency(code: String) -> Bool {

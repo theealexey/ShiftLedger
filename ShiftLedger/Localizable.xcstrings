@@ -209,21 +209,39 @@
         }
       }
     },
-    "jobSetup.rate.accessibilityHint" : {
+    "jobSetup.basePay.amount.accessibilityHint" : {
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Enter your hourly rate."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Введите вашу почасовую ставку."
-          }
-        }
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Enter your base pay amount." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Введите сумму базовой оплаты." } }
+      }
+    },
+    "jobSetup.basePay.fixedPerShift" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Fixed per shift" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Фиксированно за смену" } }
+      }
+    },
+    "jobSetup.basePay.fixedPerShift.amountTitle" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Pay per shift" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Оплата за одну смену" } }
+      }
+    },
+    "jobSetup.basePay.hourly" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Per hour" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "За час" } }
+      }
+    },
+    "jobSetup.basePay.hourly.amountTitle" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Base hourly rate" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Базовая ставка за час" } }
       }
     },
     "jobSetup.step1.subtitle" : {
@@ -232,13 +250,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "We use it as the basis for calculating your expected pay."
+            "value" : "Do not include premiums or multipliers."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Мы используем её как основу для расчёта ожидаемой зарплаты."
+            "value" : "Не учитывайте доплаты и повышающие коэффициенты."
           }
         }
       }
@@ -249,13 +267,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "What is your hourly rate?"
+            "value" : "How is your base pay calculated?"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Какая у вас почасовая ставка?"
+            "value" : "Как рассчитывается ваша базовая оплата?"
           }
         }
       }
@@ -277,15 +295,15 @@
     "jobSetup.step2.subtitle" : {
       "extractionState" : "manual",
       "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "This determines which shifts we group into one calculation." } },
-        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Это определяет, какие смены мы объединяем в один расчёт." } }
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Choose which shifts belong to one calculation." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Выберите, какие смены входят в один расчёт." } }
       }
     },
     "jobSetup.step2.title" : {
       "extractionState" : "manual",
       "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "How is your pay calculated?" } },
-        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Как вам начисляют оплату?" } }
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "How are your shifts grouped for pay?" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Как смены объединяются в расчёт?" } }
       }
     },
     "jobSetup.payCalculation.perShift" : {

@@ -1,13 +1,14 @@
 import UIKit
 
 final class JobSetupView: UIView {
-    var onHourlyRateChanged: ((String) -> Void)?
+    var onBasePayAmountChanged: ((String) -> Void)?
+    var onBasePayBasisSelected: ((BasePayBasis) -> Void)?
     var onCurrencyTapped: (() -> Void)?
     var onContinueTapped: (() -> Void)?
 
-    var hourlyRateText: String {
-        get { hourlyRateTextField.text ?? "" }
-        set { hourlyRateTextField.text = newValue }
+    var basePayAmountText: String {
+        get { basePayAmountTextField.text ?? "" }
+        set { basePayAmountTextField.text = newValue }
     }
 
     private let scrollView = UIScrollView()
@@ -20,10 +21,15 @@ final class JobSetupView: UIView {
     private let progressSegments = (0..<4).map { _ in UIView() }
     private let questionLabel = UILabel()
     private let supportingTextLabel = UILabel()
+    private let basisOptionsStack = UIStackView()
+    private let hourlyBasisControl = BasePayBasisOptionControl(title: JobSetupStrings.hourlyBasis)
+    private let fixedPerShiftBasisControl = BasePayBasisOptionControl(title: JobSetupStrings.fixedPerShiftBasis)
+    private let amountSection = UIStackView()
+    private let amountTitleLabel = UILabel()
     private let heroMoneyStack = UIStackView()
     private let currencySymbolLabel = UILabel()
-    private let hourlyRateTextField = UITextField()
-    private let hourlyRateUnderline = UIView()
+    private let basePayAmountTextField = UITextField()
+    private let basePayAmountUnderline = UIView()
     private let currencyRow = UIControl()
     private let currencyTitleLabel = UILabel()
     private let currencyValueLabel = UILabel()
@@ -50,6 +56,17 @@ final class JobSetupView: UIView {
         currencyValueLabel.text = code
         currencySymbolLabel.text = Locale(identifier: "en_US@currency=\(code)").currencySymbol ?? code
         currencyRow.accessibilityValue = code
+    }
+
+    func setBasePayBasis(_ basis: BasePayBasis?) {
+        hourlyBasisControl.isSelected = basis == .hourly
+        fixedPerShiftBasisControl.isSelected = basis == .fixedPerShift
+        amountSection.isHidden = basis == nil
+        amountTitleLabel.text = basis == .hourly
+            ? JobSetupStrings.hourlyAmountTitle
+            : JobSetupStrings.fixedPerShiftAmountTitle
+        basePayAmountTextField.accessibilityLabel = amountTitleLabel.text
+        basePayAmountTextField.accessibilityHint = JobSetupStrings.basePayAmountAccessibilityHint
     }
 
     func setContinueEnabled(_ enabled: Bool) {
@@ -112,18 +129,36 @@ final class JobSetupView: UIView {
         currencySymbolLabel.textColor = ShiftLedgerColors.textSecondary
         currencySymbolLabel.adjustsFontForContentSizeCategory = true
 
-        hourlyRateTextField.font = ShiftLedgerTypography.display
-        hourlyRateTextField.textColor = ShiftLedgerColors.textPrimary
-        hourlyRateTextField.backgroundColor = .clear
-        hourlyRateTextField.borderStyle = .none
-        hourlyRateTextField.keyboardType = .decimalPad
-        hourlyRateTextField.textAlignment = .natural
-        hourlyRateTextField.adjustsFontForContentSizeCategory = true
-        hourlyRateTextField.delegate = self
-        hourlyRateTextField.accessibilityLabel = JobSetupStrings.step1Title
-        hourlyRateTextField.accessibilityHint = JobSetupStrings.hourlyRateAccessibilityHint
+        basisOptionsStack.axis = .vertical
+        basisOptionsStack.spacing = 0
+        basisOptionsStack.addArrangedSubview(hourlyBasisControl)
+        basisOptionsStack.addArrangedSubview(fixedPerShiftBasisControl)
 
-        hourlyRateUnderline.backgroundColor = ShiftLedgerColors.separator
+        amountSection.axis = .vertical
+        amountSection.spacing = 0
+        amountSection.addArrangedSubview(amountTitleLabel)
+        amountSection.addArrangedSubview(heroMoneyStack)
+        amountSection.addArrangedSubview(basePayAmountUnderline)
+        amountSection.setCustomSpacing(8, after: amountTitleLabel)
+        amountSection.setCustomSpacing(8, after: heroMoneyStack)
+        amountSection.isHidden = true
+
+        amountTitleLabel.font = ShiftLedgerTypography.headline
+        amountTitleLabel.textColor = ShiftLedgerColors.textPrimary
+        amountTitleLabel.adjustsFontForContentSizeCategory = true
+        amountTitleLabel.numberOfLines = 0
+
+        basePayAmountTextField.font = ShiftLedgerTypography.display
+        basePayAmountTextField.textColor = ShiftLedgerColors.textPrimary
+        basePayAmountTextField.backgroundColor = .clear
+        basePayAmountTextField.borderStyle = .none
+        basePayAmountTextField.keyboardType = .decimalPad
+        basePayAmountTextField.textAlignment = .natural
+        basePayAmountTextField.adjustsFontForContentSizeCategory = true
+        basePayAmountTextField.delegate = self
+        basePayAmountTextField.accessibilityHint = JobSetupStrings.basePayAmountAccessibilityHint
+
+        basePayAmountUnderline.backgroundColor = ShiftLedgerColors.separator
 
         currencyTitleLabel.text = JobSetupStrings.currencyTitle
         currencyTitleLabel.font = ShiftLedgerTypography.body
@@ -183,8 +218,13 @@ final class JobSetupView: UIView {
             supportingTextLabel,
             heroMoneyStack,
             currencySymbolLabel,
-            hourlyRateTextField,
-            hourlyRateUnderline,
+            basisOptionsStack,
+            hourlyBasisControl,
+            fixedPerShiftBasisControl,
+            amountSection,
+            amountTitleLabel,
+            basePayAmountTextField,
+            basePayAmountUnderline,
             currencyRow,
             currencyTitleLabel,
             currencyValueLabel,
@@ -212,7 +252,7 @@ final class JobSetupView: UIView {
         heroMoneyStack.alignment = .firstBaseline
         heroMoneyStack.spacing = 8
         heroMoneyStack.addArrangedSubview(currencySymbolLabel)
-        heroMoneyStack.addArrangedSubview(hourlyRateTextField)
+        heroMoneyStack.addArrangedSubview(basePayAmountTextField)
 
         addSubview(scrollView)
         scrollView.addSubview(contentView)
@@ -221,8 +261,8 @@ final class JobSetupView: UIView {
             progressStack,
             questionLabel,
             supportingTextLabel,
-            heroMoneyStack,
-            hourlyRateUnderline,
+            basisOptionsStack,
+            amountSection,
             currencyRow,
             currencySeparator,
             continueButton
@@ -271,19 +311,19 @@ final class JobSetupView: UIView {
             supportingTextLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 24),
             supportingTextLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -24),
 
-            heroMoneyStack.topAnchor.constraint(equalTo: supportingTextLabel.bottomAnchor, constant: 36),
-            heroMoneyStack.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 24),
-            heroMoneyStack.trailingAnchor.constraint(lessThanOrEqualTo: contentView.trailingAnchor, constant: -24),
-            hourlyRateTextField.heightAnchor.constraint(greaterThanOrEqualToConstant: 56),
-            hourlyRateTextField.widthAnchor.constraint(greaterThanOrEqualToConstant: 220),
-            hourlyRateTextField.widthAnchor.constraint(lessThanOrEqualTo: contentView.widthAnchor, constant: -48),
+            basisOptionsStack.topAnchor.constraint(equalTo: supportingTextLabel.bottomAnchor, constant: 32),
+            basisOptionsStack.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 24),
+            basisOptionsStack.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -24),
 
-            hourlyRateUnderline.topAnchor.constraint(equalTo: heroMoneyStack.bottomAnchor, constant: 8),
-            hourlyRateUnderline.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 24),
-            hourlyRateUnderline.trailingAnchor.constraint(equalTo: heroMoneyStack.trailingAnchor),
-            hourlyRateUnderline.heightAnchor.constraint(equalToConstant: 1 / UIScreen.main.scale),
+            amountSection.topAnchor.constraint(equalTo: basisOptionsStack.bottomAnchor, constant: 28),
+            amountSection.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 24),
+            amountSection.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -24),
+            basePayAmountTextField.heightAnchor.constraint(greaterThanOrEqualToConstant: 56),
+            basePayAmountTextField.widthAnchor.constraint(greaterThanOrEqualToConstant: 220),
+            basePayAmountTextField.widthAnchor.constraint(lessThanOrEqualTo: contentView.widthAnchor, constant: -48),
+            basePayAmountUnderline.heightAnchor.constraint(equalToConstant: 1 / UIScreen.main.scale),
 
-            currencyRow.topAnchor.constraint(equalTo: hourlyRateUnderline.bottomAnchor, constant: 28),
+            currencyRow.topAnchor.constraint(equalTo: amountSection.bottomAnchor, constant: 28),
             currencyRow.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 24),
             currencyRow.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -24),
             currencyRow.heightAnchor.constraint(greaterThanOrEqualToConstant: 52),
@@ -315,9 +355,11 @@ final class JobSetupView: UIView {
     }
 
     private func configureInteractions() {
-        hourlyRateTextField.addTarget(self, action: #selector(hourlyRateTextChanged), for: .editingChanged)
-        hourlyRateTextField.addTarget(self, action: #selector(hourlyRateEditingDidBegin), for: .editingDidBegin)
-        hourlyRateTextField.addTarget(self, action: #selector(hourlyRateEditingDidEnd), for: .editingDidEnd)
+        basePayAmountTextField.addTarget(self, action: #selector(basePayAmountTextChanged), for: .editingChanged)
+        basePayAmountTextField.addTarget(self, action: #selector(basePayAmountEditingDidBegin), for: .editingDidBegin)
+        basePayAmountTextField.addTarget(self, action: #selector(basePayAmountEditingDidEnd), for: .editingDidEnd)
+        hourlyBasisControl.addAction(UIAction { [weak self] _ in self?.onBasePayBasisSelected?(.hourly) }, for: .touchUpInside)
+        fixedPerShiftBasisControl.addAction(UIAction { [weak self] _ in self?.onBasePayBasisSelected?(.fixedPerShift) }, for: .touchUpInside)
         currencyRow.addTarget(self, action: #selector(currencyTapped), for: .touchUpInside)
         continueButton.addTarget(self, action: #selector(continueTapped), for: .touchUpInside)
     }
@@ -359,16 +401,16 @@ final class JobSetupView: UIView {
         continueButton.configuration = configuration
     }
 
-    @objc private func hourlyRateTextChanged() {
-        onHourlyRateChanged?(hourlyRateText)
+    @objc private func basePayAmountTextChanged() {
+        onBasePayAmountChanged?(basePayAmountText)
     }
 
-    @objc private func hourlyRateEditingDidBegin() {
-        hourlyRateUnderline.backgroundColor = ShiftLedgerColors.accentPrimary
+    @objc private func basePayAmountEditingDidBegin() {
+        basePayAmountUnderline.backgroundColor = ShiftLedgerColors.accentPrimary
     }
 
-    @objc private func hourlyRateEditingDidEnd() {
-        hourlyRateUnderline.backgroundColor = ShiftLedgerColors.separator
+    @objc private func basePayAmountEditingDidEnd() {
+        basePayAmountUnderline.backgroundColor = ShiftLedgerColors.separator
     }
 
     @objc private func currencyTapped() {
@@ -384,5 +426,50 @@ extension JobSetupView: UITextFieldDelegate {
     func textFieldShouldReturn(_ textField: UITextField) -> Bool {
         endEditing(true)
         return true
+    }
+}
+
+private final class BasePayBasisOptionControl: UIControl {
+    private let optionTitle: String
+    private let titleLabel = UILabel()
+
+    override var isSelected: Bool {
+        didSet {
+            titleLabel.text = isSelected ? "●  \(optionTitle)" : "○  \(optionTitle)"
+            titleLabel.textColor = isSelected
+                ? ShiftLedgerColors.accentPrimary
+                : ShiftLedgerColors.textPrimary
+            accessibilityTraits = isSelected ? [.button, .selected] : .button
+        }
+    }
+
+    init(title: String) {
+        optionTitle = title
+        super.init(frame: .zero)
+
+        translatesAutoresizingMaskIntoConstraints = false
+        titleLabel.text = "○  \(title)"
+        titleLabel.font = ShiftLedgerTypography.body
+        titleLabel.textColor = ShiftLedgerColors.textPrimary
+        titleLabel.numberOfLines = 0
+        titleLabel.adjustsFontForContentSizeCategory = true
+        titleLabel.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(titleLabel)
+        NSLayoutConstraint.activate([
+            titleLabel.leadingAnchor.constraint(equalTo: leadingAnchor),
+            titleLabel.trailingAnchor.constraint(equalTo: trailingAnchor),
+            titleLabel.topAnchor.constraint(equalTo: topAnchor, constant: 12),
+            titleLabel.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -12)
+        ])
+        heightAnchor.constraint(greaterThanOrEqualToConstant: 56).isActive = true
+
+        isAccessibilityElement = true
+        accessibilityLabel = title
+        accessibilityTraits = .button
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        nil
     }
 }

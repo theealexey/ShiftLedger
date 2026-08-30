@@ -91,22 +91,23 @@ struct JobSetupViewModelTests {
         #expect(viewModel.draft.timeZoneIdentifier == "Europe/Stockholm")
     }
 
-    @Test("Пустая ставка не позволяет продолжить")
-    func emptyHourlyRateDisablesContinue() {
+    @Test("Без базы оплаты продолжить нельзя")
+    func emptyBasePayDisablesContinue() {
         let viewModel = makeViewModel()
 
-        #expect(viewModel.hourlyRate == nil)
+        #expect(viewModel.basePayAmount == nil)
         #expect(viewModel.canContinue == false)
     }
 
-    @Test("Положительная ставка с точкой парсится без округления")
-    func parsesEnglishHourlyRateWithoutRounding() {
+    @Test("Почасовая база с точкой парсится без округления")
+    func parsesEnglishBasePayWithoutRounding() {
         let viewModel = makeViewModel()
 
-        viewModel.updateHourlyRateText("24.50")
+        viewModel.selectBasePayBasis(.hourly)
+        viewModel.updateBasePayAmountText("24.50")
 
-        #expect(viewModel.draft.hourlyRateText == "24.50")
-        #expect(viewModel.hourlyRate == Decimal(string: "24.50"))
+        #expect(viewModel.draft.basePayAmountText == "24.50")
+        #expect(viewModel.basePayAmount == Decimal(string: "24.50"))
         #expect(viewModel.canContinue)
     }
 
@@ -114,9 +115,10 @@ struct JobSetupViewModelTests {
     func preservesExactHourlyRateWithoutRounding() {
         let viewModel = makeViewModel()
 
-        viewModel.updateHourlyRateText("17.125")
+        viewModel.selectBasePayBasis(.hourly)
+        viewModel.updateBasePayAmountText("17.125")
 
-        #expect(viewModel.hourlyRate == Decimal(string: "17.125"))
+        #expect(viewModel.basePayAmount == Decimal(string: "17.125"))
         #expect(viewModel.canContinue)
     }
 
@@ -124,9 +126,10 @@ struct JobSetupViewModelTests {
     func zeroHourlyRateDisablesContinue() {
         let viewModel = makeViewModel()
 
-        viewModel.updateHourlyRateText("0")
+        viewModel.selectBasePayBasis(.hourly)
+        viewModel.updateBasePayAmountText("0")
 
-        #expect(viewModel.hourlyRate == .zero)
+        #expect(viewModel.basePayAmount == .zero)
         #expect(viewModel.canContinue == false)
     }
 
@@ -134,12 +137,13 @@ struct JobSetupViewModelTests {
         "Некорректная английская запись ставки отклоняется",
         arguments: ["1234ю50", "1234abc", "24.", "1..2", "1e3", "-10", "+10", "€24.50", "1,234.50", "12 34"]
     )
-    func rejectsMalformedEnglishHourlyRate(_ value: String) {
+    func rejectsMalformedEnglishBasePay(_ value: String) {
         let viewModel = makeViewModel()
 
-        viewModel.updateHourlyRateText(value)
+        viewModel.selectBasePayBasis(.hourly)
+        viewModel.updateBasePayAmountText(value)
 
-        #expect(viewModel.hourlyRate == nil)
+        #expect(viewModel.basePayAmount == nil)
         #expect(viewModel.canContinue == false)
     }
 
@@ -151,9 +155,10 @@ struct JobSetupViewModelTests {
             decimalInputLocale: Locale(identifier: "sv_SE")
         )
 
-        viewModel.updateHourlyRateText("17,125")
+        viewModel.selectBasePayBasis(.hourly)
+        viewModel.updateBasePayAmountText("17,125")
 
-        #expect(viewModel.hourlyRate == Decimal(string: "17.125"))
+        #expect(viewModel.basePayAmount == Decimal(string: "17.125"))
         #expect(viewModel.canContinue)
     }
 
@@ -165,24 +170,60 @@ struct JobSetupViewModelTests {
             decimalInputLocale: Locale(identifier: "ru_RU")
         )
 
-        viewModel.updateHourlyRateText("24,50")
+        viewModel.selectBasePayBasis(.hourly)
+        viewModel.updateBasePayAmountText("24,50")
 
-        #expect(viewModel.hourlyRate == Decimal(string: "24.50"))
+        #expect(viewModel.basePayAmount == Decimal(string: "24.50"))
         #expect(viewModel.canContinue)
     }
 
     @Test("Некорректная запись с запятой отклоняется", arguments: ["24.50", "24,", "12,3,4"])
-    func rejectsMalformedSwedishHourlyRate(_ value: String) {
+    func rejectsMalformedSwedishBasePay(_ value: String) {
         let viewModel = JobSetupViewModel(
             initialCurrencyCode: "SEK",
             initialTimeZoneIdentifier: "Europe/Stockholm",
             decimalInputLocale: Locale(identifier: "sv_SE")
         )
 
-        viewModel.updateHourlyRateText(value)
+        viewModel.selectBasePayBasis(.hourly)
+        viewModel.updateBasePayAmountText(value)
 
-        #expect(viewModel.hourlyRate == nil)
+        #expect(viewModel.basePayAmount == nil)
         #expect(viewModel.canContinue == false)
+    }
+
+    @Test("Фиксированная база за смену позволяет продолжить")
+    func fixedPerShiftBasePayEnablesContinue() {
+        let viewModel = makeViewModel()
+        viewModel.selectBasePayBasis(.fixedPerShift)
+        viewModel.updateBasePayAmountText("4000")
+
+        #expect(viewModel.basePayBasis == .fixedPerShift)
+        #expect(viewModel.basePayAmount == Decimal(string: "4000"))
+        #expect(viewModel.canContinue)
+    }
+
+    @Test("Переключение базы очищает существующую сумму")
+    func switchingBasePayBasisClearsAmount() {
+        let viewModel = makeViewModel()
+        viewModel.selectBasePayBasis(.hourly)
+        viewModel.updateBasePayAmountText("500")
+        viewModel.selectBasePayBasis(.fixedPerShift)
+
+        #expect(viewModel.basePayAmount == nil)
+        #expect(viewModel.draft.basePayAmountText.isEmpty)
+        #expect(viewModel.canContinue == false)
+    }
+
+    @Test("Повторный выбор той же базы не очищает сумму")
+    func reselectingSameBasePayBasisPreservesAmount() {
+        let viewModel = makeViewModel()
+        viewModel.selectBasePayBasis(.fixedPerShift)
+        viewModel.updateBasePayAmountText("4000")
+        viewModel.selectBasePayBasis(.fixedPerShift)
+
+        #expect(viewModel.draft.basePayAmountText == "4000")
+        #expect(viewModel.canContinue)
     }
 
     private func makeViewModel() -> JobSetupViewModel {

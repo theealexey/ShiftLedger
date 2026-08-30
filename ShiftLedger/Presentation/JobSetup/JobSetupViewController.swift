@@ -28,13 +28,18 @@ final class JobSetupViewController: UIViewController {
     }
 
     private func bindView() {
-        jobSetupView.onHourlyRateChanged = { [weak self] text in
+        jobSetupView.onBasePayAmountChanged = { [weak self] text in
             guard let self else {
                 return
             }
 
-            viewModel.updateHourlyRateText(text)
+            viewModel.updateBasePayAmountText(text)
             jobSetupView.setContinueEnabled(viewModel.canContinue)
+        }
+        jobSetupView.onBasePayBasisSelected = { [weak self] basis in
+            guard let self else { return }
+            viewModel.selectBasePayBasis(basis)
+            render()
         }
         jobSetupView.onCurrencyTapped = { [weak self] in
             self?.showCurrencySelection()
@@ -50,7 +55,8 @@ final class JobSetupViewController: UIViewController {
 
     private func render() {
         let draft = viewModel.draft
-        jobSetupView.hourlyRateText = draft.hourlyRateText
+        jobSetupView.basePayAmountText = draft.basePayAmountText
+        jobSetupView.setBasePayBasis(draft.basePayBasis)
         jobSetupView.setCurrencyCode(draft.currencyCode)
         jobSetupView.setContinueEnabled(viewModel.canContinue)
     }

@@ -38,7 +38,7 @@ struct PayPeriodSetupViewModelTests {
 
         viewModel.selectCycleKind(.perShift)
 
-        #expect(viewModel.draft.hourlyRateText == "24.50")
+        #expect(viewModel.draft.basePayAmountText == "24.50")
         #expect(viewModel.draft.currencyCode == "AUD")
         #expect(viewModel.draft.timeZoneIdentifier == "Europe/Stockholm")
         #expect(viewModel.draft.name == "Karolinska Hospital")
@@ -163,7 +163,7 @@ struct PayPeriodSetupViewModelTests {
         let viewModel = makeViewModel()
         viewModel.selectCycleKind(.calendarMonthly)
 
-        #expect(viewModel.draft.hourlyRateText == "24.50")
+        #expect(viewModel.draft.basePayAmountText == "24.50")
         #expect(viewModel.draft.currencyCode == "EUR")
     }
 
@@ -204,7 +204,8 @@ struct PayPeriodSetupViewModelTests {
             initialTimeZoneIdentifier: "Europe/Stockholm",
             decimalInputLocale: Locale(identifier: "en_US")
         )
-        jobSetupViewModel.updateHourlyRateText("24.50")
+        jobSetupViewModel.selectBasePayBasis(.hourly)
+        jobSetupViewModel.updateBasePayAmountText("24.50")
         return PayPeriodSetupViewModel(draft: jobSetupViewModel.draft)
     }
 
