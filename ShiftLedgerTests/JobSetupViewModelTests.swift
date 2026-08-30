@@ -99,19 +99,42 @@ struct JobSetupViewModelTests {
         #expect(viewModel.canContinue == false)
     }
 
-    @Test("Положительная дробная ставка сохраняет Decimal точность")
-    func parsesPositiveHourlyRateWithoutRounding() {
+    @Test("Положительная ставка с точкой парсится без округления")
+    func parsesEnglishHourlyRateWithoutRounding() {
+        let viewModel = makeViewModel()
+
+        viewModel.updateHourlyRateText("24.50")
+
+        #expect(viewModel.draft.hourlyRateText == "24.50")
+        #expect(viewModel.hourlyRate == Decimal(string: "24.50"))
+        #expect(viewModel.canContinue)
+    }
+
+    @Test("Точная дробная ставка сохраняет Decimal точность")
+    func preservesExactHourlyRateWithoutRounding() {
         let viewModel = makeViewModel()
 
         viewModel.updateHourlyRateText("17.125")
 
-        #expect(viewModel.draft.hourlyRateText == "17.125")
         #expect(viewModel.hourlyRate == Decimal(string: "17.125"))
         #expect(viewModel.canContinue)
     }
 
-    @Test("Нулевая и отрицательная ставки не позволяют продолжить", arguments: ["0", "-17.125"])
-    func rejectsNonPositiveHourlyRate(_ value: String) {
+    @Test("Нулевая ставка парсится, но не позволяет продолжить")
+    func zeroHourlyRateDisablesContinue() {
+        let viewModel = makeViewModel()
+
+        viewModel.updateHourlyRateText("0")
+
+        #expect(viewModel.hourlyRate == .zero)
+        #expect(viewModel.canContinue == false)
+    }
+
+    @Test(
+        "Некорректная английская запись ставки отклоняется",
+        arguments: ["1234ю50", "1234abc", "24.", "1..2", "1e3", "-10", "+10", "€24.50", "1,234.50", "12 34"]
+    )
+    func rejectsMalformedEnglishHourlyRate(_ value: String) {
         let viewModel = makeViewModel()
 
         viewModel.updateHourlyRateText(value)
@@ -132,6 +155,34 @@ struct JobSetupViewModelTests {
 
         #expect(viewModel.hourlyRate == Decimal(string: "17.125"))
         #expect(viewModel.canContinue)
+    }
+
+    @Test("Запись с запятой принимается для русского locale")
+    func parsesRussianHourlyRateWithCommaSeparator() {
+        let viewModel = JobSetupViewModel(
+            initialCurrencyCode: "EUR",
+            initialTimeZoneIdentifier: "Europe/Stockholm",
+            decimalInputLocale: Locale(identifier: "ru_RU")
+        )
+
+        viewModel.updateHourlyRateText("24,50")
+
+        #expect(viewModel.hourlyRate == Decimal(string: "24.50"))
+        #expect(viewModel.canContinue)
+    }
+
+    @Test("Некорректная запись с запятой отклоняется", arguments: ["24.50", "24,", "12,3,4"])
+    func rejectsMalformedSwedishHourlyRate(_ value: String) {
+        let viewModel = JobSetupViewModel(
+            initialCurrencyCode: "SEK",
+            initialTimeZoneIdentifier: "Europe/Stockholm",
+            decimalInputLocale: Locale(identifier: "sv_SE")
+        )
+
+        viewModel.updateHourlyRateText(value)
+
+        #expect(viewModel.hourlyRate == nil)
+        #expect(viewModel.canContinue == false)
     }
 
     private func makeViewModel() -> JobSetupViewModel {

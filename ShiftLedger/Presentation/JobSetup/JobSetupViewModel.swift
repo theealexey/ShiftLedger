@@ -20,7 +20,7 @@ final class JobSetupViewModel {
     }
 
     var canContinue: Bool {
-        hourlyRate != nil
+        hourlyRate.map { $0 > .zero } ?? false
     }
 
     var hasValidName: Bool {
@@ -28,9 +28,17 @@ final class JobSetupViewModel {
     }
 
     var hourlyRate: Decimal? {
-        let text = draft.hourlyRateText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let text = draft.hourlyRateText
+        let decimalSeparator = decimalInputLocale.decimalSeparator ?? "."
+        let components = text.components(separatedBy: decimalSeparator)
 
-        guard let amount = Decimal(string: text, locale: decimalInputLocale), amount > .zero else {
+        guard
+            components.count <= 2,
+            components.allSatisfy({
+                $0.isEmpty == false && $0.allSatisfy(\.isWholeNumber)
+            }),
+            let amount = Decimal(string: text, locale: decimalInputLocale)
+        else {
             return nil
         }
 
