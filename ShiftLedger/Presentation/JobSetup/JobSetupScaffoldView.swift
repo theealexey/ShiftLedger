@@ -14,7 +14,7 @@ final class JobSetupScaffoldView: UIView {
     private let backButton = UIButton(type: .system)
     private let stepLabel = UILabel()
     private let progressStack = UIStackView()
-    private let progressSegments = (0..<4).map { _ in UIView() }
+    private let progressSegments = (0..<3).map { _ in UIView() }
     private let showsBrand: Bool
 
     init(

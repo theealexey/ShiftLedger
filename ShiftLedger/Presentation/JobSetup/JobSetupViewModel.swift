@@ -30,10 +30,6 @@ final class JobSetupViewModel {
         draft.basePayBasis
     }
 
-    var hasValidName: Bool {
-        draft.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
-    }
-
     var basePayAmount: Decimal? {
         let text = draft.basePayAmountText
         let decimalSeparator = decimalInputLocale.decimalSeparator ?? "."
@@ -50,10 +46,6 @@ final class JobSetupViewModel {
         }
 
         return amount
-    }
-
-    func updateName(_ value: String) {
-        draft.name = value
     }
 
     func updateBasePayAmountText(_ value: String) {

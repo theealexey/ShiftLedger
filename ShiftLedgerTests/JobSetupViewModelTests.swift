@@ -18,47 +18,6 @@ struct JobSetupViewModelTests {
         #expect(viewModel.draft.timeZoneIdentifier == "Europe/Stockholm")
     }
 
-    @Test("Пустое имя не проходит name validation")
-    func emptyNameIsInvalid() {
-        let viewModel = makeViewModel()
-
-        #expect(viewModel.hasValidName == false)
-    }
-
-    @Test("Имя из пробелов и переводов строк не проходит name validation")
-    func whitespaceOnlyNameIsInvalid() {
-        let viewModel = makeViewModel()
-        viewModel.updateName(" \n\t ")
-
-        #expect(viewModel.hasValidName == false)
-    }
-
-    @Test("Обычное имя проходит name validation")
-    func validNameIsValid() {
-        let viewModel = makeViewModel()
-        viewModel.updateName("Clinic")
-
-        #expect(viewModel.hasValidName)
-    }
-
-    @Test("Имя с внешними пробелами сохраняется без нормализации")
-    func preservesUnnormalizedNameWhileAllowingContinue() {
-        let viewModel = makeViewModel()
-        viewModel.updateName("  Clinic  ")
-
-        #expect(viewModel.draft.name == "  Clinic  ")
-        #expect(viewModel.hasValidName)
-    }
-
-    @Test("updateName обновляет draft")
-    func updatesNameInDraft() {
-        let viewModel = makeViewModel()
-
-        viewModel.updateName("Night clinic")
-
-        #expect(viewModel.draft.name == "Night clinic")
-    }
-
     @Test("Выбор валюты обновляет draft")
     func updatesCurrencyInDraft() {
         let viewModel = makeViewModel()

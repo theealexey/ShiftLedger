@@ -25,7 +25,6 @@ final class JobSetupView: UIView {
     private let amountSection = UIStackView()
     private let amountTitleLabel = UILabel()
     private let heroMoneyStack = UIStackView()
-    private let currencySymbolLabel = UILabel()
     private let basePayAmountTextField = UITextField()
     private let basePayAmountUnderline = UIView()
     private let currencyRow = UIControl()
@@ -53,7 +52,6 @@ final class JobSetupView: UIView {
 
     func setCurrencyCode(_ code: String) {
         currencyValueLabel.text = code
-        currencySymbolLabel.text = Locale(identifier: "en_US@currency=\(code)").currencySymbol ?? code
         currencyRow.accessibilityValue = code
     }
 
@@ -107,10 +105,6 @@ final class JobSetupView: UIView {
         amountTitleLabel.adjustsFontForContentSizeCategory = true
         amountTitleLabel.numberOfLines = 0
 
-        currencySymbolLabel.font = ShiftLedgerTypography.basePayCurrency
-        currencySymbolLabel.textColor = ShiftLedgerColors.textSecondary
-        currencySymbolLabel.adjustsFontForContentSizeCategory = true
-
         basePayAmountTextField.font = ShiftLedgerTypography.basePayAmount
         basePayAmountTextField.textColor = ShiftLedgerColors.textPrimary
         basePayAmountTextField.backgroundColor = .clear
@@ -153,7 +147,6 @@ final class JobSetupView: UIView {
             amountSection,
             amountTitleLabel,
             heroMoneyStack,
-            currencySymbolLabel,
             basePayAmountTextField,
             basePayAmountUnderline,
             currencyRow,
@@ -165,8 +158,6 @@ final class JobSetupView: UIView {
 
         heroMoneyStack.axis = .horizontal
         heroMoneyStack.alignment = .firstBaseline
-        heroMoneyStack.spacing = 8
-        heroMoneyStack.addArrangedSubview(currencySymbolLabel)
         heroMoneyStack.addArrangedSubview(basePayAmountTextField)
 
         addSubview(scaffold)
@@ -174,7 +165,6 @@ final class JobSetupView: UIView {
             .forEach(scaffold.contentView.addSubview)
         [currencyTitleLabel, currencyValueLabel, currencyChevron].forEach(currencyRow.addSubview)
 
-        currencySymbolLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
         currencyValueLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
         currencyChevron.setContentCompressionResistancePriority(.required, for: .horizontal)
     }
