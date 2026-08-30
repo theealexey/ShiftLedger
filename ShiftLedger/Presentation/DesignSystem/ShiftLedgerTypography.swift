@@ -6,6 +6,11 @@ enum ShiftLedgerTypography {
         return UIFontMetrics(forTextStyle: .largeTitle).scaledFont(for: font)
     }
 
+    static var basePayAmount: UIFont {
+        let font = UIFont.monospacedDigitSystemFont(ofSize: 36, weight: .bold)
+        return UIFontMetrics(forTextStyle: .title1).scaledFont(for: font)
+    }
+
     static var largeTitle: UIFont {
         UIFont.preferredFont(forTextStyle: .largeTitle)
     }

@@ -11,14 +11,12 @@ final class JobSetupView: UIView {
         set { basePayAmountTextField.text = newValue }
     }
 
-    private let scrollView = UIScrollView()
-    private let contentView = UIView()
-    private let topRow = UIStackView()
-    private let topRowSpacer = UIView()
-    private let brandLabel = UILabel()
-    private let stepLabel = UILabel()
-    private let progressStack = UIStackView()
-    private let progressSegments = (0..<4).map { _ in UIView() }
+    private let scaffold = JobSetupScaffoldView(
+        brandText: JobSetupStrings.brandName,
+        stepIndicator: JobSetupStrings.stepIndicator,
+        stepAccessibilityLabel: JobSetupStrings.stepIndicatorAccessibilityLabel,
+        activeStep: 1
+    )
     private let questionLabel = UILabel()
     private let supportingTextLabel = UILabel()
     private let basisOptionsStack = UIStackView()
@@ -35,7 +33,8 @@ final class JobSetupView: UIView {
     private let currencyValueLabel = UILabel()
     private let currencyChevron = UIImageView(image: UIImage(systemName: "chevron.right"))
     private let currencySeparator = UIView()
-    private let continueButton = UIButton(type: .system)
+    private var currencyRowTopAfterAmountConstraint: NSLayoutConstraint?
+    private var currencyRowTopAfterBasisConstraint: NSLayoutConstraint?
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -67,51 +66,15 @@ final class JobSetupView: UIView {
             : JobSetupStrings.fixedPerShiftAmountTitle
         basePayAmountTextField.accessibilityLabel = amountTitleLabel.text
         basePayAmountTextField.accessibilityHint = JobSetupStrings.basePayAmountAccessibilityHint
+        currencyRowTopAfterAmountConstraint?.isActive = basis != nil
+        currencyRowTopAfterBasisConstraint?.isActive = basis == nil
     }
 
     func setContinueEnabled(_ enabled: Bool) {
-        continueButton.isEnabled = enabled
-
-        guard var configuration = continueButton.configuration else {
-            return
-        }
-
-        configuration.baseForegroundColor = enabled
-            ? ShiftLedgerColors.accentPrimary
-            : ShiftLedgerColors.textTertiary
-        continueButton.configuration = configuration
-    }
-
-    override func didMoveToWindow() {
-        super.didMoveToWindow()
-
-        updateDynamicTypeLayout()
+        scaffold.setContinueEnabled(enabled)
     }
 
     private func configureAppearance() {
-        backgroundColor = ShiftLedgerColors.backgroundPrimary
-        scrollView.alwaysBounceVertical = true
-        scrollView.keyboardDismissMode = .interactive
-
-        brandLabel.text = JobSetupStrings.brandName
-        brandLabel.font = ShiftLedgerTypography.caption
-        brandLabel.textColor = ShiftLedgerColors.accentPrimary
-        brandLabel.numberOfLines = 1
-        brandLabel.adjustsFontForContentSizeCategory = true
-        brandLabel.isAccessibilityElement = false
-
-        stepLabel.text = JobSetupStrings.stepIndicator
-        stepLabel.font = ShiftLedgerTypography.caption
-        stepLabel.textColor = ShiftLedgerColors.textTertiary
-        stepLabel.adjustsFontForContentSizeCategory = true
-        stepLabel.accessibilityLabel = JobSetupStrings.stepIndicatorAccessibilityLabel
-
-        for (index, segment) in progressSegments.enumerated() {
-            segment.backgroundColor = index == 0
-                ? ShiftLedgerColors.accentPrimary
-                : ShiftLedgerColors.separator
-        }
-
         questionLabel.text = JobSetupStrings.step1Title
         questionLabel.font = ShiftLedgerTypography.onboardingQuestion
         questionLabel.textColor = ShiftLedgerColors.textPrimary
@@ -124,10 +87,6 @@ final class JobSetupView: UIView {
         supportingTextLabel.textColor = ShiftLedgerColors.textSecondary
         supportingTextLabel.numberOfLines = 0
         supportingTextLabel.adjustsFontForContentSizeCategory = true
-
-        currencySymbolLabel.font = ShiftLedgerTypography.title
-        currencySymbolLabel.textColor = ShiftLedgerColors.textSecondary
-        currencySymbolLabel.adjustsFontForContentSizeCategory = true
 
         basisOptionsStack.axis = .vertical
         basisOptionsStack.spacing = 0
@@ -148,7 +107,11 @@ final class JobSetupView: UIView {
         amountTitleLabel.adjustsFontForContentSizeCategory = true
         amountTitleLabel.numberOfLines = 0
 
-        basePayAmountTextField.font = ShiftLedgerTypography.display
+        currencySymbolLabel.font = ShiftLedgerTypography.title
+        currencySymbolLabel.textColor = ShiftLedgerColors.textSecondary
+        currencySymbolLabel.adjustsFontForContentSizeCategory = true
+
+        basePayAmountTextField.font = ShiftLedgerTypography.basePayAmount
         basePayAmountTextField.textColor = ShiftLedgerColors.textPrimary
         basePayAmountTextField.backgroundColor = .clear
         basePayAmountTextField.borderStyle = .none
@@ -178,75 +141,27 @@ final class JobSetupView: UIView {
         currencyRow.accessibilityLabel = JobSetupStrings.currencyTitle
         currencyRow.accessibilityHint = JobSetupStrings.currencyAccessibilityHint
         currencyRow.accessibilityTraits = .button
-
         currencySeparator.backgroundColor = ShiftLedgerColors.separator
-
-        var continueConfiguration = UIButton.Configuration.plain()
-        continueConfiguration.title = JobSetupStrings.continueTitle
-        continueConfiguration.image = UIImage(systemName: "arrow.right")
-        continueConfiguration.imagePlacement = .trailing
-        continueConfiguration.imagePadding = 8
-        continueConfiguration.titleAlignment = .trailing
-        continueConfiguration.baseForegroundColor = ShiftLedgerColors.accentPrimary
-        continueConfiguration.contentInsets = NSDirectionalEdgeInsets(
-            top: 10,
-            leading: 0,
-            bottom: 10,
-            trailing: 0
-        )
-        continueConfiguration.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { attributes in
-            var transformedAttributes = attributes
-            transformedAttributes.font = ShiftLedgerTypography.button
-            return transformedAttributes
-        }
-        continueButton.configuration = continueConfiguration
-        continueButton.contentHorizontalAlignment = .trailing
-        continueButton.titleLabel?.numberOfLines = 0
-        continueButton.titleLabel?.adjustsFontForContentSizeCategory = true
     }
 
     private func configureSubviews() {
         [
-            scrollView,
-            contentView,
-            topRow,
-            topRowSpacer,
-            brandLabel,
-            stepLabel,
-            progressStack,
+            scaffold,
             questionLabel,
             supportingTextLabel,
-            heroMoneyStack,
-            currencySymbolLabel,
             basisOptionsStack,
-            hourlyBasisControl,
-            fixedPerShiftBasisControl,
             amountSection,
             amountTitleLabel,
+            heroMoneyStack,
+            currencySymbolLabel,
             basePayAmountTextField,
             basePayAmountUnderline,
             currencyRow,
             currencyTitleLabel,
             currencyValueLabel,
             currencyChevron,
-            currencySeparator,
-            continueButton
-        ].forEach {
-            $0.translatesAutoresizingMaskIntoConstraints = false
-        }
-
-        topRow.axis = .horizontal
-        topRow.alignment = .top
-        topRow.distribution = .fill
-        topRow.addArrangedSubview(brandLabel)
-        topRow.addArrangedSubview(topRowSpacer)
-        topRow.addArrangedSubview(stepLabel)
-
-        progressStack.axis = .horizontal
-        progressStack.alignment = .fill
-        progressStack.distribution = .fillEqually
-        progressStack.spacing = 3
-        progressSegments.forEach(progressStack.addArrangedSubview)
+            currencySeparator
+        ].forEach { $0.translatesAutoresizingMaskIntoConstraints = false }
 
         heroMoneyStack.axis = .horizontal
         heroMoneyStack.alignment = .firstBaseline
@@ -254,151 +169,97 @@ final class JobSetupView: UIView {
         heroMoneyStack.addArrangedSubview(currencySymbolLabel)
         heroMoneyStack.addArrangedSubview(basePayAmountTextField)
 
-        addSubview(scrollView)
-        scrollView.addSubview(contentView)
-        [
-            topRow,
-            progressStack,
-            questionLabel,
-            supportingTextLabel,
-            basisOptionsStack,
-            amountSection,
-            currencyRow,
-            currencySeparator,
-            continueButton
-        ].forEach(contentView.addSubview)
-
+        addSubview(scaffold)
+        [questionLabel, supportingTextLabel, basisOptionsStack, amountSection, currencyRow, currencySeparator]
+            .forEach(scaffold.contentView.addSubview)
         [currencyTitleLabel, currencyValueLabel, currencyChevron].forEach(currencyRow.addSubview)
 
-        stepLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
-        brandLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        topRowSpacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
         currencySymbolLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
         currencyValueLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
         currencyChevron.setContentCompressionResistancePriority(.required, for: .horizontal)
-
-        updateDynamicTypeLayout()
     }
 
     private func configureLayout() {
+        currencyRowTopAfterAmountConstraint = currencyRow.topAnchor.constraint(
+            equalTo: amountSection.bottomAnchor,
+            constant: 28
+        )
+        currencyRowTopAfterBasisConstraint = currencyRow.topAnchor.constraint(
+            equalTo: basisOptionsStack.bottomAnchor,
+            constant: 28
+        )
+
         NSLayoutConstraint.activate([
-            scrollView.topAnchor.constraint(equalTo: safeAreaLayoutGuide.topAnchor),
-            scrollView.leadingAnchor.constraint(equalTo: leadingAnchor),
-            scrollView.trailingAnchor.constraint(equalTo: trailingAnchor),
-            scrollView.bottomAnchor.constraint(equalTo: keyboardLayoutGuide.topAnchor),
+            scaffold.topAnchor.constraint(equalTo: topAnchor),
+            scaffold.leadingAnchor.constraint(equalTo: leadingAnchor),
+            scaffold.trailingAnchor.constraint(equalTo: trailingAnchor),
+            scaffold.bottomAnchor.constraint(equalTo: bottomAnchor),
 
-            contentView.topAnchor.constraint(equalTo: scrollView.contentLayoutGuide.topAnchor),
-            contentView.leadingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.leadingAnchor),
-            contentView.trailingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.trailingAnchor),
-            contentView.bottomAnchor.constraint(equalTo: scrollView.contentLayoutGuide.bottomAnchor),
-            contentView.widthAnchor.constraint(equalTo: scrollView.frameLayoutGuide.widthAnchor),
-            contentView.heightAnchor.constraint(greaterThanOrEqualTo: scrollView.frameLayoutGuide.heightAnchor),
-
-            topRow.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 24),
-            topRow.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 24),
-            topRow.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -24),
-
-            progressStack.topAnchor.constraint(equalTo: topRow.bottomAnchor, constant: 16),
-            progressStack.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 24),
-            progressStack.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -24),
-            progressStack.heightAnchor.constraint(equalToConstant: 1),
-
-            questionLabel.topAnchor.constraint(equalTo: progressStack.bottomAnchor, constant: 40),
-            questionLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 24),
-            questionLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -24),
+            questionLabel.topAnchor.constraint(equalTo: scaffold.progressBottomAnchor, constant: 40),
+            questionLabel.leadingAnchor.constraint(equalTo: scaffold.contentView.leadingAnchor, constant: 24),
+            questionLabel.trailingAnchor.constraint(equalTo: scaffold.contentView.trailingAnchor, constant: -24),
 
             supportingTextLabel.topAnchor.constraint(equalTo: questionLabel.bottomAnchor, constant: 12),
-            supportingTextLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 24),
-            supportingTextLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -24),
+            supportingTextLabel.leadingAnchor.constraint(equalTo: questionLabel.leadingAnchor),
+            supportingTextLabel.trailingAnchor.constraint(equalTo: questionLabel.trailingAnchor),
 
             basisOptionsStack.topAnchor.constraint(equalTo: supportingTextLabel.bottomAnchor, constant: 32),
-            basisOptionsStack.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 24),
-            basisOptionsStack.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -24),
+            basisOptionsStack.leadingAnchor.constraint(equalTo: scaffold.contentView.leadingAnchor, constant: 24),
+            basisOptionsStack.trailingAnchor.constraint(equalTo: scaffold.contentView.trailingAnchor, constant: -24),
 
             amountSection.topAnchor.constraint(equalTo: basisOptionsStack.bottomAnchor, constant: 28),
-            amountSection.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 24),
-            amountSection.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -24),
+            amountSection.leadingAnchor.constraint(equalTo: scaffold.contentView.leadingAnchor, constant: 24),
+            amountSection.trailingAnchor.constraint(equalTo: scaffold.contentView.trailingAnchor, constant: -24),
             basePayAmountTextField.heightAnchor.constraint(greaterThanOrEqualToConstant: 56),
             basePayAmountTextField.widthAnchor.constraint(greaterThanOrEqualToConstant: 220),
-            basePayAmountTextField.widthAnchor.constraint(lessThanOrEqualTo: contentView.widthAnchor, constant: -48),
+            basePayAmountTextField.widthAnchor.constraint(lessThanOrEqualTo: scaffold.contentView.widthAnchor, constant: -48),
             basePayAmountUnderline.heightAnchor.constraint(equalToConstant: 1 / UIScreen.main.scale),
 
-            currencyRow.topAnchor.constraint(equalTo: amountSection.bottomAnchor, constant: 28),
-            currencyRow.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 24),
-            currencyRow.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -24),
+            currencyRow.leadingAnchor.constraint(equalTo: scaffold.contentView.leadingAnchor, constant: 24),
+            currencyRow.trailingAnchor.constraint(equalTo: scaffold.contentView.trailingAnchor, constant: -24),
             currencyRow.heightAnchor.constraint(greaterThanOrEqualToConstant: 52),
-
             currencyTitleLabel.leadingAnchor.constraint(equalTo: currencyRow.leadingAnchor),
             currencyTitleLabel.topAnchor.constraint(equalTo: currencyRow.topAnchor, constant: 8),
             currencyTitleLabel.bottomAnchor.constraint(equalTo: currencyRow.bottomAnchor, constant: -8),
             currencyTitleLabel.trailingAnchor.constraint(lessThanOrEqualTo: currencyValueLabel.leadingAnchor, constant: -12),
-
             currencyChevron.trailingAnchor.constraint(equalTo: currencyRow.trailingAnchor),
             currencyChevron.centerYAnchor.constraint(equalTo: currencyRow.centerYAnchor),
             currencyChevron.widthAnchor.constraint(equalToConstant: 9),
             currencyChevron.heightAnchor.constraint(equalToConstant: 13),
-
             currencyValueLabel.trailingAnchor.constraint(equalTo: currencyChevron.leadingAnchor, constant: -12),
             currencyValueLabel.centerYAnchor.constraint(equalTo: currencyRow.centerYAnchor),
-
             currencySeparator.topAnchor.constraint(equalTo: currencyRow.bottomAnchor),
-            currencySeparator.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 24),
-            currencySeparator.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -24),
+            currencySeparator.leadingAnchor.constraint(equalTo: scaffold.contentView.leadingAnchor, constant: 24),
+            currencySeparator.trailingAnchor.constraint(equalTo: scaffold.contentView.trailingAnchor, constant: -24),
             currencySeparator.heightAnchor.constraint(equalToConstant: 1 / UIScreen.main.scale),
-
-            continueButton.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 24),
-            continueButton.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -24),
-            continueButton.topAnchor.constraint(greaterThanOrEqualTo: currencySeparator.bottomAnchor, constant: 44),
-            continueButton.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -24),
-            continueButton.heightAnchor.constraint(greaterThanOrEqualToConstant: 44)
+            scaffold.continueButton.topAnchor.constraint(greaterThanOrEqualTo: currencySeparator.bottomAnchor, constant: 44)
         ])
+
+        currencyRowTopAfterBasisConstraint?.isActive = true
     }
 
     private func configureInteractions() {
+        scaffold.onContinueTapped = { [weak self] in self?.onContinueTapped?() }
         basePayAmountTextField.addTarget(self, action: #selector(basePayAmountTextChanged), for: .editingChanged)
         basePayAmountTextField.addTarget(self, action: #selector(basePayAmountEditingDidBegin), for: .editingDidBegin)
         basePayAmountTextField.addTarget(self, action: #selector(basePayAmountEditingDidEnd), for: .editingDidEnd)
         hourlyBasisControl.addAction(UIAction { [weak self] _ in self?.onBasePayBasisSelected?(.hourly) }, for: .touchUpInside)
         fixedPerShiftBasisControl.addAction(UIAction { [weak self] _ in self?.onBasePayBasisSelected?(.fixedPerShift) }, for: .touchUpInside)
         currencyRow.addTarget(self, action: #selector(currencyTapped), for: .touchUpInside)
-        continueButton.addTarget(self, action: #selector(continueTapped), for: .touchUpInside)
     }
 
     private func configureTraitChanges() {
         registerForTraitChanges([UITraitPreferredContentSizeCategory.self]) { (self: JobSetupView, _) in
             self.updateDynamicTypeLayout()
         }
+        updateDynamicTypeLayout()
     }
 
     private func updateDynamicTypeLayout() {
         let usesAccessibilityLayout = traitCollection.preferredContentSizeCategory.isAccessibilityCategory
-
-        topRow.axis = usesAccessibilityLayout ? .vertical : .horizontal
-        topRow.alignment = usesAccessibilityLayout ? .fill : .top
-        topRow.spacing = usesAccessibilityLayout ? 8 : 12
-        topRowSpacer.isHidden = usesAccessibilityLayout
-        brandLabel.numberOfLines = usesAccessibilityLayout ? 0 : 1
-        brandLabel.setContentCompressionResistancePriority(
-            usesAccessibilityLayout ? .required : .defaultLow,
-            for: .horizontal
-        )
-        stepLabel.textAlignment = usesAccessibilityLayout ? .right : .natural
-
         heroMoneyStack.axis = usesAccessibilityLayout ? .vertical : .horizontal
         heroMoneyStack.alignment = usesAccessibilityLayout ? .leading : .firstBaseline
         heroMoneyStack.spacing = usesAccessibilityLayout ? 4 : 8
-
-        updateContinueButtonLayout(usesAccessibilityLayout: usesAccessibilityLayout)
-    }
-
-    private func updateContinueButtonLayout(usesAccessibilityLayout: Bool) {
-        guard var configuration = continueButton.configuration else {
-            return
-        }
-
-        configuration.imagePlacement = usesAccessibilityLayout ? .bottom : .trailing
-        configuration.imagePadding = usesAccessibilityLayout ? 4 : 8
-        continueButton.configuration = configuration
     }
 
     @objc private func basePayAmountTextChanged() {
@@ -416,10 +277,6 @@ final class JobSetupView: UIView {
     @objc private func currencyTapped() {
         onCurrencyTapped?()
     }
-
-    @objc private func continueTapped() {
-        onContinueTapped?()
-    }
 }
 
 extension JobSetupView: UITextFieldDelegate {
@@ -436,9 +293,7 @@ private final class BasePayBasisOptionControl: UIControl {
     override var isSelected: Bool {
         didSet {
             titleLabel.text = isSelected ? "●  \(optionTitle)" : "○  \(optionTitle)"
-            titleLabel.textColor = isSelected
-                ? ShiftLedgerColors.accentPrimary
-                : ShiftLedgerColors.textPrimary
+            titleLabel.textColor = isSelected ? ShiftLedgerColors.accentPrimary : ShiftLedgerColors.textPrimary
             accessibilityTraits = isSelected ? [.button, .selected] : .button
         }
     }

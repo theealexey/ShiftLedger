@@ -6,13 +6,13 @@ final class PayPeriodSetupView: UIView {
     var onAnchorTapped: (() -> Void)?
     var onContinueTapped: (() -> Void)?
 
-    private let scrollView = UIScrollView()
-    private let contentView = UIView()
-    private let topRow = UIStackView()
-    private let backButton = UIButton(type: .system)
-    private let stepLabel = UILabel()
-    private let progressStack = UIStackView()
-    private let progressSegments = (0..<4).map { _ in UIView() }
+    private let scaffold = JobSetupScaffoldView(
+        brandText: nil,
+        stepIndicator: PayPeriodSetupStrings.stepIndicator,
+        stepAccessibilityLabel: PayPeriodSetupStrings.stepIndicatorAccessibilityLabel,
+        activeStep: 2,
+        backAccessibilityLabel: PayPeriodSetupStrings.back
+    )
     private let questionLabel = UILabel()
     private let subtitleLabel = UILabel()
     private let optionsStack = UIStackView()
@@ -23,7 +23,8 @@ final class PayPeriodSetupView: UIView {
     private let anchorValueLabel = UILabel()
     private let anchorChevron = UIImageView(image: UIImage(systemName: "chevron.right"))
     private let anchorSeparator = UIView()
-    private let continueButton = UIButton(type: .system)
+    private var continueTopAfterAnchorConstraint: NSLayoutConstraint?
+    private var continueTopAfterOptionsConstraint: NSLayoutConstraint?
 
     private let weeklyControl = FrequencyOptionControl(title: PayPeriodSetupStrings.weekly)
     private let biweeklyControl = FrequencyOptionControl(title: PayPeriodSetupStrings.biweekly)
@@ -49,50 +50,21 @@ final class PayPeriodSetupView: UIView {
         weeklyControl.isSelected = cycleKind == .weekly
         biweeklyControl.isSelected = cycleKind == .biweekly
         calendarMonthlyControl.isSelected = cycleKind == .calendarMonthly
+
         let showsAnchor = cycleKind == .weekly || cycleKind == .biweekly
+        anchorSection.isHidden = !showsAnchor
         anchorTitleLabel.isHidden = !showsAnchor
         anchorSubtitleLabel.isHidden = !showsAnchor
         anchorRow.isHidden = !showsAnchor
         anchorSeparator.isHidden = !showsAnchor
         anchorValueLabel.text = anchorDateText ?? PayPeriodSetupStrings.anchorChoose
         anchorRow.accessibilityValue = anchorDateText ?? PayPeriodSetupStrings.anchorChoose
-        continueButton.isEnabled = canContinue
-
-        guard var configuration = continueButton.configuration else {
-            return
-        }
-
-        configuration.baseForegroundColor = canContinue
-            ? ShiftLedgerColors.accentPrimary
-            : ShiftLedgerColors.textTertiary
-        continueButton.configuration = configuration
+        continueTopAfterAnchorConstraint?.isActive = showsAnchor
+        continueTopAfterOptionsConstraint?.isActive = !showsAnchor
+        scaffold.setContinueEnabled(canContinue)
     }
 
     private func configureAppearance() {
-        backgroundColor = ShiftLedgerColors.backgroundPrimary
-        scrollView.alwaysBounceVertical = true
-        scrollView.keyboardDismissMode = .interactive
-
-        backButton.setImage(UIImage(systemName: "chevron.left"), for: .normal)
-        backButton.tintColor = ShiftLedgerColors.textSecondary
-        backButton.accessibilityLabel = PayPeriodSetupStrings.back
-        backButton.accessibilityTraits = .button
-
-        stepLabel.text = PayPeriodSetupStrings.stepIndicator
-        stepLabel.font = ShiftLedgerTypography.caption
-        stepLabel.textColor = ShiftLedgerColors.textTertiary
-        stepLabel.accessibilityLabel = PayPeriodSetupStrings.stepIndicatorAccessibilityLabel
-
-        progressStack.axis = .horizontal
-        progressStack.distribution = .fillEqually
-        progressStack.spacing = 3
-        progressSegments.forEach { segment in
-            segment.backgroundColor = ShiftLedgerColors.separator
-            segment.isAccessibilityElement = false
-        }
-        progressSegments.prefix(2).forEach { $0.backgroundColor = ShiftLedgerColors.accentPrimary }
-        progressStack.isAccessibilityElement = false
-
         questionLabel.text = PayPeriodSetupStrings.title
         questionLabel.font = ShiftLedgerTypography.onboardingQuestion
         questionLabel.textColor = ShiftLedgerColors.textPrimary
@@ -108,10 +80,10 @@ final class PayPeriodSetupView: UIView {
 
         optionsStack.axis = .vertical
         optionsStack.spacing = 0
+        optionsStack.addArrangedSubview(perShiftControl)
         optionsStack.addArrangedSubview(weeklyControl)
         optionsStack.addArrangedSubview(biweeklyControl)
         optionsStack.addArrangedSubview(calendarMonthlyControl)
-        optionsStack.insertArrangedSubview(perShiftControl, at: 0)
 
         anchorSection.axis = .vertical
         anchorSection.spacing = 0
@@ -146,84 +118,59 @@ final class PayPeriodSetupView: UIView {
         anchorRow.accessibilityLabel = PayPeriodSetupStrings.anchorChoose
         anchorRow.accessibilityTraits = .button
         anchorSeparator.backgroundColor = ShiftLedgerColors.separator
-
-        var continueConfiguration = UIButton.Configuration.plain()
-        continueConfiguration.title = JobSetupStrings.continueTitle
-        continueConfiguration.image = UIImage(systemName: "arrow.right")
-        continueConfiguration.imagePlacement = .trailing
-        continueConfiguration.imagePadding = 8
-        continueConfiguration.titleAlignment = .trailing
-        continueConfiguration.baseForegroundColor = ShiftLedgerColors.textTertiary
-        continueConfiguration.contentInsets = NSDirectionalEdgeInsets(top: 10, leading: 0, bottom: 10, trailing: 0)
-        continueConfiguration.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { attributes in
-            var transformedAttributes = attributes
-            transformedAttributes.font = ShiftLedgerTypography.button
-            return transformedAttributes
-        }
-        continueButton.configuration = continueConfiguration
-        continueButton.contentHorizontalAlignment = .trailing
-        continueButton.accessibilityTraits = .button
     }
 
     private func configureSubviews() {
-        [scrollView, contentView, topRow, backButton, stepLabel, progressStack, questionLabel, subtitleLabel, optionsStack, anchorSection, anchorTitleLabel, anchorSubtitleLabel, anchorRow, anchorValueLabel, anchorChevron, anchorSeparator, continueButton].forEach {
-            $0.translatesAutoresizingMaskIntoConstraints = false
-        }
-
-        topRow.axis = .horizontal
-        topRow.alignment = .center
-        topRow.addArrangedSubview(backButton)
-        let spacer = UIView()
-        spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
-        topRow.addArrangedSubview(spacer)
-        topRow.addArrangedSubview(stepLabel)
+        [
+            scaffold,
+            questionLabel,
+            subtitleLabel,
+            optionsStack,
+            anchorSection,
+            anchorTitleLabel,
+            anchorSubtitleLabel,
+            anchorRow,
+            anchorValueLabel,
+            anchorChevron,
+            anchorSeparator
+        ].forEach { $0.translatesAutoresizingMaskIntoConstraints = false }
 
         anchorRow.addSubview(anchorValueLabel)
         anchorRow.addSubview(anchorChevron)
-        progressSegments.forEach(progressStack.addArrangedSubview)
 
-        addSubview(scrollView)
-        scrollView.addSubview(contentView)
-        [topRow, progressStack, questionLabel, subtitleLabel, optionsStack, anchorSection, continueButton].forEach(contentView.addSubview)
+        addSubview(scaffold)
+        [questionLabel, subtitleLabel, optionsStack, anchorSection].forEach(scaffold.contentView.addSubview)
     }
 
     private func configureLayout() {
+        continueTopAfterAnchorConstraint = scaffold.continueButton.topAnchor.constraint(
+            greaterThanOrEqualTo: anchorSection.bottomAnchor,
+            constant: 44
+        )
+        continueTopAfterOptionsConstraint = scaffold.continueButton.topAnchor.constraint(
+            greaterThanOrEqualTo: optionsStack.bottomAnchor,
+            constant: 44
+        )
+
         NSLayoutConstraint.activate([
-            scrollView.topAnchor.constraint(equalTo: safeAreaLayoutGuide.topAnchor),
-            scrollView.leadingAnchor.constraint(equalTo: leadingAnchor),
-            scrollView.trailingAnchor.constraint(equalTo: trailingAnchor),
-            scrollView.bottomAnchor.constraint(equalTo: keyboardLayoutGuide.topAnchor),
+            scaffold.topAnchor.constraint(equalTo: topAnchor),
+            scaffold.leadingAnchor.constraint(equalTo: leadingAnchor),
+            scaffold.trailingAnchor.constraint(equalTo: trailingAnchor),
+            scaffold.bottomAnchor.constraint(equalTo: bottomAnchor),
 
-            contentView.topAnchor.constraint(equalTo: scrollView.contentLayoutGuide.topAnchor),
-            contentView.leadingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.leadingAnchor),
-            contentView.trailingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.trailingAnchor),
-            contentView.bottomAnchor.constraint(equalTo: scrollView.contentLayoutGuide.bottomAnchor),
-            contentView.widthAnchor.constraint(equalTo: scrollView.frameLayoutGuide.widthAnchor),
-            contentView.heightAnchor.constraint(greaterThanOrEqualTo: scrollView.frameLayoutGuide.heightAnchor),
-
-            topRow.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 20),
-            topRow.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 24),
-            topRow.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -24),
-            backButton.widthAnchor.constraint(equalToConstant: 44),
-            backButton.heightAnchor.constraint(equalToConstant: 44),
-
-            progressStack.topAnchor.constraint(equalTo: topRow.bottomAnchor, constant: 8),
-            progressStack.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 24),
-            progressStack.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -24),
-            progressStack.heightAnchor.constraint(equalToConstant: 1),
-
-            questionLabel.topAnchor.constraint(equalTo: progressStack.bottomAnchor, constant: 40),
-            questionLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 24),
-            questionLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -24),
-
+            questionLabel.topAnchor.constraint(equalTo: scaffold.progressBottomAnchor, constant: 40),
+            questionLabel.leadingAnchor.constraint(equalTo: scaffold.contentView.leadingAnchor, constant: 24),
+            questionLabel.trailingAnchor.constraint(equalTo: scaffold.contentView.trailingAnchor, constant: -24),
             subtitleLabel.topAnchor.constraint(equalTo: questionLabel.bottomAnchor, constant: 12),
             subtitleLabel.leadingAnchor.constraint(equalTo: questionLabel.leadingAnchor),
             subtitleLabel.trailingAnchor.constraint(equalTo: questionLabel.trailingAnchor),
-
             optionsStack.topAnchor.constraint(equalTo: subtitleLabel.bottomAnchor, constant: 32),
-            optionsStack.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 24),
-            optionsStack.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -24),
+            optionsStack.leadingAnchor.constraint(equalTo: scaffold.contentView.leadingAnchor, constant: 24),
+            optionsStack.trailingAnchor.constraint(equalTo: scaffold.contentView.trailingAnchor, constant: -24),
 
+            anchorSection.topAnchor.constraint(equalTo: optionsStack.bottomAnchor, constant: 28),
+            anchorSection.leadingAnchor.constraint(equalTo: scaffold.contentView.leadingAnchor, constant: 24),
+            anchorSection.trailingAnchor.constraint(equalTo: scaffold.contentView.trailingAnchor, constant: -24),
             anchorRow.heightAnchor.constraint(greaterThanOrEqualToConstant: 52),
             anchorValueLabel.leadingAnchor.constraint(equalTo: anchorRow.leadingAnchor),
             anchorValueLabel.topAnchor.constraint(equalTo: anchorRow.topAnchor, constant: 8),
@@ -233,28 +180,20 @@ final class PayPeriodSetupView: UIView {
             anchorChevron.centerYAnchor.constraint(equalTo: anchorRow.centerYAnchor),
             anchorChevron.widthAnchor.constraint(equalToConstant: 9),
             anchorChevron.heightAnchor.constraint(equalToConstant: 13),
-            anchorSeparator.heightAnchor.constraint(equalToConstant: 1 / UIScreen.main.scale),
-
-            anchorSection.topAnchor.constraint(equalTo: optionsStack.bottomAnchor, constant: 28),
-            anchorSection.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 24),
-            anchorSection.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -24),
-
-            continueButton.topAnchor.constraint(greaterThanOrEqualTo: anchorSection.bottomAnchor, constant: 44),
-            continueButton.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 24),
-            continueButton.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -24),
-            continueButton.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -24),
-            continueButton.heightAnchor.constraint(greaterThanOrEqualToConstant: 44)
+            anchorSeparator.heightAnchor.constraint(equalToConstant: 1 / UIScreen.main.scale)
         ])
+
+        continueTopAfterOptionsConstraint?.isActive = true
     }
 
     private func configureInteractions() {
-        backButton.addAction(UIAction { [weak self] _ in self?.onBackTapped?() }, for: .primaryActionTriggered)
+        scaffold.onBackTapped = { [weak self] in self?.onBackTapped?() }
+        scaffold.onContinueTapped = { [weak self] in self?.onContinueTapped?() }
         perShiftControl.addAction(UIAction { [weak self] _ in self?.onCycleKindSelected?(.perShift) }, for: .touchUpInside)
         weeklyControl.addAction(UIAction { [weak self] _ in self?.onCycleKindSelected?(.weekly) }, for: .touchUpInside)
         biweeklyControl.addAction(UIAction { [weak self] _ in self?.onCycleKindSelected?(.biweekly) }, for: .touchUpInside)
         calendarMonthlyControl.addAction(UIAction { [weak self] _ in self?.onCycleKindSelected?(.calendarMonthly) }, for: .touchUpInside)
         anchorRow.addAction(UIAction { [weak self] _ in self?.onAnchorTapped?() }, for: .touchUpInside)
-        continueButton.addAction(UIAction { [weak self] _ in self?.onContinueTapped?() }, for: .primaryActionTriggered)
     }
 }
 
