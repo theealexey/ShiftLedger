@@ -177,6 +177,7 @@ final class PayPeriodSetupView: UIView {
 
         anchorRow.addSubview(anchorValueLabel)
         anchorRow.addSubview(anchorChevron)
+        progressSegments.forEach(progressStack.addArrangedSubview)
 
         addSubview(scrollView)
         scrollView.addSubview(contentView)
@@ -260,13 +261,14 @@ private final class TappableControl: UIControl {
     }
 }
 
-private final class FrequencyOptionControl: UIButton {
+private final class FrequencyOptionControl: UIControl {
     private let optionTitle: String
+    private let titleLabel = UILabel()
 
     override var isSelected: Bool {
         didSet {
-            setTitle(isSelected ? "●  \(optionTitle)" : "○  \(optionTitle)", for: .normal)
-            setTitleColor(isSelected ? ShiftLedgerColors.accentPrimary : ShiftLedgerColors.textPrimary, for: .normal)
+            titleLabel.text = isSelected ? "●  \(optionTitle)" : "○  \(optionTitle)"
+            titleLabel.textColor = isSelected ? ShiftLedgerColors.accentPrimary : ShiftLedgerColors.textPrimary
             accessibilityTraits = isSelected ? [.button, .selected] : .button
         }
     }
@@ -276,14 +278,19 @@ private final class FrequencyOptionControl: UIButton {
         super.init(frame: .zero)
 
         translatesAutoresizingMaskIntoConstraints = false
-        setTitle("○  \(title)", for: .normal)
-        setTitleColor(ShiftLedgerColors.textPrimary, for: .normal)
-        titleLabel?.font = ShiftLedgerTypography.body
-        titleLabel?.numberOfLines = 0
-        titleLabel?.adjustsFontForContentSizeCategory = true
-        contentHorizontalAlignment = .leading
-        contentVerticalAlignment = .center
-        configuration = nil
+        titleLabel.text = "○  \(title)"
+        titleLabel.font = ShiftLedgerTypography.body
+        titleLabel.textColor = ShiftLedgerColors.textPrimary
+        titleLabel.numberOfLines = 0
+        titleLabel.adjustsFontForContentSizeCategory = true
+        titleLabel.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(titleLabel)
+        NSLayoutConstraint.activate([
+            titleLabel.leadingAnchor.constraint(equalTo: leadingAnchor),
+            titleLabel.trailingAnchor.constraint(equalTo: trailingAnchor),
+            titleLabel.topAnchor.constraint(equalTo: topAnchor, constant: 12),
+            titleLabel.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -12)
+        ])
         heightAnchor.constraint(greaterThanOrEqualToConstant: 56).isActive = true
 
         isAccessibilityElement = true
