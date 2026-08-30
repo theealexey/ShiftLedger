@@ -1,6 +1,15 @@
 import UIKit
 
 final class JobSetupScaffoldView: UIView {
+    private enum Layout {
+        static let contentInset: CGFloat = 24
+        static let safeAreaTopInset: CGFloat = 20
+        static let headerToProgress: CGFloat = 12
+        static let progressSegmentGap: CGFloat = 3
+        static let actionBottomInset: CGFloat = 44
+        static let scrollToActionGap: CGFloat = 16
+    }
+
     let contentView = UIView()
     let continueButton = UIButton(type: .system)
 
@@ -94,7 +103,7 @@ final class JobSetupScaffoldView: UIView {
         progressStack.axis = .horizontal
         progressStack.alignment = .fill
         progressStack.distribution = .fillEqually
-        progressStack.spacing = 3
+        progressStack.spacing = Layout.progressSegmentGap
         progressStack.isAccessibilityElement = false
         for (index, segment) in progressSegments.enumerated() {
             segment.backgroundColor = index < activeStep
@@ -157,7 +166,8 @@ final class JobSetupScaffoldView: UIView {
 
         addSubview(scrollView)
         scrollView.addSubview(contentView)
-        [topRow, progressStack, continueButton].forEach(contentView.addSubview)
+        [topRow, progressStack].forEach(contentView.addSubview)
+        addSubview(continueButton)
 
         topRowSpacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
         stepLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
@@ -169,29 +179,27 @@ final class JobSetupScaffoldView: UIView {
             scrollView.topAnchor.constraint(equalTo: safeAreaLayoutGuide.topAnchor),
             scrollView.leadingAnchor.constraint(equalTo: leadingAnchor),
             scrollView.trailingAnchor.constraint(equalTo: trailingAnchor),
-            scrollView.bottomAnchor.constraint(equalTo: keyboardLayoutGuide.topAnchor),
+            scrollView.bottomAnchor.constraint(equalTo: continueButton.topAnchor, constant: -Layout.scrollToActionGap),
 
             contentView.topAnchor.constraint(equalTo: scrollView.contentLayoutGuide.topAnchor),
             contentView.leadingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.leadingAnchor),
             contentView.trailingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.trailingAnchor),
             contentView.bottomAnchor.constraint(equalTo: scrollView.contentLayoutGuide.bottomAnchor),
             contentView.widthAnchor.constraint(equalTo: scrollView.frameLayoutGuide.widthAnchor),
-            contentView.heightAnchor.constraint(greaterThanOrEqualTo: scrollView.frameLayoutGuide.heightAnchor),
-
-            topRow.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 20),
-            topRow.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 24),
-            topRow.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -24),
+            topRow.topAnchor.constraint(equalTo: contentView.topAnchor, constant: Layout.safeAreaTopInset),
+            topRow.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: Layout.contentInset),
+            topRow.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -Layout.contentInset),
             backButton.widthAnchor.constraint(equalToConstant: 44),
             backButton.heightAnchor.constraint(equalToConstant: 44),
 
-            progressStack.topAnchor.constraint(equalTo: topRow.bottomAnchor, constant: 8),
-            progressStack.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 24),
-            progressStack.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -24),
+            progressStack.topAnchor.constraint(equalTo: topRow.bottomAnchor, constant: Layout.headerToProgress),
+            progressStack.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: Layout.contentInset),
+            progressStack.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -Layout.contentInset),
             progressStack.heightAnchor.constraint(equalToConstant: 1),
 
-            continueButton.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 24),
-            continueButton.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -24),
-            continueButton.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -24),
+            continueButton.leadingAnchor.constraint(greaterThanOrEqualTo: safeAreaLayoutGuide.leadingAnchor, constant: Layout.contentInset),
+            continueButton.trailingAnchor.constraint(equalTo: safeAreaLayoutGuide.trailingAnchor, constant: -Layout.contentInset),
+            continueButton.bottomAnchor.constraint(equalTo: safeAreaLayoutGuide.bottomAnchor, constant: -Layout.actionBottomInset),
             continueButton.heightAnchor.constraint(greaterThanOrEqualToConstant: 44)
         ])
     }

@@ -1,6 +1,19 @@
 import UIKit
 
 final class JobSetupView: UIView {
+    private enum Layout {
+        static let contentInset: CGFloat = 24
+        static let progressToQuestion: CGFloat = 32
+        static let questionToSupporting: CGFloat = 12
+        static let supportingToBasis: CGFloat = 28
+        static let basisRowGap: CGFloat = 12
+        static let basisToAmount: CGFloat = 24
+        static let basisToCurrency: CGFloat = 28
+        static let amountTitleToInput: CGFloat = 6
+        static let inputToDivider: CGFloat = 12
+        static let dividerToCurrency: CGFloat = 18
+    }
+
     var onBasePayAmountChanged: ((String) -> Void)?
     var onBasePayBasisSelected: ((BasePayBasis) -> Void)?
     var onCurrencyTapped: (() -> Void)?
@@ -34,6 +47,7 @@ final class JobSetupView: UIView {
     private let currencySeparator = UIView()
     private var currencyRowTopAfterAmountConstraint: NSLayoutConstraint?
     private var currencyRowTopAfterBasisConstraint: NSLayoutConstraint?
+    private var amountSectionTopConstraint: NSLayoutConstraint?
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -66,6 +80,7 @@ final class JobSetupView: UIView {
         basePayAmountTextField.accessibilityHint = JobSetupStrings.basePayAmountAccessibilityHint
         currencyRowTopAfterAmountConstraint?.isActive = basis != nil
         currencyRowTopAfterBasisConstraint?.isActive = basis == nil
+        amountSectionTopConstraint?.isActive = basis != nil
     }
 
     func setContinueEnabled(_ enabled: Bool) {
@@ -87,7 +102,7 @@ final class JobSetupView: UIView {
         supportingTextLabel.adjustsFontForContentSizeCategory = true
 
         basisOptionsStack.axis = .vertical
-        basisOptionsStack.spacing = 0
+        basisOptionsStack.spacing = Layout.basisRowGap
         basisOptionsStack.addArrangedSubview(hourlyBasisControl)
         basisOptionsStack.addArrangedSubview(fixedPerShiftBasisControl)
 
@@ -96,8 +111,8 @@ final class JobSetupView: UIView {
         amountSection.addArrangedSubview(amountTitleLabel)
         amountSection.addArrangedSubview(heroMoneyStack)
         amountSection.addArrangedSubview(basePayAmountUnderline)
-        amountSection.setCustomSpacing(8, after: amountTitleLabel)
-        amountSection.setCustomSpacing(8, after: heroMoneyStack)
+        amountSection.setCustomSpacing(Layout.amountTitleToInput, after: amountTitleLabel)
+        amountSection.setCustomSpacing(Layout.inputToDivider, after: heroMoneyStack)
         amountSection.isHidden = true
 
         amountTitleLabel.font = ShiftLedgerTypography.headline
@@ -170,13 +185,17 @@ final class JobSetupView: UIView {
     }
 
     private func configureLayout() {
+        amountSectionTopConstraint = amountSection.topAnchor.constraint(
+            equalTo: basisOptionsStack.bottomAnchor,
+            constant: Layout.basisToAmount
+        )
         currencyRowTopAfterAmountConstraint = currencyRow.topAnchor.constraint(
             equalTo: amountSection.bottomAnchor,
-            constant: 28
+            constant: Layout.dividerToCurrency
         )
         currencyRowTopAfterBasisConstraint = currencyRow.topAnchor.constraint(
             equalTo: basisOptionsStack.bottomAnchor,
-            constant: 28
+            constant: Layout.basisToCurrency
         )
 
         NSLayoutConstraint.activate([
@@ -185,28 +204,27 @@ final class JobSetupView: UIView {
             scaffold.trailingAnchor.constraint(equalTo: trailingAnchor),
             scaffold.bottomAnchor.constraint(equalTo: bottomAnchor),
 
-            questionLabel.topAnchor.constraint(equalTo: scaffold.progressBottomAnchor, constant: 40),
-            questionLabel.leadingAnchor.constraint(equalTo: scaffold.contentView.leadingAnchor, constant: 24),
-            questionLabel.trailingAnchor.constraint(equalTo: scaffold.contentView.trailingAnchor, constant: -24),
+            questionLabel.topAnchor.constraint(equalTo: scaffold.progressBottomAnchor, constant: Layout.progressToQuestion),
+            questionLabel.leadingAnchor.constraint(equalTo: scaffold.contentView.leadingAnchor, constant: Layout.contentInset),
+            questionLabel.trailingAnchor.constraint(equalTo: scaffold.contentView.trailingAnchor, constant: -Layout.contentInset),
 
-            supportingTextLabel.topAnchor.constraint(equalTo: questionLabel.bottomAnchor, constant: 12),
+            supportingTextLabel.topAnchor.constraint(equalTo: questionLabel.bottomAnchor, constant: Layout.questionToSupporting),
             supportingTextLabel.leadingAnchor.constraint(equalTo: questionLabel.leadingAnchor),
             supportingTextLabel.trailingAnchor.constraint(equalTo: questionLabel.trailingAnchor),
 
-            basisOptionsStack.topAnchor.constraint(equalTo: supportingTextLabel.bottomAnchor, constant: 32),
-            basisOptionsStack.leadingAnchor.constraint(equalTo: scaffold.contentView.leadingAnchor, constant: 24),
-            basisOptionsStack.trailingAnchor.constraint(equalTo: scaffold.contentView.trailingAnchor, constant: -24),
+            basisOptionsStack.topAnchor.constraint(equalTo: supportingTextLabel.bottomAnchor, constant: Layout.supportingToBasis),
+            basisOptionsStack.leadingAnchor.constraint(equalTo: scaffold.contentView.leadingAnchor, constant: Layout.contentInset),
+            basisOptionsStack.trailingAnchor.constraint(equalTo: scaffold.contentView.trailingAnchor, constant: -Layout.contentInset),
 
-            amountSection.topAnchor.constraint(equalTo: basisOptionsStack.bottomAnchor, constant: 28),
-            amountSection.leadingAnchor.constraint(equalTo: scaffold.contentView.leadingAnchor, constant: 24),
-            amountSection.trailingAnchor.constraint(equalTo: scaffold.contentView.trailingAnchor, constant: -24),
-            basePayAmountTextField.heightAnchor.constraint(greaterThanOrEqualToConstant: 56),
+            amountSection.leadingAnchor.constraint(equalTo: scaffold.contentView.leadingAnchor, constant: Layout.contentInset),
+            amountSection.trailingAnchor.constraint(equalTo: scaffold.contentView.trailingAnchor, constant: -Layout.contentInset),
+            basePayAmountTextField.heightAnchor.constraint(greaterThanOrEqualToConstant: 44),
             basePayAmountTextField.widthAnchor.constraint(greaterThanOrEqualToConstant: 220),
             basePayAmountTextField.widthAnchor.constraint(lessThanOrEqualTo: scaffold.contentView.widthAnchor, constant: -48),
-            basePayAmountUnderline.heightAnchor.constraint(equalToConstant: 1 / UIScreen.main.scale),
+            basePayAmountUnderline.heightAnchor.constraint(equalToConstant: 1 / traitCollection.displayScale),
 
-            currencyRow.leadingAnchor.constraint(equalTo: scaffold.contentView.leadingAnchor, constant: 24),
-            currencyRow.trailingAnchor.constraint(equalTo: scaffold.contentView.trailingAnchor, constant: -24),
+            currencyRow.leadingAnchor.constraint(equalTo: scaffold.contentView.leadingAnchor, constant: Layout.contentInset),
+            currencyRow.trailingAnchor.constraint(equalTo: scaffold.contentView.trailingAnchor, constant: -Layout.contentInset),
             currencyRow.heightAnchor.constraint(greaterThanOrEqualToConstant: 52),
             currencyTitleLabel.leadingAnchor.constraint(equalTo: currencyRow.leadingAnchor),
             currencyTitleLabel.topAnchor.constraint(equalTo: currencyRow.topAnchor, constant: 8),
@@ -219,10 +237,10 @@ final class JobSetupView: UIView {
             currencyValueLabel.trailingAnchor.constraint(equalTo: currencyChevron.leadingAnchor, constant: -12),
             currencyValueLabel.centerYAnchor.constraint(equalTo: currencyRow.centerYAnchor),
             currencySeparator.topAnchor.constraint(equalTo: currencyRow.bottomAnchor),
-            currencySeparator.leadingAnchor.constraint(equalTo: scaffold.contentView.leadingAnchor, constant: 24),
-            currencySeparator.trailingAnchor.constraint(equalTo: scaffold.contentView.trailingAnchor, constant: -24),
-            currencySeparator.heightAnchor.constraint(equalToConstant: 1 / UIScreen.main.scale),
-            scaffold.continueButton.topAnchor.constraint(greaterThanOrEqualTo: currencySeparator.bottomAnchor, constant: 44)
+            currencySeparator.leadingAnchor.constraint(equalTo: scaffold.contentView.leadingAnchor, constant: Layout.contentInset),
+            currencySeparator.trailingAnchor.constraint(equalTo: scaffold.contentView.trailingAnchor, constant: -Layout.contentInset),
+            currencySeparator.heightAnchor.constraint(equalToConstant: 1 / traitCollection.displayScale),
+            currencySeparator.bottomAnchor.constraint(equalTo: scaffold.contentView.bottomAnchor)
         ])
 
         currencyRowTopAfterBasisConstraint?.isActive = true
@@ -303,10 +321,10 @@ private final class BasePayBasisOptionControl: UIControl {
         NSLayoutConstraint.activate([
             titleLabel.leadingAnchor.constraint(equalTo: leadingAnchor),
             titleLabel.trailingAnchor.constraint(equalTo: trailingAnchor),
-            titleLabel.topAnchor.constraint(equalTo: topAnchor, constant: 12),
-            titleLabel.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -12)
+            titleLabel.topAnchor.constraint(equalTo: topAnchor, constant: 10),
+            titleLabel.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -10)
         ])
-        heightAnchor.constraint(greaterThanOrEqualToConstant: 56).isActive = true
+        heightAnchor.constraint(greaterThanOrEqualToConstant: 44).isActive = true
 
         isAccessibilityElement = true
         accessibilityLabel = title

@@ -1,6 +1,17 @@
 import UIKit
 
 final class PayPeriodSetupView: UIView {
+    private enum Layout {
+        static let contentInset: CGFloat = 24
+        static let progressToQuestion: CGFloat = 32
+        static let questionToSubtitle: CGFloat = 12
+        static let subtitleToOptions: CGFloat = 28
+        static let optionRowGap: CGFloat = 12
+        static let optionsToAnchor: CGFloat = 24
+        static let anchorTitleToSubtitle: CGFloat = 6
+        static let anchorSubtitleToRow: CGFloat = 14
+    }
+
     var onBackTapped: (() -> Void)?
     var onCycleKindSelected: ((PayCalculationCycleKind) -> Void)?
     var onAnchorTapped: (() -> Void)?
@@ -23,8 +34,8 @@ final class PayPeriodSetupView: UIView {
     private let anchorValueLabel = UILabel()
     private let anchorChevron = UIImageView(image: UIImage(systemName: "chevron.right"))
     private let anchorSeparator = UIView()
-    private var continueTopAfterAnchorConstraint: NSLayoutConstraint?
-    private var continueTopAfterOptionsConstraint: NSLayoutConstraint?
+    private var contentBottomAfterAnchorConstraint: NSLayoutConstraint?
+    private var contentBottomAfterOptionsConstraint: NSLayoutConstraint?
 
     private let weeklyControl = FrequencyOptionControl(title: PayPeriodSetupStrings.weekly)
     private let biweeklyControl = FrequencyOptionControl(title: PayPeriodSetupStrings.biweekly)
@@ -59,8 +70,8 @@ final class PayPeriodSetupView: UIView {
         anchorSeparator.isHidden = !showsAnchor
         anchorValueLabel.text = anchorDateText ?? PayPeriodSetupStrings.anchorChoose
         anchorRow.accessibilityValue = anchorDateText ?? PayPeriodSetupStrings.anchorChoose
-        continueTopAfterAnchorConstraint?.isActive = showsAnchor
-        continueTopAfterOptionsConstraint?.isActive = !showsAnchor
+        contentBottomAfterAnchorConstraint?.isActive = showsAnchor
+        contentBottomAfterOptionsConstraint?.isActive = !showsAnchor
         scaffold.setContinueEnabled(canContinue)
     }
 
@@ -79,7 +90,7 @@ final class PayPeriodSetupView: UIView {
         subtitleLabel.adjustsFontForContentSizeCategory = true
 
         optionsStack.axis = .vertical
-        optionsStack.spacing = 0
+        optionsStack.spacing = Layout.optionRowGap
         optionsStack.addArrangedSubview(perShiftControl)
         optionsStack.addArrangedSubview(weeklyControl)
         optionsStack.addArrangedSubview(biweeklyControl)
@@ -91,8 +102,8 @@ final class PayPeriodSetupView: UIView {
         anchorSection.addArrangedSubview(anchorSubtitleLabel)
         anchorSection.addArrangedSubview(anchorRow)
         anchorSection.addArrangedSubview(anchorSeparator)
-        anchorSection.setCustomSpacing(8, after: anchorTitleLabel)
-        anchorSection.setCustomSpacing(16, after: anchorSubtitleLabel)
+        anchorSection.setCustomSpacing(Layout.anchorTitleToSubtitle, after: anchorTitleLabel)
+        anchorSection.setCustomSpacing(Layout.anchorSubtitleToRow, after: anchorSubtitleLabel)
 
         anchorTitleLabel.text = PayPeriodSetupStrings.anchorTitle
         anchorTitleLabel.font = ShiftLedgerTypography.headline
@@ -143,13 +154,11 @@ final class PayPeriodSetupView: UIView {
     }
 
     private func configureLayout() {
-        continueTopAfterAnchorConstraint = scaffold.continueButton.topAnchor.constraint(
-            greaterThanOrEqualTo: anchorSection.bottomAnchor,
-            constant: 44
+        contentBottomAfterAnchorConstraint = anchorSection.bottomAnchor.constraint(
+            equalTo: scaffold.contentView.bottomAnchor
         )
-        continueTopAfterOptionsConstraint = scaffold.continueButton.topAnchor.constraint(
-            greaterThanOrEqualTo: optionsStack.bottomAnchor,
-            constant: 44
+        contentBottomAfterOptionsConstraint = optionsStack.bottomAnchor.constraint(
+            equalTo: scaffold.contentView.bottomAnchor
         )
 
         NSLayoutConstraint.activate([
@@ -158,19 +167,19 @@ final class PayPeriodSetupView: UIView {
             scaffold.trailingAnchor.constraint(equalTo: trailingAnchor),
             scaffold.bottomAnchor.constraint(equalTo: bottomAnchor),
 
-            questionLabel.topAnchor.constraint(equalTo: scaffold.progressBottomAnchor, constant: 40),
-            questionLabel.leadingAnchor.constraint(equalTo: scaffold.contentView.leadingAnchor, constant: 24),
-            questionLabel.trailingAnchor.constraint(equalTo: scaffold.contentView.trailingAnchor, constant: -24),
-            subtitleLabel.topAnchor.constraint(equalTo: questionLabel.bottomAnchor, constant: 12),
+            questionLabel.topAnchor.constraint(equalTo: scaffold.progressBottomAnchor, constant: Layout.progressToQuestion),
+            questionLabel.leadingAnchor.constraint(equalTo: scaffold.contentView.leadingAnchor, constant: Layout.contentInset),
+            questionLabel.trailingAnchor.constraint(equalTo: scaffold.contentView.trailingAnchor, constant: -Layout.contentInset),
+            subtitleLabel.topAnchor.constraint(equalTo: questionLabel.bottomAnchor, constant: Layout.questionToSubtitle),
             subtitleLabel.leadingAnchor.constraint(equalTo: questionLabel.leadingAnchor),
             subtitleLabel.trailingAnchor.constraint(equalTo: questionLabel.trailingAnchor),
-            optionsStack.topAnchor.constraint(equalTo: subtitleLabel.bottomAnchor, constant: 32),
-            optionsStack.leadingAnchor.constraint(equalTo: scaffold.contentView.leadingAnchor, constant: 24),
-            optionsStack.trailingAnchor.constraint(equalTo: scaffold.contentView.trailingAnchor, constant: -24),
+            optionsStack.topAnchor.constraint(equalTo: subtitleLabel.bottomAnchor, constant: Layout.subtitleToOptions),
+            optionsStack.leadingAnchor.constraint(equalTo: scaffold.contentView.leadingAnchor, constant: Layout.contentInset),
+            optionsStack.trailingAnchor.constraint(equalTo: scaffold.contentView.trailingAnchor, constant: -Layout.contentInset),
 
-            anchorSection.topAnchor.constraint(equalTo: optionsStack.bottomAnchor, constant: 28),
-            anchorSection.leadingAnchor.constraint(equalTo: scaffold.contentView.leadingAnchor, constant: 24),
-            anchorSection.trailingAnchor.constraint(equalTo: scaffold.contentView.trailingAnchor, constant: -24),
+            anchorSection.topAnchor.constraint(equalTo: optionsStack.bottomAnchor, constant: Layout.optionsToAnchor),
+            anchorSection.leadingAnchor.constraint(equalTo: scaffold.contentView.leadingAnchor, constant: Layout.contentInset),
+            anchorSection.trailingAnchor.constraint(equalTo: scaffold.contentView.trailingAnchor, constant: -Layout.contentInset),
             anchorRow.heightAnchor.constraint(greaterThanOrEqualToConstant: 52),
             anchorValueLabel.leadingAnchor.constraint(equalTo: anchorRow.leadingAnchor),
             anchorValueLabel.topAnchor.constraint(equalTo: anchorRow.topAnchor, constant: 8),
@@ -180,10 +189,10 @@ final class PayPeriodSetupView: UIView {
             anchorChevron.centerYAnchor.constraint(equalTo: anchorRow.centerYAnchor),
             anchorChevron.widthAnchor.constraint(equalToConstant: 9),
             anchorChevron.heightAnchor.constraint(equalToConstant: 13),
-            anchorSeparator.heightAnchor.constraint(equalToConstant: 1 / UIScreen.main.scale)
+            anchorSeparator.heightAnchor.constraint(equalToConstant: 1 / traitCollection.displayScale)
         ])
 
-        continueTopAfterOptionsConstraint?.isActive = true
+        contentBottomAfterOptionsConstraint?.isActive = true
     }
 
     private func configureInteractions() {
@@ -231,10 +240,10 @@ private final class FrequencyOptionControl: UIControl {
         NSLayoutConstraint.activate([
             titleLabel.leadingAnchor.constraint(equalTo: leadingAnchor),
             titleLabel.trailingAnchor.constraint(equalTo: trailingAnchor),
-            titleLabel.topAnchor.constraint(equalTo: topAnchor, constant: 12),
-            titleLabel.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -12)
+            titleLabel.topAnchor.constraint(equalTo: topAnchor, constant: 10),
+            titleLabel.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -10)
         ])
-        heightAnchor.constraint(greaterThanOrEqualToConstant: 56).isActive = true
+        heightAnchor.constraint(greaterThanOrEqualToConstant: 44).isActive = true
 
         isAccessibilityElement = true
         accessibilityLabel = title
