@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 @testable import ShiftLedger
 
@@ -17,27 +18,27 @@ struct JobSetupViewModelTests {
         #expect(viewModel.draft.timeZoneIdentifier == "Europe/Stockholm")
     }
 
-    @Test("Пустое имя не позволяет продолжить")
-    func emptyNameDisablesContinue() {
+    @Test("Пустое имя не проходит name validation")
+    func emptyNameIsInvalid() {
         let viewModel = makeViewModel()
 
-        #expect(viewModel.canContinue == false)
+        #expect(viewModel.hasValidName == false)
     }
 
-    @Test("Имя из пробелов и переводов строк не позволяет продолжить")
-    func whitespaceOnlyNameDisablesContinue() {
+    @Test("Имя из пробелов и переводов строк не проходит name validation")
+    func whitespaceOnlyNameIsInvalid() {
         let viewModel = makeViewModel()
         viewModel.updateName(" \n\t ")
 
-        #expect(viewModel.canContinue == false)
+        #expect(viewModel.hasValidName == false)
     }
 
-    @Test("Обычное имя позволяет продолжить")
-    func validNameEnablesContinue() {
+    @Test("Обычное имя проходит name validation")
+    func validNameIsValid() {
         let viewModel = makeViewModel()
         viewModel.updateName("Clinic")
 
-        #expect(viewModel.canContinue)
+        #expect(viewModel.hasValidName)
     }
 
     @Test("Имя с внешними пробелами сохраняется без нормализации")
@@ -46,7 +47,7 @@ struct JobSetupViewModelTests {
         viewModel.updateName("  Clinic  ")
 
         #expect(viewModel.draft.name == "  Clinic  ")
-        #expect(viewModel.canContinue)
+        #expect(viewModel.hasValidName)
     }
 
     @Test("updateName обновляет draft")
@@ -90,10 +91,54 @@ struct JobSetupViewModelTests {
         #expect(viewModel.draft.timeZoneIdentifier == "Europe/Stockholm")
     }
 
+    @Test("Пустая ставка не позволяет продолжить")
+    func emptyHourlyRateDisablesContinue() {
+        let viewModel = makeViewModel()
+
+        #expect(viewModel.hourlyRate == nil)
+        #expect(viewModel.canContinue == false)
+    }
+
+    @Test("Положительная дробная ставка сохраняет Decimal точность")
+    func parsesPositiveHourlyRateWithoutRounding() {
+        let viewModel = makeViewModel()
+
+        viewModel.updateHourlyRateText("17.125")
+
+        #expect(viewModel.draft.hourlyRateText == "17.125")
+        #expect(viewModel.hourlyRate == Decimal(string: "17.125"))
+        #expect(viewModel.canContinue)
+    }
+
+    @Test("Нулевая и отрицательная ставки не позволяют продолжить", arguments: ["0", "-17.125"])
+    func rejectsNonPositiveHourlyRate(_ value: String) {
+        let viewModel = makeViewModel()
+
+        viewModel.updateHourlyRateText(value)
+
+        #expect(viewModel.hourlyRate == nil)
+        #expect(viewModel.canContinue == false)
+    }
+
+    @Test("Ставка с локальным десятичным разделителем парсится как Decimal")
+    func parsesHourlyRateWithLocaleDecimalSeparator() {
+        let viewModel = JobSetupViewModel(
+            initialCurrencyCode: "SEK",
+            initialTimeZoneIdentifier: "Europe/Stockholm",
+            decimalInputLocale: Locale(identifier: "sv_SE")
+        )
+
+        viewModel.updateHourlyRateText("17,125")
+
+        #expect(viewModel.hourlyRate == Decimal(string: "17.125"))
+        #expect(viewModel.canContinue)
+    }
+
     private func makeViewModel() -> JobSetupViewModel {
         JobSetupViewModel(
             initialCurrencyCode: "EUR",
-            initialTimeZoneIdentifier: "Europe/Stockholm"
+            initialTimeZoneIdentifier: "Europe/Stockholm",
+            decimalInputLocale: Locale(identifier: "en_US")
         )
     }
 }

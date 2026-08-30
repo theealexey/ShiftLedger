@@ -35,6 +35,40 @@
         }
       }
     },
+    "jobSetup.currency.accessibilityHint" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Opens currency selection."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Открывает выбор валюты."
+          }
+        }
+      }
+    },
+    "jobSetup.currency.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Currency"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Валюта"
+          }
+        }
+      }
+    },
     "jobSetup.name.accessibilityHint" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -86,19 +120,36 @@
         }
       }
     },
+    "jobSetup.rate.accessibilityHint" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enter your hourly rate."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Введите вашу почасовую ставку."
+          }
+        }
+      }
+    },
     "jobSetup.step1.subtitle" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "The name is only used to identify this job."
+            "value" : "We use it as the basis for calculating your expected pay."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Название используется только для идентификации работы."
+            "value" : "Мы используем её как основу для расчёта ожидаемой зарплаты."
           }
         }
       }
@@ -109,13 +160,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "What is your job called?"
+            "value" : "What is your hourly rate?"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Как называется ваша работа?"
+            "value" : "Какая у вас почасовая ставка?"
           }
         }
       }

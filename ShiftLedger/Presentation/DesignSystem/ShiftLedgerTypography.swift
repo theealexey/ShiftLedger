@@ -11,7 +11,7 @@ enum ShiftLedgerTypography {
     }
 
     static var onboardingQuestion: UIFont {
-        let font = UIFont.systemFont(ofSize: 32, weight: .semibold)
+        let font = UIFont.systemFont(ofSize: 30, weight: .semibold)
         return UIFontMetrics(forTextStyle: .largeTitle).scaledFont(for: font)
     }
 

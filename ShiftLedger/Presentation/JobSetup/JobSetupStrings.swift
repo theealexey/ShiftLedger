@@ -6,8 +6,8 @@ enum JobSetupStrings {
     static var stepIndicatorAccessibilityLabel: String { String(localized: "jobSetup.stepIndicator.accessibilityLabel", table: "Localizable") }
     static var step1Title: String { String(localized: "jobSetup.step1.title", table: "Localizable") }
     static var step1Subtitle: String { String(localized: "jobSetup.step1.subtitle", table: "Localizable") }
-    static var nameTitle: String { String(localized: "jobSetup.name.title", table: "Localizable") }
-    static var namePlaceholder: String { String(localized: "jobSetup.name.placeholder", table: "Localizable") }
-    static var nameAccessibilityHint: String { String(localized: "jobSetup.name.accessibilityHint", table: "Localizable") }
+    static var hourlyRateAccessibilityHint: String { String(localized: "jobSetup.rate.accessibilityHint", table: "Localizable") }
+    static var currencyTitle: String { String(localized: "jobSetup.currency.title", table: "Localizable") }
+    static var currencyAccessibilityHint: String { String(localized: "jobSetup.currency.accessibilityHint", table: "Localizable") }
     static var continueTitle: String { String(localized: "common.continue", table: "Localizable") }
 }

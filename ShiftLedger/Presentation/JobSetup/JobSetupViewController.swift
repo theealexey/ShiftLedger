@@ -1,6 +1,7 @@
 import UIKit
 
 final class JobSetupViewController: UIViewController {
+    var onCurrencySelectionRequested: (() -> Void)?
     var onContinue: ((JobSetupDraft) -> Void)?
 
     private let viewModel: JobSetupViewModel
@@ -28,13 +29,16 @@ final class JobSetupViewController: UIViewController {
     }
 
     private func bindView() {
-        jobSetupView.onNameChanged = { [weak self] name in
+        jobSetupView.onHourlyRateChanged = { [weak self] text in
             guard let self else {
                 return
             }
 
-            viewModel.updateName(name)
+            viewModel.updateHourlyRateText(text)
             jobSetupView.setContinueEnabled(viewModel.canContinue)
+        }
+        jobSetupView.onCurrencyTapped = { [weak self] in
+            self?.onCurrencySelectionRequested?()
         }
         jobSetupView.onContinueTapped = { [weak self] in
             guard let self, viewModel.canContinue else {
@@ -47,7 +51,8 @@ final class JobSetupViewController: UIViewController {
 
     private func render() {
         let draft = viewModel.draft
-        jobSetupView.nameText = draft.name
+        jobSetupView.hourlyRateText = draft.hourlyRateText
+        jobSetupView.setCurrencyCode(draft.currencyCode)
         jobSetupView.setContinueEnabled(viewModel.canContinue)
     }
 }

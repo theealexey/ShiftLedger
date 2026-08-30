@@ -1,12 +1,13 @@
 import UIKit
 
 final class JobSetupView: UIView {
-    var onNameChanged: ((String) -> Void)?
+    var onHourlyRateChanged: ((String) -> Void)?
+    var onCurrencyTapped: (() -> Void)?
     var onContinueTapped: (() -> Void)?
 
-    var nameText: String {
-        get { nameTextField.text ?? "" }
-        set { nameTextField.text = newValue }
+    var hourlyRateText: String {
+        get { hourlyRateTextField.text ?? "" }
+        set { hourlyRateTextField.text = newValue }
     }
 
     private let scrollView = UIScrollView()
@@ -15,11 +16,20 @@ final class JobSetupView: UIView {
     private let topRowSpacer = UIView()
     private let brandLabel = UILabel()
     private let stepLabel = UILabel()
+    private let progressStack = UIStackView()
+    private let progressSegments = (0..<4).map { _ in UIView() }
     private let questionLabel = UILabel()
     private let supportingTextLabel = UILabel()
-    private let nameLabel = UILabel()
-    private let nameTextField = UITextField()
-    private let nameUnderline = UIView()
+    private let heroMoneyStack = UIStackView()
+    private let currencySymbolLabel = UILabel()
+    private let hourlyRateTextField = UITextField()
+    private let hourlyRateUnderline = UIView()
+    private let currencyRow = UIControl()
+    private let currencyTitleLabel = UILabel()
+    private let currencyValueLabel = UILabel()
+    private let currencyChevron = UIImageView(image: UIImage(systemName: "chevron.right"))
+    private let currencySeparator = UIView()
+    private let actionSeparator = UIView()
     private let continueButton = UIButton(type: .system)
 
     override init(frame: CGRect) {
@@ -35,6 +45,12 @@ final class JobSetupView: UIView {
     @available(*, unavailable)
     required init?(coder: NSCoder) {
         nil
+    }
+
+    func setCurrencyCode(_ code: String) {
+        currencyValueLabel.text = code
+        currencySymbolLabel.text = Locale(identifier: "en_US@currency=\(code)").currencySymbol ?? code
+        currencyRow.accessibilityValue = code
     }
 
     func setContinueEnabled(_ enabled: Bool) {
@@ -53,7 +69,7 @@ final class JobSetupView: UIView {
     override func didMoveToWindow() {
         super.didMoveToWindow()
 
-        updateTopRowLayout()
+        updateDynamicTypeLayout()
     }
 
     private func configureAppearance() {
@@ -74,6 +90,12 @@ final class JobSetupView: UIView {
         stepLabel.adjustsFontForContentSizeCategory = true
         stepLabel.accessibilityLabel = JobSetupStrings.stepIndicatorAccessibilityLabel
 
+        for (index, segment) in progressSegments.enumerated() {
+            segment.backgroundColor = index == 0
+                ? ShiftLedgerColors.accentPrimary
+                : ShiftLedgerColors.separator
+        }
+
         questionLabel.text = JobSetupStrings.step1Title
         questionLabel.font = ShiftLedgerTypography.onboardingQuestion
         questionLabel.textColor = ShiftLedgerColors.textPrimary
@@ -87,30 +109,44 @@ final class JobSetupView: UIView {
         supportingTextLabel.numberOfLines = 0
         supportingTextLabel.adjustsFontForContentSizeCategory = true
 
-        nameLabel.text = JobSetupStrings.nameTitle
-        nameLabel.font = ShiftLedgerTypography.headline
-        nameLabel.textColor = ShiftLedgerColors.textPrimary
-        nameLabel.numberOfLines = 0
-        nameLabel.adjustsFontForContentSizeCategory = true
+        currencySymbolLabel.font = ShiftLedgerTypography.title
+        currencySymbolLabel.textColor = ShiftLedgerColors.textSecondary
+        currencySymbolLabel.adjustsFontForContentSizeCategory = true
 
-        nameTextField.font = ShiftLedgerTypography.body
-        nameTextField.textColor = ShiftLedgerColors.textPrimary
-        nameTextField.attributedPlaceholder = NSAttributedString(
-            string: JobSetupStrings.namePlaceholder,
-            attributes: [.foregroundColor: ShiftLedgerColors.textTertiary]
-        )
-        nameTextField.backgroundColor = .clear
-        nameTextField.borderStyle = .none
-        nameTextField.clearButtonMode = .whileEditing
-        nameTextField.returnKeyType = .done
-        nameTextField.autocorrectionType = .no
-        nameTextField.autocapitalizationType = .words
-        nameTextField.adjustsFontForContentSizeCategory = true
-        nameTextField.delegate = self
-        nameTextField.accessibilityLabel = JobSetupStrings.nameTitle
-        nameTextField.accessibilityHint = JobSetupStrings.nameAccessibilityHint
+        hourlyRateTextField.font = ShiftLedgerTypography.display
+        hourlyRateTextField.textColor = ShiftLedgerColors.textPrimary
+        hourlyRateTextField.backgroundColor = .clear
+        hourlyRateTextField.borderStyle = .none
+        hourlyRateTextField.keyboardType = .decimalPad
+        hourlyRateTextField.textAlignment = .natural
+        hourlyRateTextField.adjustsFontForContentSizeCategory = true
+        hourlyRateTextField.delegate = self
+        hourlyRateTextField.accessibilityLabel = JobSetupStrings.step1Title
+        hourlyRateTextField.accessibilityHint = JobSetupStrings.hourlyRateAccessibilityHint
 
-        nameUnderline.backgroundColor = ShiftLedgerColors.separator
+        hourlyRateUnderline.backgroundColor = ShiftLedgerColors.separator
+
+        currencyTitleLabel.text = JobSetupStrings.currencyTitle
+        currencyTitleLabel.font = ShiftLedgerTypography.headline
+        currencyTitleLabel.textColor = ShiftLedgerColors.textPrimary
+        currencyTitleLabel.numberOfLines = 0
+        currencyTitleLabel.adjustsFontForContentSizeCategory = true
+
+        currencyValueLabel.font = ShiftLedgerTypography.callout
+        currencyValueLabel.textColor = ShiftLedgerColors.textSecondary
+        currencyValueLabel.adjustsFontForContentSizeCategory = true
+
+        currencyChevron.tintColor = ShiftLedgerColors.textTertiary
+        currencyChevron.contentMode = .scaleAspectFit
+        currencyChevron.isAccessibilityElement = false
+
+        currencyRow.isAccessibilityElement = true
+        currencyRow.accessibilityLabel = JobSetupStrings.currencyTitle
+        currencyRow.accessibilityHint = JobSetupStrings.currencyAccessibilityHint
+        currencyRow.accessibilityTraits = .button
+
+        currencySeparator.backgroundColor = ShiftLedgerColors.separator
+        actionSeparator.backgroundColor = ShiftLedgerColors.separator
 
         var continueConfiguration = UIButton.Configuration.plain()
         continueConfiguration.title = JobSetupStrings.continueTitle
@@ -137,7 +173,28 @@ final class JobSetupView: UIView {
     }
 
     private func configureSubviews() {
-        [scrollView, contentView, topRow, topRowSpacer, brandLabel, stepLabel, questionLabel, supportingTextLabel, nameLabel, nameTextField, nameUnderline, continueButton].forEach {
+        [
+            scrollView,
+            contentView,
+            topRow,
+            topRowSpacer,
+            brandLabel,
+            stepLabel,
+            progressStack,
+            questionLabel,
+            supportingTextLabel,
+            heroMoneyStack,
+            currencySymbolLabel,
+            hourlyRateTextField,
+            hourlyRateUnderline,
+            currencyRow,
+            currencyTitleLabel,
+            currencyValueLabel,
+            currencyChevron,
+            currencySeparator,
+            actionSeparator,
+            continueButton
+        ].forEach {
             $0.translatesAutoresizingMaskIntoConstraints = false
         }
 
@@ -148,18 +205,43 @@ final class JobSetupView: UIView {
         topRow.addArrangedSubview(topRowSpacer)
         topRow.addArrangedSubview(stepLabel)
 
+        progressStack.axis = .horizontal
+        progressStack.alignment = .fill
+        progressStack.distribution = .fillEqually
+        progressStack.spacing = 4
+        progressSegments.forEach(progressStack.addArrangedSubview)
+
+        heroMoneyStack.axis = .horizontal
+        heroMoneyStack.alignment = .firstBaseline
+        heroMoneyStack.spacing = 8
+        heroMoneyStack.addArrangedSubview(currencySymbolLabel)
+        heroMoneyStack.addArrangedSubview(hourlyRateTextField)
+
         addSubview(scrollView)
         scrollView.addSubview(contentView)
-        contentView.addSubview(topRow)
-        [questionLabel, supportingTextLabel, nameLabel, nameTextField, nameUnderline, continueButton].forEach {
-            contentView.addSubview($0)
-        }
+        [
+            topRow,
+            progressStack,
+            questionLabel,
+            supportingTextLabel,
+            heroMoneyStack,
+            hourlyRateUnderline,
+            currencyRow,
+            currencySeparator,
+            actionSeparator,
+            continueButton
+        ].forEach(contentView.addSubview)
+
+        [currencyTitleLabel, currencyValueLabel, currencyChevron].forEach(currencyRow.addSubview)
 
         stepLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
         brandLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         topRowSpacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        currencySymbolLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
+        currencyValueLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
+        currencyChevron.setContentCompressionResistancePriority(.required, for: .horizontal)
 
-        updateTopRowLayout()
+        updateDynamicTypeLayout()
     }
 
     private func configureLayout() {
@@ -180,7 +262,12 @@ final class JobSetupView: UIView {
             topRow.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 24),
             topRow.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -24),
 
-            questionLabel.topAnchor.constraint(equalTo: topRow.bottomAnchor, constant: 52),
+            progressStack.topAnchor.constraint(equalTo: topRow.bottomAnchor, constant: 16),
+            progressStack.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 24),
+            progressStack.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -24),
+            progressStack.heightAnchor.constraint(equalToConstant: 2),
+
+            questionLabel.topAnchor.constraint(equalTo: progressStack.bottomAnchor, constant: 40),
             questionLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 24),
             questionLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -24),
 
@@ -188,21 +275,45 @@ final class JobSetupView: UIView {
             supportingTextLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 24),
             supportingTextLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -24),
 
-            nameLabel.topAnchor.constraint(equalTo: supportingTextLabel.bottomAnchor, constant: 48),
-            nameLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 24),
-            nameLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -24),
+            heroMoneyStack.topAnchor.constraint(equalTo: supportingTextLabel.bottomAnchor, constant: 36),
+            heroMoneyStack.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 24),
+            heroMoneyStack.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -24),
+            hourlyRateTextField.heightAnchor.constraint(greaterThanOrEqualToConstant: 56),
 
-            nameTextField.topAnchor.constraint(equalTo: nameLabel.bottomAnchor, constant: 10),
-            nameTextField.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 24),
-            nameTextField.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -24),
-            nameTextField.heightAnchor.constraint(greaterThanOrEqualToConstant: 44),
+            hourlyRateUnderline.topAnchor.constraint(equalTo: heroMoneyStack.bottomAnchor, constant: 8),
+            hourlyRateUnderline.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 24),
+            hourlyRateUnderline.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -24),
+            hourlyRateUnderline.heightAnchor.constraint(equalToConstant: 1 / UIScreen.main.scale),
 
-            nameUnderline.topAnchor.constraint(equalTo: nameTextField.bottomAnchor),
-            nameUnderline.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 24),
-            nameUnderline.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -24),
-            nameUnderline.heightAnchor.constraint(equalToConstant: 1 / UIScreen.main.scale),
+            currencyRow.topAnchor.constraint(equalTo: hourlyRateUnderline.bottomAnchor, constant: 28),
+            currencyRow.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 24),
+            currencyRow.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -24),
+            currencyRow.heightAnchor.constraint(greaterThanOrEqualToConstant: 52),
 
-            continueButton.topAnchor.constraint(greaterThanOrEqualTo: nameUnderline.bottomAnchor, constant: 44),
+            currencyTitleLabel.leadingAnchor.constraint(equalTo: currencyRow.leadingAnchor),
+            currencyTitleLabel.topAnchor.constraint(equalTo: currencyRow.topAnchor, constant: 8),
+            currencyTitleLabel.bottomAnchor.constraint(equalTo: currencyRow.bottomAnchor, constant: -8),
+            currencyTitleLabel.trailingAnchor.constraint(lessThanOrEqualTo: currencyValueLabel.leadingAnchor, constant: -12),
+
+            currencyChevron.trailingAnchor.constraint(equalTo: currencyRow.trailingAnchor),
+            currencyChevron.centerYAnchor.constraint(equalTo: currencyRow.centerYAnchor),
+            currencyChevron.widthAnchor.constraint(equalToConstant: 12),
+            currencyChevron.heightAnchor.constraint(equalToConstant: 18),
+
+            currencyValueLabel.trailingAnchor.constraint(equalTo: currencyChevron.leadingAnchor, constant: -12),
+            currencyValueLabel.centerYAnchor.constraint(equalTo: currencyRow.centerYAnchor),
+
+            currencySeparator.topAnchor.constraint(equalTo: currencyRow.bottomAnchor),
+            currencySeparator.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 24),
+            currencySeparator.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -24),
+            currencySeparator.heightAnchor.constraint(equalToConstant: 1 / UIScreen.main.scale),
+
+            actionSeparator.topAnchor.constraint(greaterThanOrEqualTo: currencySeparator.bottomAnchor, constant: 44),
+            actionSeparator.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 24),
+            actionSeparator.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -24),
+            actionSeparator.bottomAnchor.constraint(equalTo: continueButton.topAnchor, constant: -16),
+            actionSeparator.heightAnchor.constraint(equalToConstant: 1 / UIScreen.main.scale),
+
             continueButton.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 24),
             continueButton.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -24),
             continueButton.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -24),
@@ -211,33 +322,38 @@ final class JobSetupView: UIView {
     }
 
     private func configureInteractions() {
-        nameTextField.addTarget(self, action: #selector(nameTextChanged), for: .editingChanged)
-        nameTextField.addTarget(self, action: #selector(nameEditingDidBegin), for: .editingDidBegin)
-        nameTextField.addTarget(self, action: #selector(nameEditingDidEnd), for: .editingDidEnd)
+        hourlyRateTextField.addTarget(self, action: #selector(hourlyRateTextChanged), for: .editingChanged)
+        hourlyRateTextField.addTarget(self, action: #selector(hourlyRateEditingDidBegin), for: .editingDidBegin)
+        hourlyRateTextField.addTarget(self, action: #selector(hourlyRateEditingDidEnd), for: .editingDidEnd)
+        currencyRow.addTarget(self, action: #selector(currencyTapped), for: .touchUpInside)
         continueButton.addTarget(self, action: #selector(continueTapped), for: .touchUpInside)
     }
 
     private func configureTraitChanges() {
         registerForTraitChanges([UITraitPreferredContentSizeCategory.self]) { (self: JobSetupView, _) in
-            self.updateTopRowLayout()
+            self.updateDynamicTypeLayout()
         }
     }
 
-    private func updateTopRowLayout() {
-        let usesVerticalLayout = traitCollection.preferredContentSizeCategory.isAccessibilityCategory
+    private func updateDynamicTypeLayout() {
+        let usesAccessibilityLayout = traitCollection.preferredContentSizeCategory.isAccessibilityCategory
 
-        topRow.axis = usesVerticalLayout ? .vertical : .horizontal
-        topRow.alignment = usesVerticalLayout ? .fill : .top
-        topRow.spacing = usesVerticalLayout ? 8 : 12
-        topRowSpacer.isHidden = usesVerticalLayout
-        brandLabel.numberOfLines = usesVerticalLayout ? 0 : 1
+        topRow.axis = usesAccessibilityLayout ? .vertical : .horizontal
+        topRow.alignment = usesAccessibilityLayout ? .fill : .top
+        topRow.spacing = usesAccessibilityLayout ? 8 : 12
+        topRowSpacer.isHidden = usesAccessibilityLayout
+        brandLabel.numberOfLines = usesAccessibilityLayout ? 0 : 1
         brandLabel.setContentCompressionResistancePriority(
-            usesVerticalLayout ? .required : .defaultLow,
+            usesAccessibilityLayout ? .required : .defaultLow,
             for: .horizontal
         )
-        stepLabel.textAlignment = usesVerticalLayout ? .right : .natural
+        stepLabel.textAlignment = usesAccessibilityLayout ? .right : .natural
 
-        updateContinueButtonLayout(usesAccessibilityLayout: usesVerticalLayout)
+        heroMoneyStack.axis = usesAccessibilityLayout ? .vertical : .horizontal
+        heroMoneyStack.alignment = usesAccessibilityLayout ? .leading : .firstBaseline
+        heroMoneyStack.spacing = usesAccessibilityLayout ? 4 : 8
+
+        updateContinueButtonLayout(usesAccessibilityLayout: usesAccessibilityLayout)
     }
 
     private func updateContinueButtonLayout(usesAccessibilityLayout: Bool) {
@@ -250,16 +366,20 @@ final class JobSetupView: UIView {
         continueButton.configuration = configuration
     }
 
-    @objc private func nameTextChanged() {
-        onNameChanged?(nameText)
+    @objc private func hourlyRateTextChanged() {
+        onHourlyRateChanged?(hourlyRateText)
     }
 
-    @objc private func nameEditingDidBegin() {
-        nameUnderline.backgroundColor = ShiftLedgerColors.accentPrimary
+    @objc private func hourlyRateEditingDidBegin() {
+        hourlyRateUnderline.backgroundColor = ShiftLedgerColors.accentPrimary
     }
 
-    @objc private func nameEditingDidEnd() {
-        nameUnderline.backgroundColor = ShiftLedgerColors.separator
+    @objc private func hourlyRateEditingDidEnd() {
+        hourlyRateUnderline.backgroundColor = ShiftLedgerColors.separator
+    }
+
+    @objc private func currencyTapped() {
+        onCurrencyTapped?()
     }
 
     @objc private func continueTapped() {
