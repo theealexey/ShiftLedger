@@ -374,7 +374,7 @@ struct ShiftLedgerTests {
             name: name,
             currencyCode: currencyCode,
             timeZoneIdentifier: timeZoneIdentifier,
-            payPeriodSchedule: .weekly(anchorDate: try makeLocalDate()),
+            payCalculationCycle: .scheduled(.weekly(anchorDate: try makeLocalDate())),
             payRates: payRates,
             createdAt: createdAt
         )

@@ -33,6 +33,7 @@ final class JobStorage {
         case weekly
         case biweekly
         case calendarMonthly
+        case perShift
     }
 
     private let context: NSManagedObjectContext
@@ -52,7 +53,7 @@ final class JobStorage {
         }
 
         let timeZone = try makeTimeZone(from: job.timeZoneIdentifier)
-        let storedPayPeriod = try encodePayPeriodSchedule(job.payPeriodSchedule, timeZone: timeZone)
+        let storedPayPeriod = try encodePayCalculationCycle(job.payCalculationCycle, timeZone: timeZone)
         let storedPayRates = try job.payRates.map { payRate in
             (payRate: payRate, effectiveFrom: try payRate.effectiveFrom.startOfDay(in: timeZone))
         }
@@ -126,7 +127,7 @@ final class JobStorage {
 
     private func makeJob(from jobEntity: JobEntity) throws -> Job {
         let timeZone = try makeTimeZone(from: jobEntity.timeZoneIdentifier)
-        let payPeriodSchedule = try makePayPeriodSchedule(from: jobEntity, timeZone: timeZone)
+        let payCalculationCycle = try makePayCalculationCycle(from: jobEntity, timeZone: timeZone)
         var payRates: [PayRate] = []
 
         for object in jobEntity.payRates {
@@ -145,7 +146,7 @@ final class JobStorage {
                 name: jobEntity.name,
                 currencyCode: jobEntity.currencyCode,
                 timeZoneIdentifier: jobEntity.timeZoneIdentifier,
-                payPeriodSchedule: payPeriodSchedule,
+                payCalculationCycle: payCalculationCycle,
                 payRates: sortedPayRates,
                 createdAt: jobEntity.createdAt
             )
@@ -154,40 +155,54 @@ final class JobStorage {
         }
     }
 
-    private func encodePayPeriodSchedule(
-        _ payPeriodSchedule: PayPeriodSchedule,
+    private func encodePayCalculationCycle(
+        _ payCalculationCycle: PayCalculationCycle,
         timeZone: TimeZone
     ) throws -> (kind: StoredPayPeriodKind, anchorDate: Date?) {
-        switch payPeriodSchedule {
-        case let .weekly(anchorDate):
-            return (.weekly, try anchorDate.startOfDay(in: timeZone))
-        case let .biweekly(anchorDate):
-            return (.biweekly, try anchorDate.startOfDay(in: timeZone))
-        case .calendarMonthly:
-            return (.calendarMonthly, nil)
+        switch payCalculationCycle {
+        case .perShift:
+            return (.perShift, nil)
+        case let .scheduled(schedule):
+            switch schedule {
+            case let .weekly(anchorDate):
+                return (.weekly, try anchorDate.startOfDay(in: timeZone))
+            case let .biweekly(anchorDate):
+                return (.biweekly, try anchorDate.startOfDay(in: timeZone))
+            case .calendarMonthly:
+                return (.calendarMonthly, nil)
+            }
         }
     }
 
-    private func makePayPeriodSchedule(
+    private func makePayCalculationCycle(
         from jobEntity: JobEntity,
         timeZone: TimeZone
-    ) throws -> PayPeriodSchedule {
+    ) throws -> PayCalculationCycle {
         guard let storedKind = StoredPayPeriodKind(rawValue: jobEntity.payPeriodKind) else {
             throw JobStorageError.corruptedData(.unknownPayPeriodKind(jobEntity.payPeriodKind))
         }
 
         switch storedKind {
+        case .perShift:
+            guard jobEntity.payPeriodAnchorDate == nil else {
+                throw JobStorageError.corruptedData(
+                    .unexpectedPayPeriodAnchorDate(payPeriodKind: storedKind.rawValue)
+                )
+            }
+            return .perShift
         case .weekly:
             guard let anchorDate = jobEntity.payPeriodAnchorDate else {
                 throw JobStorageError.corruptedData(
                     .missingPayPeriodAnchorDate(payPeriodKind: storedKind.rawValue)
                 )
             }
-            return .weekly(
-                anchorDate: try makePayPeriodAnchorDate(
-                    from: anchorDate,
-                    kind: storedKind,
-                    timeZone: timeZone
+            return .scheduled(
+                .weekly(
+                    anchorDate: try makePayPeriodAnchorDate(
+                        from: anchorDate,
+                        kind: storedKind,
+                        timeZone: timeZone
+                    )
                 )
             )
         case .biweekly:
@@ -196,11 +211,13 @@ final class JobStorage {
                     .missingPayPeriodAnchorDate(payPeriodKind: storedKind.rawValue)
                 )
             }
-            return .biweekly(
-                anchorDate: try makePayPeriodAnchorDate(
-                    from: anchorDate,
-                    kind: storedKind,
-                    timeZone: timeZone
+            return .scheduled(
+                .biweekly(
+                    anchorDate: try makePayPeriodAnchorDate(
+                        from: anchorDate,
+                        kind: storedKind,
+                        timeZone: timeZone
+                    )
                 )
             )
         case .calendarMonthly:
@@ -209,7 +226,7 @@ final class JobStorage {
                     .unexpectedPayPeriodAnchorDate(payPeriodKind: storedKind.rawValue)
                 )
             }
-            return .calendarMonthly
+            return .scheduled(.calendarMonthly)
         }
     }
 

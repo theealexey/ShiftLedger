@@ -13,7 +13,7 @@ struct Job: Equatable {
     let name: String
     let currencyCode: String
     let timeZoneIdentifier: String
-    let payPeriodSchedule: PayPeriodSchedule
+    let payCalculationCycle: PayCalculationCycle
     let payRates: [PayRate]
     let createdAt: Date
 
@@ -22,7 +22,7 @@ struct Job: Equatable {
         name: String,
         currencyCode: String,
         timeZoneIdentifier: String,
-        payPeriodSchedule: PayPeriodSchedule,
+        payCalculationCycle: PayCalculationCycle,
         payRates: [PayRate],
         createdAt: Date = Date()
     ) throws {
@@ -53,7 +53,7 @@ struct Job: Equatable {
         self.name = normalizedName
         self.currencyCode = normalizedCurrencyCode
         self.timeZoneIdentifier = timeZoneIdentifier
-        self.payPeriodSchedule = payPeriodSchedule
+        self.payCalculationCycle = payCalculationCycle
         self.payRates = payRates
         self.createdAt = createdAt
     }
