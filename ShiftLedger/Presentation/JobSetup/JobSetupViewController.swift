@@ -1,7 +1,6 @@
 import UIKit
 
 final class JobSetupViewController: UIViewController {
-    var onCurrencySelectionRequested: (() -> Void)?
     var onContinue: ((JobSetupDraft) -> Void)?
 
     private let viewModel: JobSetupViewModel
@@ -38,7 +37,7 @@ final class JobSetupViewController: UIViewController {
             jobSetupView.setContinueEnabled(viewModel.canContinue)
         }
         jobSetupView.onCurrencyTapped = { [weak self] in
-            self?.onCurrencySelectionRequested?()
+            self?.showCurrencySelection()
         }
         jobSetupView.onContinueTapped = { [weak self] in
             guard let self, viewModel.canContinue else {
@@ -54,5 +53,25 @@ final class JobSetupViewController: UIViewController {
         jobSetupView.hourlyRateText = draft.hourlyRateText
         jobSetupView.setCurrencyCode(draft.currencyCode)
         jobSetupView.setContinueEnabled(viewModel.canContinue)
+    }
+
+    private func showCurrencySelection() {
+        let selectionViewController = CurrencySelectionViewController(
+            currentCurrencyCode: viewModel.draft.currencyCode
+        ) { [weak self] code in
+            guard let self, viewModel.selectCurrency(code: code) else {
+                return
+            }
+
+            render()
+        }
+
+        if let navigationController {
+            navigationController.pushViewController(selectionViewController, animated: true)
+        } else {
+            let navigationController = UINavigationController(rootViewController: selectionViewController)
+            navigationController.modalPresentationStyle = .fullScreen
+            present(navigationController, animated: true)
+        }
     }
 }
