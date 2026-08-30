@@ -5,6 +5,7 @@ enum JobStorageError: Error {
     enum Corruption: Error {
         case invalidTimeZoneIdentifier(String)
         case unknownPayPeriodKind(String)
+        case unknownBasePayKind(String)
         case missingPayPeriodAnchorDate(payPeriodKind: String)
         case unexpectedPayPeriodAnchorDate(payPeriodKind: String)
         case invalidPayPeriodAnchorDate(payPeriodKind: String, underlying: Error)
@@ -34,6 +35,11 @@ final class JobStorage {
         case biweekly
         case calendarMonthly
         case perShift
+    }
+
+    private enum StoredBasePayKind: String {
+        case hourly
+        case fixedPerShift
     }
 
     private let context: NSManagedObjectContext
@@ -80,6 +86,7 @@ final class JobStorage {
         jobEntity.name = job.name
         jobEntity.currencyCode = job.currencyCode
         jobEntity.timeZoneIdentifier = job.timeZoneIdentifier
+        jobEntity.basePayKind = encodeBasePayBasis(job.basePayBasis).rawValue
         jobEntity.createdAt = job.createdAt
         jobEntity.payPeriodKind = storedPayPeriod.kind.rawValue
         jobEntity.payPeriodAnchorDate = storedPayPeriod.anchorDate
@@ -127,6 +134,7 @@ final class JobStorage {
 
     private func makeJob(from jobEntity: JobEntity) throws -> Job {
         let timeZone = try makeTimeZone(from: jobEntity.timeZoneIdentifier)
+        let basePayBasis = try makeBasePayBasis(from: jobEntity)
         let payCalculationCycle = try makePayCalculationCycle(from: jobEntity, timeZone: timeZone)
         var payRates: [PayRate] = []
 
@@ -146,12 +154,39 @@ final class JobStorage {
                 name: jobEntity.name,
                 currencyCode: jobEntity.currencyCode,
                 timeZoneIdentifier: jobEntity.timeZoneIdentifier,
+                basePayBasis: basePayBasis,
                 payCalculationCycle: payCalculationCycle,
                 payRates: sortedPayRates,
                 createdAt: jobEntity.createdAt
             )
         } catch {
             throw JobStorageError.corruptedData(.invalidJob(underlying: error))
+        }
+    }
+
+    private func encodeBasePayBasis(_ basis: BasePayBasis) -> StoredBasePayKind {
+        switch basis {
+        case .hourly:
+            .hourly
+        case .fixedPerShift:
+            .fixedPerShift
+        }
+    }
+
+    private func makeBasePayBasis(from jobEntity: JobEntity) throws -> BasePayBasis {
+        guard let rawValue = jobEntity.basePayKind else {
+            return .hourly
+        }
+
+        guard let storedKind = StoredBasePayKind(rawValue: rawValue) else {
+            throw JobStorageError.corruptedData(.unknownBasePayKind(rawValue))
+        }
+
+        switch storedKind {
+        case .hourly:
+            return .hourly
+        case .fixedPerShift:
+            return .fixedPerShift
         }
     }
 

@@ -5,6 +5,7 @@
         <attribute name="name" optional="NO" attributeType="String"/>
         <attribute name="currencyCode" optional="NO" attributeType="String"/>
         <attribute name="timeZoneIdentifier" optional="NO" attributeType="String"/>
+        <attribute name="basePayKind" optional="YES" attributeType="String"/>
         <attribute name="payPeriodKind" optional="NO" attributeType="String"/>
         <attribute name="payPeriodAnchorDate" optional="YES" attributeType="Date"/>
         <attribute name="createdAt" optional="NO" attributeType="Date"/>

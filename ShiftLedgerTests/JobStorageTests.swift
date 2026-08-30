@@ -19,6 +19,7 @@ struct JobStorageTests {
             id: try #require(UUID(uuidString: "D5E1C53B-CA4E-4C37-98DC-B8E4F6A0B56F")),
             name: "Разовые смены",
             payRates: [payRate],
+            basePayBasis: .fixedPerShift,
             payCalculationCycle: .perShift
         )
 
@@ -31,6 +32,38 @@ struct JobStorageTests {
         let restoredJob = try #require(try JobStorage(stack: stackB).load())
 
         #expect(restoredJob == job)
+        #expect(restoredJob.basePayBasis == .fixedPerShift)
+    }
+
+    @Test("Неизвестная база оплаты в SQLite отклоняется")
+    func rejectsUnknownBasePayKind() async throws {
+        let storeURL = try makeTemporaryStoreURL()
+        var stacks: [CoreDataStack] = []
+        defer { removeTemporaryStoreDirectory(for: storeURL, stacks: stacks) }
+
+        let timeZone = try #require(TimeZone(identifier: "Europe/Stockholm"))
+        let effectiveFrom = try LocalDate(year: 2026, month: 1, day: 1)
+        let stack = try await CoreDataStack.load(storeURL: storeURL)
+        stacks.append(stack)
+
+        try insertPersistedJob(
+            id: try #require(UUID(uuidString: "2A6D58B5-6B9D-4D60-9EAE-9B9A0B7F2D6A")),
+            name: "Повреждённая база",
+            payRateID: try #require(UUID(uuidString: "4B5A3AF5-1E65-459B-A7D0-2AC5B5E77B26")),
+            payRateEffectiveFrom: try effectiveFrom.startOfDay(in: timeZone),
+            basePayKind: "unknown",
+            payPeriodAnchorDate: try effectiveFrom.startOfDay(in: timeZone),
+            in: stack.viewContext
+        )
+        try stack.viewContext.save()
+
+        do {
+            _ = try JobStorage(stack: stack).load()
+            Issue.record("Неизвестная база оплаты была принята")
+        } catch JobStorageError.corruptedData(.unknownBasePayKind("unknown")) {
+        } catch {
+            Issue.record("Неизвестная база оплаты вернула неверную ошибку")
+        }
     }
 
     @Test("Job сохраняется в SQLite и восстанавливается новым Core Data stack")
@@ -66,6 +99,7 @@ struct JobStorageTests {
             name: " \n Основная работа \t",
             currencyCode: "eur",
             timeZoneIdentifier: "Europe/Stockholm",
+            basePayBasis: .hourly,
             payCalculationCycle: .scheduled(.weekly(anchorDate: anchorDate)),
             payRates: [laterPayRate, earlierPayRate],
             createdAt: createdAt
@@ -308,6 +342,7 @@ struct JobStorageTests {
         id: UUID,
         name: String,
         payRates: [PayRate],
+        basePayBasis: BasePayBasis = .hourly,
         payCalculationCycle: PayCalculationCycle? = nil
     ) throws -> Job {
         let cycle = try payCalculationCycle ?? .scheduled(
@@ -318,6 +353,7 @@ struct JobStorageTests {
             name: name,
             currencyCode: "EUR",
             timeZoneIdentifier: "Europe/Stockholm",
+            basePayBasis: basePayBasis,
             payCalculationCycle: cycle,
             payRates: payRates,
             createdAt: Date(timeIntervalSinceReferenceDate: 750_000)
@@ -329,6 +365,7 @@ struct JobStorageTests {
         name: String,
         payRateID: UUID,
         payRateEffectiveFrom: Date,
+        basePayKind: String? = nil,
         payPeriodKind: String = "weekly",
         payPeriodAnchorDate: Date?,
         in context: NSManagedObjectContext
@@ -345,6 +382,7 @@ struct JobStorageTests {
         jobEntity.name = name
         jobEntity.currencyCode = "EUR"
         jobEntity.timeZoneIdentifier = "Europe/Stockholm"
+        jobEntity.basePayKind = basePayKind
         jobEntity.payPeriodKind = payPeriodKind
         jobEntity.payPeriodAnchorDate = payPeriodAnchorDate
         jobEntity.createdAt = Date(timeIntervalSinceReferenceDate: 900_000)

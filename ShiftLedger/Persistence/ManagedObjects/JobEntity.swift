@@ -7,6 +7,7 @@ class JobEntity: NSManagedObject {
     @NSManaged var name: String
     @NSManaged var currencyCode: String
     @NSManaged var timeZoneIdentifier: String
+    @NSManaged var basePayKind: String?
     @NSManaged var payPeriodKind: String
     @NSManaged var payPeriodAnchorDate: Date?
     @NSManaged var createdAt: Date
