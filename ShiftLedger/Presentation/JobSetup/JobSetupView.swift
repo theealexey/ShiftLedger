@@ -107,7 +107,7 @@ final class JobSetupView: UIView {
         amountTitleLabel.adjustsFontForContentSizeCategory = true
         amountTitleLabel.numberOfLines = 0
 
-        currencySymbolLabel.font = ShiftLedgerTypography.title
+        currencySymbolLabel.font = ShiftLedgerTypography.basePayCurrency
         currencySymbolLabel.textColor = ShiftLedgerColors.textSecondary
         currencySymbolLabel.adjustsFontForContentSizeCategory = true
 

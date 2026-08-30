@@ -54,7 +54,7 @@ final class JobNameSetupView: UIView, UITextFieldDelegate {
         subtitleLabel.numberOfLines = 0
         subtitleLabel.adjustsFontForContentSizeCategory = true
 
-        nameTextField.font = ShiftLedgerTypography.title
+        nameTextField.font = ShiftLedgerTypography.setupInput
         nameTextField.textColor = ShiftLedgerColors.textPrimary
         nameTextField.tintColor = ShiftLedgerColors.accentPrimary
         nameTextField.backgroundColor = .clear
