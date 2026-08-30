@@ -1,8 +1,6 @@
 import UIKit
 
 final class JobSetupViewController: UIViewController {
-    var onCurrencySelectionRequested: (() -> Void)?
-    var onTimeZoneSelectionRequested: (() -> Void)?
     var onContinue: ((JobSetupDraft) -> Void)?
 
     private let viewModel: JobSetupViewModel
@@ -38,12 +36,6 @@ final class JobSetupViewController: UIViewController {
             viewModel.updateName(name)
             jobSetupView.setContinueEnabled(viewModel.canContinue)
         }
-        jobSetupView.onCurrencyTapped = { [weak self] in
-            self?.onCurrencySelectionRequested?()
-        }
-        jobSetupView.onTimeZoneTapped = { [weak self] in
-            self?.onTimeZoneSelectionRequested?()
-        }
         jobSetupView.onContinueTapped = { [weak self] in
             guard let self, viewModel.canContinue else {
                 return
@@ -56,8 +48,6 @@ final class JobSetupViewController: UIViewController {
     private func render() {
         let draft = viewModel.draft
         jobSetupView.nameText = draft.name
-        jobSetupView.setCurrencyCode(draft.currencyCode)
-        jobSetupView.setTimeZoneIdentifier(draft.timeZoneIdentifier)
         jobSetupView.setContinueEnabled(viewModel.canContinue)
     }
 }

@@ -35,40 +35,6 @@
         }
       }
     },
-    "jobSetup.currency.accessibilityHint" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Opens currency selection."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Открывает выбор валюты."
-          }
-        }
-      }
-    },
-    "jobSetup.currency.title" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Currency"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Валюта"
-          }
-        }
-      }
-    },
     "jobSetup.name.accessibilityHint" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -120,70 +86,70 @@
         }
       }
     },
-    "jobSetup.subtitle" : {
+    "jobSetup.step1.subtitle" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Enter the basic information used to calculate your pay."
+            "value" : "The name is only used to identify this job."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Укажите основные данные для расчёта начислений."
+            "value" : "Название используется только для идентификации работы."
           }
         }
       }
     },
-    "jobSetup.timeZone.accessibilityHint" : {
+    "jobSetup.step1.title" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Opens time zone selection."
+            "value" : "What is your job called?"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Открывает выбор часового пояса."
+            "value" : "Как называется ваша работа?"
           }
         }
       }
     },
-    "jobSetup.timeZone.title" : {
+    "jobSetup.stepIndicator" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Time zone"
+            "value" : "1 / 4"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Часовой пояс"
+            "value" : "1 / 4"
           }
         }
       }
     },
-    "jobSetup.title" : {
+    "jobSetup.stepIndicator.accessibilityLabel" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Set up your job"
+            "value" : "Step 1 of 4"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Настроим вашу работу"
+            "value" : "Шаг 1 из 4"
           }
         }
       }

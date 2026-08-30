@@ -2,8 +2,6 @@ import UIKit
 
 final class JobSetupView: UIView {
     var onNameChanged: ((String) -> Void)?
-    var onCurrencyTapped: (() -> Void)?
-    var onTimeZoneTapped: (() -> Void)?
     var onContinueTapped: (() -> Void)?
 
     var nameText: String {
@@ -13,21 +11,15 @@ final class JobSetupView: UIView {
 
     private let scrollView = UIScrollView()
     private let contentView = UIView()
-    private let contentStack = UIStackView()
-    private let headingStack = UIStackView()
-    private let nameStack = UIStackView()
-    private let selectionStack = UIStackView()
-
+    private let topRow = UIStackView()
+    private let topRowSpacer = UIView()
     private let brandLabel = UILabel()
-    private let titleLabel = UILabel()
+    private let stepLabel = UILabel()
+    private let questionLabel = UILabel()
     private let supportingTextLabel = UILabel()
     private let nameLabel = UILabel()
-    private let nameFieldContainer = UIView()
     private let nameTextField = UITextField()
-    private let selectionGroup = UIView()
-    private let selectionSeparator = UIView()
-    private let currencyButton = UIButton(type: .system)
-    private let timeZoneButton = UIButton(type: .system)
+    private let nameUnderline = UIView()
     private let continueButton = UIButton(type: .system)
 
     override init(frame: CGRect) {
@@ -37,19 +29,12 @@ final class JobSetupView: UIView {
         configureSubviews()
         configureLayout()
         configureInteractions()
+        configureTraitChanges()
     }
 
     @available(*, unavailable)
     required init?(coder: NSCoder) {
         nil
-    }
-
-    func setCurrencyCode(_ code: String) {
-        setSelectionValue(code, for: currencyButton)
-    }
-
-    func setTimeZoneIdentifier(_ identifier: String) {
-        setSelectionValue(identifier, for: timeZoneButton)
     }
 
     func setContinueEnabled(_ enabled: Bool) {
@@ -59,13 +44,16 @@ final class JobSetupView: UIView {
             return
         }
 
-        configuration.baseBackgroundColor = enabled
-            ? ShiftLedgerColors.accentPrimary
-            : ShiftLedgerColors.backgroundSecondary
         configuration.baseForegroundColor = enabled
-            ? ShiftLedgerColors.backgroundPrimary
+            ? ShiftLedgerColors.accentPrimary
             : ShiftLedgerColors.textTertiary
         continueButton.configuration = configuration
+    }
+
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+
+        updateTopRowLayout()
     }
 
     private func configureAppearance() {
@@ -76,17 +64,24 @@ final class JobSetupView: UIView {
         brandLabel.text = JobSetupStrings.brandName
         brandLabel.font = ShiftLedgerTypography.caption
         brandLabel.textColor = ShiftLedgerColors.accentPrimary
+        brandLabel.numberOfLines = 1
         brandLabel.adjustsFontForContentSizeCategory = true
         brandLabel.isAccessibilityElement = false
 
-        titleLabel.text = JobSetupStrings.title
-        titleLabel.font = ShiftLedgerTypography.largeTitle
-        titleLabel.textColor = ShiftLedgerColors.textPrimary
-        titleLabel.numberOfLines = 0
-        titleLabel.adjustsFontForContentSizeCategory = true
-        titleLabel.accessibilityTraits = .header
+        stepLabel.text = JobSetupStrings.stepIndicator
+        stepLabel.font = ShiftLedgerTypography.caption
+        stepLabel.textColor = ShiftLedgerColors.textTertiary
+        stepLabel.adjustsFontForContentSizeCategory = true
+        stepLabel.accessibilityLabel = JobSetupStrings.stepIndicatorAccessibilityLabel
 
-        supportingTextLabel.text = JobSetupStrings.subtitle
+        questionLabel.text = JobSetupStrings.step1Title
+        questionLabel.font = ShiftLedgerTypography.onboardingQuestion
+        questionLabel.textColor = ShiftLedgerColors.textPrimary
+        questionLabel.numberOfLines = 0
+        questionLabel.adjustsFontForContentSizeCategory = true
+        questionLabel.accessibilityTraits = .header
+
+        supportingTextLabel.text = JobSetupStrings.step1Subtitle
         supportingTextLabel.font = ShiftLedgerTypography.body
         supportingTextLabel.textColor = ShiftLedgerColors.textSecondary
         supportingTextLabel.numberOfLines = 0
@@ -95,10 +90,8 @@ final class JobSetupView: UIView {
         nameLabel.text = JobSetupStrings.nameTitle
         nameLabel.font = ShiftLedgerTypography.headline
         nameLabel.textColor = ShiftLedgerColors.textPrimary
+        nameLabel.numberOfLines = 0
         nameLabel.adjustsFontForContentSizeCategory = true
-
-        nameFieldContainer.backgroundColor = ShiftLedgerColors.surfacePrimary
-        nameFieldContainer.layer.cornerRadius = 12
 
         nameTextField.font = ShiftLedgerTypography.body
         nameTextField.textColor = ShiftLedgerColors.textPrimary
@@ -106,6 +99,7 @@ final class JobSetupView: UIView {
             string: JobSetupStrings.namePlaceholder,
             attributes: [.foregroundColor: ShiftLedgerColors.textTertiary]
         )
+        nameTextField.backgroundColor = .clear
         nameTextField.borderStyle = .none
         nameTextField.clearButtonMode = .whileEditing
         nameTextField.returnKeyType = .done
@@ -116,31 +110,20 @@ final class JobSetupView: UIView {
         nameTextField.accessibilityLabel = JobSetupStrings.nameTitle
         nameTextField.accessibilityHint = JobSetupStrings.nameAccessibilityHint
 
-        selectionGroup.backgroundColor = ShiftLedgerColors.surfacePrimary
-        selectionGroup.layer.cornerRadius = 12
-        selectionSeparator.backgroundColor = ShiftLedgerColors.separator
+        nameUnderline.backgroundColor = ShiftLedgerColors.separator
 
-        configureSelectionButton(
-            currencyButton,
-            title: JobSetupStrings.currencyTitle,
-            hint: JobSetupStrings.currencyAccessibilityHint
-        )
-        configureSelectionButton(
-            timeZoneButton,
-            title: JobSetupStrings.timeZoneTitle,
-            hint: JobSetupStrings.timeZoneAccessibilityHint
-        )
-
-        var continueConfiguration = UIButton.Configuration.filled()
+        var continueConfiguration = UIButton.Configuration.plain()
         continueConfiguration.title = JobSetupStrings.continueTitle
-        continueConfiguration.baseBackgroundColor = ShiftLedgerColors.accentPrimary
-        continueConfiguration.baseForegroundColor = ShiftLedgerColors.backgroundPrimary
-        continueConfiguration.cornerStyle = .medium
+        continueConfiguration.image = UIImage(systemName: "arrow.right")
+        continueConfiguration.imagePlacement = .trailing
+        continueConfiguration.imagePadding = 8
+        continueConfiguration.titleAlignment = .trailing
+        continueConfiguration.baseForegroundColor = ShiftLedgerColors.accentPrimary
         continueConfiguration.contentInsets = NSDirectionalEdgeInsets(
-            top: 14,
-            leading: 20,
-            bottom: 14,
-            trailing: 20
+            top: 10,
+            leading: 0,
+            bottom: 10,
+            trailing: 0
         )
         continueConfiguration.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { attributes in
             var transformedAttributes = attributes
@@ -148,57 +131,35 @@ final class JobSetupView: UIView {
             return transformedAttributes
         }
         continueButton.configuration = continueConfiguration
+        continueButton.contentHorizontalAlignment = .trailing
+        continueButton.titleLabel?.numberOfLines = 0
         continueButton.titleLabel?.adjustsFontForContentSizeCategory = true
-        continueButton.accessibilityLabel = JobSetupStrings.continueTitle
     }
 
     private func configureSubviews() {
-        [scrollView, contentView, contentStack, headingStack, nameStack, nameFieldContainer, selectionGroup, selectionStack].forEach {
+        [scrollView, contentView, topRow, topRowSpacer, brandLabel, stepLabel, questionLabel, supportingTextLabel, nameLabel, nameTextField, nameUnderline, continueButton].forEach {
             $0.translatesAutoresizingMaskIntoConstraints = false
         }
 
-        [brandLabel, titleLabel, supportingTextLabel, nameLabel, nameTextField, selectionSeparator, currencyButton, timeZoneButton, continueButton].forEach {
-            $0.translatesAutoresizingMaskIntoConstraints = false
-        }
-
-        contentStack.axis = .vertical
-        contentStack.spacing = 24
-        contentStack.alignment = .fill
-
-        headingStack.axis = .vertical
-        headingStack.spacing = 8
-        headingStack.alignment = .fill
-
-        nameStack.axis = .vertical
-        nameStack.spacing = 8
-        nameStack.alignment = .fill
-
-        selectionStack.axis = .vertical
-        selectionStack.spacing = 0
-        selectionStack.alignment = .fill
+        topRow.axis = .horizontal
+        topRow.alignment = .top
+        topRow.distribution = .fill
+        topRow.addArrangedSubview(brandLabel)
+        topRow.addArrangedSubview(topRowSpacer)
+        topRow.addArrangedSubview(stepLabel)
 
         addSubview(scrollView)
         scrollView.addSubview(contentView)
-        contentView.addSubview(contentStack)
+        contentView.addSubview(topRow)
+        [questionLabel, supportingTextLabel, nameLabel, nameTextField, nameUnderline, continueButton].forEach {
+            contentView.addSubview($0)
+        }
 
-        headingStack.addArrangedSubview(titleLabel)
-        headingStack.addArrangedSubview(supportingTextLabel)
+        stepLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
+        brandLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        topRowSpacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
 
-        nameFieldContainer.addSubview(nameTextField)
-        nameStack.addArrangedSubview(nameLabel)
-        nameStack.addArrangedSubview(nameFieldContainer)
-
-        selectionStack.addArrangedSubview(currencyButton)
-        selectionStack.addArrangedSubview(selectionSeparator)
-        selectionStack.addArrangedSubview(timeZoneButton)
-        selectionGroup.addSubview(selectionStack)
-
-        contentStack.addArrangedSubview(brandLabel)
-        contentStack.addArrangedSubview(headingStack)
-        contentStack.addArrangedSubview(nameStack)
-        contentStack.addArrangedSubview(selectionGroup)
-        contentStack.addArrangedSubview(continueButton)
-        contentStack.setCustomSpacing(20, after: brandLabel)
+        updateTopRowLayout()
     }
 
     private func configureLayout() {
@@ -213,89 +174,92 @@ final class JobSetupView: UIView {
             contentView.trailingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.trailingAnchor),
             contentView.bottomAnchor.constraint(equalTo: scrollView.contentLayoutGuide.bottomAnchor),
             contentView.widthAnchor.constraint(equalTo: scrollView.frameLayoutGuide.widthAnchor),
+            contentView.heightAnchor.constraint(greaterThanOrEqualTo: scrollView.frameLayoutGuide.heightAnchor),
 
-            contentStack.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 32),
-            contentStack.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 24),
-            contentStack.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -24),
-            contentStack.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -24),
+            topRow.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 24),
+            topRow.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 24),
+            topRow.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -24),
 
-            nameTextField.topAnchor.constraint(equalTo: nameFieldContainer.topAnchor, constant: 12),
-            nameTextField.leadingAnchor.constraint(equalTo: nameFieldContainer.leadingAnchor, constant: 16),
-            nameTextField.trailingAnchor.constraint(equalTo: nameFieldContainer.trailingAnchor, constant: -16),
-            nameTextField.bottomAnchor.constraint(equalTo: nameFieldContainer.bottomAnchor, constant: -12),
-            nameFieldContainer.heightAnchor.constraint(greaterThanOrEqualToConstant: 52),
+            questionLabel.topAnchor.constraint(equalTo: topRow.bottomAnchor, constant: 52),
+            questionLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 24),
+            questionLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -24),
 
-            selectionStack.topAnchor.constraint(equalTo: selectionGroup.topAnchor),
-            selectionStack.leadingAnchor.constraint(equalTo: selectionGroup.leadingAnchor),
-            selectionStack.trailingAnchor.constraint(equalTo: selectionGroup.trailingAnchor),
-            selectionStack.bottomAnchor.constraint(equalTo: selectionGroup.bottomAnchor),
-            currencyButton.heightAnchor.constraint(greaterThanOrEqualToConstant: 64),
-            timeZoneButton.heightAnchor.constraint(greaterThanOrEqualToConstant: 64),
-            selectionSeparator.heightAnchor.constraint(equalToConstant: 1 / UIScreen.main.scale),
+            supportingTextLabel.topAnchor.constraint(equalTo: questionLabel.bottomAnchor, constant: 12),
+            supportingTextLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 24),
+            supportingTextLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -24),
 
-            continueButton.heightAnchor.constraint(greaterThanOrEqualToConstant: 52)
+            nameLabel.topAnchor.constraint(equalTo: supportingTextLabel.bottomAnchor, constant: 48),
+            nameLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 24),
+            nameLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -24),
+
+            nameTextField.topAnchor.constraint(equalTo: nameLabel.bottomAnchor, constant: 10),
+            nameTextField.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 24),
+            nameTextField.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -24),
+            nameTextField.heightAnchor.constraint(greaterThanOrEqualToConstant: 44),
+
+            nameUnderline.topAnchor.constraint(equalTo: nameTextField.bottomAnchor),
+            nameUnderline.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 24),
+            nameUnderline.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -24),
+            nameUnderline.heightAnchor.constraint(equalToConstant: 1 / UIScreen.main.scale),
+
+            continueButton.topAnchor.constraint(greaterThanOrEqualTo: nameUnderline.bottomAnchor, constant: 44),
+            continueButton.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 24),
+            continueButton.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -24),
+            continueButton.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -24),
+            continueButton.heightAnchor.constraint(greaterThanOrEqualToConstant: 44)
         ])
     }
 
     private func configureInteractions() {
         nameTextField.addTarget(self, action: #selector(nameTextChanged), for: .editingChanged)
-        currencyButton.addTarget(self, action: #selector(currencyTapped), for: .touchUpInside)
-        timeZoneButton.addTarget(self, action: #selector(timeZoneTapped), for: .touchUpInside)
+        nameTextField.addTarget(self, action: #selector(nameEditingDidBegin), for: .editingDidBegin)
+        nameTextField.addTarget(self, action: #selector(nameEditingDidEnd), for: .editingDidEnd)
         continueButton.addTarget(self, action: #selector(continueTapped), for: .touchUpInside)
     }
 
-    private func configureSelectionButton(_ button: UIButton, title: String, hint: String) {
-        var configuration = UIButton.Configuration.plain()
-        configuration.title = title
-        configuration.image = UIImage(systemName: "chevron.right")
-        configuration.imagePlacement = .trailing
-        configuration.imagePadding = 12
-        configuration.titleAlignment = .leading
-        configuration.baseForegroundColor = ShiftLedgerColors.textPrimary
-        configuration.contentInsets = NSDirectionalEdgeInsets(
-            top: 12,
-            leading: 16,
-            bottom: 12,
-            trailing: 16
-        )
-        configuration.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { attributes in
-            var transformedAttributes = attributes
-            transformedAttributes.font = ShiftLedgerTypography.headline
-            transformedAttributes.foregroundColor = ShiftLedgerColors.textPrimary
-            return transformedAttributes
+    private func configureTraitChanges() {
+        registerForTraitChanges([UITraitPreferredContentSizeCategory.self]) { (self: JobSetupView, _) in
+            self.updateTopRowLayout()
         }
-        configuration.subtitleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { attributes in
-            var transformedAttributes = attributes
-            transformedAttributes.font = ShiftLedgerTypography.callout
-            transformedAttributes.foregroundColor = ShiftLedgerColors.textSecondary
-            return transformedAttributes
-        }
-        button.configuration = configuration
-        button.titleLabel?.adjustsFontForContentSizeCategory = true
-        button.accessibilityLabel = title
-        button.accessibilityHint = hint
     }
 
-    private func setSelectionValue(_ value: String, for button: UIButton) {
-        guard var configuration = button.configuration else {
+    private func updateTopRowLayout() {
+        let usesVerticalLayout = traitCollection.preferredContentSizeCategory.isAccessibilityCategory
+
+        topRow.axis = usesVerticalLayout ? .vertical : .horizontal
+        topRow.alignment = usesVerticalLayout ? .fill : .top
+        topRow.spacing = usesVerticalLayout ? 8 : 12
+        topRowSpacer.isHidden = usesVerticalLayout
+        brandLabel.numberOfLines = usesVerticalLayout ? 0 : 1
+        brandLabel.setContentCompressionResistancePriority(
+            usesVerticalLayout ? .required : .defaultLow,
+            for: .horizontal
+        )
+        stepLabel.textAlignment = usesVerticalLayout ? .right : .natural
+
+        updateContinueButtonLayout(usesAccessibilityLayout: usesVerticalLayout)
+    }
+
+    private func updateContinueButtonLayout(usesAccessibilityLayout: Bool) {
+        guard var configuration = continueButton.configuration else {
             return
         }
 
-        configuration.subtitle = value
-        button.configuration = configuration
-        button.accessibilityValue = value
+        configuration.imagePlacement = usesAccessibilityLayout ? .bottom : .trailing
+        configuration.imagePadding = usesAccessibilityLayout ? 4 : 8
+        continueButton.configuration = configuration
     }
 
     @objc private func nameTextChanged() {
         onNameChanged?(nameText)
     }
 
-    @objc private func currencyTapped() {
-        onCurrencyTapped?()
+    @objc private func nameEditingDidBegin() {
+        nameUnderline.backgroundColor = ShiftLedgerColors.accentPrimary
     }
 
-    @objc private func timeZoneTapped() {
-        onTimeZoneTapped?()
+    @objc private func nameEditingDidEnd() {
+        nameUnderline.backgroundColor = ShiftLedgerColors.separator
     }
 
     @objc private func continueTapped() {
