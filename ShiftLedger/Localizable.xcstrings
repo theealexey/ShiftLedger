@@ -181,13 +181,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "For example, Karolinska Hospital"
+            "value" : "For example, Main job"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Например, Karolinska Hospital"
+            "value" : "Например, Основная работа"
           }
         }
       }
@@ -212,8 +212,8 @@
     "jobSetup.basePay.amount.accessibilityHint" : {
       "extractionState" : "manual",
       "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Enter your base pay amount." } },
-        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Введите сумму базовой оплаты." } }
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Enter the amount you are paid." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Введите сумму, которую вам платят." } }
       }
     },
     "jobSetup.basePay.fixedPerShift" : {
@@ -240,8 +240,8 @@
     "jobSetup.basePay.hourly.amountTitle" : {
       "extractionState" : "manual",
       "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Base hourly rate" } },
-        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Базовая ставка за час" } }
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Hourly pay" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Оплата за час" } }
       }
     },
     "jobSetup.step1.subtitle" : {
@@ -250,13 +250,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Do not include premiums or multipliers."
+            "value" : "For now, leave out night, weekend, and other premiums."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Не учитывайте доплаты и повышающие коэффициенты."
+            "value" : "Пока без ночных, выходных и других доплат."
           }
         }
       }
@@ -267,13 +267,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "How is your base pay calculated?"
+            "value" : "How are you paid for your work?"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Как рассчитывается ваша базовая оплата?"
+            "value" : "Как вам платят за работу?"
           }
         }
       }
@@ -295,15 +295,15 @@
     "jobSetup.step2.subtitle" : {
       "extractionState" : "manual",
       "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Choose which shifts belong to one calculation." } },
-        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Выберите, какие смены входят в один расчёт." } }
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "We’ll check your pay using the same periods." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Мы будем проверять начисления по таким же периодам." } }
       }
     },
     "jobSetup.step2.title" : {
       "extractionState" : "manual",
       "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "How are your shifts grouped for pay?" } },
-        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Как смены объединяются в расчёт?" } }
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "What period is your pay calculated for?" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "За какой период вам считают оплату?" } }
       }
     },
     "jobSetup.payCalculation.perShift" : {
@@ -316,15 +316,15 @@
     "jobSetup.payPeriod.weekly" : {
       "extractionState" : "manual",
       "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Every week" } },
-        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Каждую неделю" } }
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "One week" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "За неделю" } }
       }
     },
     "jobSetup.payPeriod.biweekly" : {
       "extractionState" : "manual",
       "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Every two weeks" } },
-        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Каждые две недели" } }
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Two weeks" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "За две недели" } }
       }
     },
     "jobSetup.payPeriod.calendarMonthly" : {
@@ -379,8 +379,8 @@
     "jobSetup.step3.subtitle" : {
       "extractionState" : "manual",
       "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "This name is only visible to you." } },
-        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Это имя будет видно только вам." } }
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "This is how you’ll see it in ShiftLedger." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Так вы будете видеть её в ShiftLedger." } }
       }
     },
     "jobSetup.step3.title" : {

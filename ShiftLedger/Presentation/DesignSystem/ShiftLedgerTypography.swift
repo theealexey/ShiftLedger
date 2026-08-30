@@ -7,12 +7,12 @@ enum ShiftLedgerTypography {
     }
 
     static var basePayAmount: UIFont {
-        let font = UIFont.monospacedDigitSystemFont(ofSize: 36, weight: .bold)
-        return UIFontMetrics(forTextStyle: .title1).scaledFont(for: font)
+        let font = UIFont.monospacedDigitSystemFont(ofSize: 30, weight: .semibold)
+        return UIFontMetrics(forTextStyle: .title2).scaledFont(for: font)
     }
 
     static var basePayCurrency: UIFont {
-        let font = UIFont.systemFont(ofSize: 26, weight: .regular)
+        let font = UIFont.systemFont(ofSize: 21, weight: .regular)
         return UIFontMetrics(forTextStyle: .title3).scaledFont(for: font)
     }
 
