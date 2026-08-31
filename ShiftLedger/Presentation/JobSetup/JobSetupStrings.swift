@@ -4,7 +4,6 @@ enum JobSetupStrings {
     static var brandName: String { String(localized: "app.brandName", table: "Localizable") }
     static var stepIndicator: String { String(localized: "jobSetup.stepIndicator", table: "Localizable") }
     static var stepIndicatorAccessibilityLabel: String { String(localized: "jobSetup.stepIndicator.accessibilityLabel", table: "Localizable") }
-    static var back: String { String(localized: "common.back", table: "Localizable") }
     static var step1Title: String { String(localized: "jobSetup.step1.title", table: "Localizable") }
     static var step1Subtitle: String { String(localized: "jobSetup.step1.subtitle", table: "Localizable") }
     static var hourlyBasis: String { String(localized: "jobSetup.basePay.hourly", table: "Localizable") }
