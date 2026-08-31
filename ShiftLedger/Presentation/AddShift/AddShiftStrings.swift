@@ -21,6 +21,7 @@ enum AddShiftStrings {
     static var genericErrorTitle: String { String(localized: "addShift.error.generic.title", table: "Localizable") }
     static var genericErrorMessage: String { String(localized: "addShift.error.generic.message", table: "Localizable") }
     static var alertOK: String { String(localized: "common.ok", table: "Localizable") }
+    static var saveSuccessTitle: String { String(localized: "addShift.saveSuccess.title", table: "Localizable") }
 
     static var endAfterStartError: String { String(localized: "addShift.validation.endAfterStart", table: "Localizable") }
     static var durationError: String { String(localized: "addShift.validation.duration", table: "Localizable") }

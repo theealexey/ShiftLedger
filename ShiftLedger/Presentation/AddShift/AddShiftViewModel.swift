@@ -85,6 +85,15 @@ final class AddShiftViewModel {
         breakEnd = value
     }
 
+    func reset() {
+        start = nil
+        end = nil
+        isUnpaidBreakEnabled = false
+        breakStart = nil
+        breakEnd = nil
+        isSaving = false
+    }
+
     func makeShift(id: UUID) throws(AddShiftValidationError) -> Shift {
         guard let start, let end else {
             throw AddShiftValidationError.incomplete

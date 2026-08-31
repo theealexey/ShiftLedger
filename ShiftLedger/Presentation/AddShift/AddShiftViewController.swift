@@ -160,7 +160,10 @@ final class AddShiftViewController: UIViewController {
     @objc private func saveTapped() {
         switch viewModel.save() {
         case let .saved(shift):
+            viewModel.reset()
+            render()
             onSaved?(shift)
+            presentSaveSuccessIfVisible()
             return
         case let .failed(failure):
             presentSaveError(failure)
@@ -168,6 +171,22 @@ final class AddShiftViewController: UIViewController {
             break
         }
         render()
+    }
+
+    private func presentSaveSuccessIfVisible() {
+        guard viewIfLoaded?.window != nil else { return }
+        guard presentedViewController == nil else { return }
+        if let navigationController, navigationController.topViewController !== self {
+            return
+        }
+
+        let alert = UIAlertController(
+            title: AddShiftStrings.saveSuccessTitle,
+            message: nil,
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: AddShiftStrings.alertOK, style: .default))
+        present(alert, animated: true)
     }
 
     private func presentSaveError(_ failure: AddShiftSaveFailure) {

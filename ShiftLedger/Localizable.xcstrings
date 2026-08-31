@@ -527,6 +527,13 @@
         "ru" : { "stringUnit" : { "state" : "translated", "value" : "Сохранить" } }
       }
     },
+    "addShift.saveSuccess.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Shift saved" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Смена сохранена" } }
+      }
+    },
     "addShift.start" : {
       "extractionState" : "manual",
       "localizations" : {

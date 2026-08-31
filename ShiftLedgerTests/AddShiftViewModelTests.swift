@@ -16,6 +16,28 @@ struct AddShiftViewModelTests {
         #expect(viewModel.save() == .invalid)
     }
 
+    @Test("Сброс возвращает draft к начальному состоянию")
+    func resetRestoresInitialState() {
+        let timeZoneIdentifier = "Europe/Stockholm"
+        let viewModel = AddShiftViewModel(timeZoneIdentifier: timeZoneIdentifier, saveShift: { _ in .success(()) })
+        viewModel.setStart(start)
+        viewModel.setEnd(end)
+        viewModel.setUnpaidBreakEnabled(true)
+        viewModel.setBreakStart(start.addingTimeInterval(60))
+        viewModel.setBreakEnd(start.addingTimeInterval(120))
+
+        viewModel.reset()
+
+        #expect(viewModel.start == nil)
+        #expect(viewModel.end == nil)
+        #expect(viewModel.isUnpaidBreakEnabled == false)
+        #expect(viewModel.breakStart == nil)
+        #expect(viewModel.breakEnd == nil)
+        #expect(viewModel.canSave == false)
+        #expect(viewModel.validationError == nil)
+        #expect(viewModel.timeZoneIdentifier == timeZoneIdentifier)
+    }
+
     @Test("Start без End нельзя сохранить")
     func startOnlyCannotSave() {
         let viewModel = makeViewModel()
