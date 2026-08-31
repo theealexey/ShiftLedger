@@ -2,7 +2,6 @@ import Foundation
 import Testing
 @testable import ShiftLedger
 
-@MainActor
 struct CurrencySelectionItemTests {
     private let englishLocale = Locale(identifier: "en")
 

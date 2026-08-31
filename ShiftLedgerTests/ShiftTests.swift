@@ -2,7 +2,6 @@ import Foundation
 import Testing
 @testable import ShiftLedger
 
-@MainActor
 struct ShiftTests {
     private let start = Date(timeIntervalSinceReferenceDate: 100_000)
 
