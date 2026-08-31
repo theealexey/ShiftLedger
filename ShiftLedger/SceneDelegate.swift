@@ -48,6 +48,21 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 
                 let jobStorage = JobStorage(stack: stack)
                 let shiftStorage = ShiftStorage(stack: stack)
+
+#if DEBUG
+                if ProcessInfo.processInfo.arguments.contains("-ui-testing-seed-job"),
+                   try jobStorage.load() == nil {
+                    let job = try Job(
+                        currencyCode: "SEK",
+                        timeZoneIdentifier: "Europe/Stockholm",
+                        basePayBasis: .hourly,
+                        payCalculationCycle: .perShift,
+                        payRates: [try PayRate(amount: 100, effectiveFrom: nil)],
+                        createdAt: Date(timeIntervalSinceReferenceDate: 0)
+                    )
+                    try jobStorage.save(job)
+                }
+#endif
                 let job = try jobStorage.load()
 
                 try Task.checkCancellation()

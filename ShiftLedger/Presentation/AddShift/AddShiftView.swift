@@ -61,6 +61,7 @@ final class AddShiftView: UIView {
         backgroundColor = ShiftLedgerColors.backgroundPrimary
         scrollView.keyboardDismissMode = .interactive
         scrollView.alwaysBounceVertical = true
+        scrollView.accessibilityIdentifier = "addShift.screen"
 
         stack.axis = .vertical
         stack.alignment = .fill
