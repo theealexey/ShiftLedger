@@ -11,7 +11,6 @@ final class JobSetupViewModel {
         decimalInputLocale: Locale = .current
     ) {
         draft = JobSetupDraft(
-            name: "",
             basePayAmountText: "",
             currencyCode: initialCurrencyCode,
             timeZoneIdentifier: initialTimeZoneIdentifier,

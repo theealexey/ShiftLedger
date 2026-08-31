@@ -6,7 +6,6 @@ enum PayCalculationCycleKind: Equatable {
 }
 
 struct JobSetupDraft: Equatable {
-    var name: String
     var basePayAmountText: String
     var currencyCode: String
     var timeZoneIdentifier: String

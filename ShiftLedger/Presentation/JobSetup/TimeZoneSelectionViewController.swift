@@ -42,20 +42,6 @@ final class TimeZoneSelectionViewController: UIViewController {
         navigationController?.navigationBar.prefersLargeTitles = false
     }
 
-    static func displayName(for identifier: String, locale: Locale) -> String {
-        let city = identifier.split(separator: "/").last.map(String.init)?.replacingOccurrences(of: "_", with: " ")
-        if let city, city.caseInsensitiveCompare("Stockholm") == .orderedSame,
-           locale.language.languageCode?.identifier == "ru" {
-            return TimeZoneSelectionStrings.stockholm
-        }
-
-        if let city, city.isEmpty == false {
-            return city
-        }
-
-        return TimeZone(identifier: identifier)?.localizedName(for: .generic, locale: locale) ?? identifier
-    }
-
     private func configureSearch() {
         searchBar.translatesAutoresizingMaskIntoConstraints = false
         searchBar.placeholder = TimeZoneSelectionStrings.searchPlaceholder
@@ -106,7 +92,7 @@ extension TimeZoneSelectionViewController: UISearchBarDelegate {
         }
 
         identifiers = allIdentifiers.filter { identifier in
-            let displayName = Self.displayName(for: identifier, locale: displayLocale)
+            let displayName = TimeZoneDisplayName.value(for: identifier, locale: displayLocale)
             return normalized(identifier).contains(query) || normalized(displayName).contains(query)
         }
         tableView.reloadData()
@@ -122,7 +108,7 @@ extension TimeZoneSelectionViewController: UITableViewDataSource, UITableViewDel
         let cell = tableView.dequeueReusableCell(withIdentifier: "TimeZoneCell") ?? UITableViewCell(style: .default, reuseIdentifier: "TimeZoneCell")
         let identifier = identifiers[indexPath.row]
         var content = cell.defaultContentConfiguration()
-        content.text = Self.displayName(for: identifier, locale: displayLocale)
+        content.text = TimeZoneDisplayName.value(for: identifier, locale: displayLocale)
         content.secondaryText = identifier
         content.textProperties.font = ShiftLedgerTypography.headline
         content.textProperties.color = ShiftLedgerColors.textPrimary

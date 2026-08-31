@@ -485,11 +485,165 @@
         "ru" : { "stringUnit" : { "state" : "translated", "value" : "Поиск часовых поясов" } }
       }
     },
-    "jobSetup.timeZone.stockholm" : {
+    "common.ok" : {
       "extractionState" : "manual",
       "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Stockholm" } },
-        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Стокгольм" } }
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "OK" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Понятно" } }
+      }
+    },
+    "addShift.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "New shift" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Новая смена" } }
+      }
+    },
+    "addShift.save" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Save" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Сохранить" } }
+      }
+    },
+    "addShift.start" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Start" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Начало" } }
+      }
+    },
+    "addShift.end" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "End" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Окончание" } }
+      }
+    },
+    "addShift.select" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Select" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Выберите" } }
+      }
+    },
+    "addShift.timeZone.prefix" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Time zone:" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Часовой пояс:" } }
+      }
+    },
+    "addShift.unpaidBreak" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Unpaid break" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Неоплачиваемый перерыв" } }
+      }
+    },
+    "addShift.breakStart" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Break start" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Начало перерыва" } }
+      }
+    },
+    "addShift.breakEnd" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Break end" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Окончание перерыва" } }
+      }
+    },
+    "addShift.picker.shiftStart" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Shift start" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Начало смены" } }
+      }
+    },
+    "addShift.picker.shiftEnd" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Shift end" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Окончание смены" } }
+      }
+    },
+    "addShift.picker.breakStart" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Break start" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Начало перерыва" } }
+      }
+    },
+    "addShift.picker.breakEnd" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Break end" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Окончание перерыва" } }
+      }
+    },
+    "addShift.error.overlap.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Shift overlaps another shift" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Смена пересекается с другой" } }
+      }
+    },
+    "addShift.error.overlap.message" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Change the start or end time." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Измените время начала или окончания." } }
+      }
+    },
+    "addShift.error.generic.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Couldn’t save shift" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Не удалось сохранить смену" } }
+      }
+    },
+    "addShift.error.generic.message" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Try again." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Попробуйте ещё раз." } }
+      }
+    },
+    "addShift.validation.endAfterStart" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "End must be later than start." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Окончание должно быть позже начала." } }
+      }
+    },
+    "addShift.validation.duration" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "A shift can’t be longer than 48 hours." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Смена не может длиться больше 48 часов." } }
+      }
+    },
+    "addShift.validation.breakEndAfterStart" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Break end must be later than break start." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Окончание перерыва должно быть позже начала." } }
+      }
+    },
+    "addShift.validation.breakInsideShift" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "The break must be within the shift." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Перерыв должен находиться внутри смены." } }
+      }
+    },
+    "addShift.validation.breakWholeShift" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "The break can’t cover the entire shift." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Перерыв не может занимать всю смену." } }
       }
     }
   },

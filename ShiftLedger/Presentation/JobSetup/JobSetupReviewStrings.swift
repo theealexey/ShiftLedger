@@ -2,6 +2,7 @@ import Foundation
 
 enum JobSetupReviewStrings {
     static var back: String { String(localized: "common.back", table: "Localizable") }
+    static var ok: String { String(localized: "common.ok", table: "Localizable") }
     static var stepIndicator: String { String(localized: "jobSetup.step3.stepIndicator", table: "Localizable") }
     static var stepIndicatorAccessibilityLabel: String { String(localized: "jobSetup.step3.stepIndicator.accessibilityLabel", table: "Localizable") }
     static var title: String { String(localized: "jobSetup.step3.title", table: "Localizable") }

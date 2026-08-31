@@ -6,6 +6,7 @@ final class JobSetupReviewViewController: UIViewController {
 
     private let viewModel: JobSetupReviewViewModel
     private let displayLocale: Locale
+    private let dateFormattingLocale: Locale
     private let saveJob: (Job) throws -> Void
     private let reviewView = JobSetupReviewView(frame: .zero)
     private var isSaving = false
@@ -13,10 +14,12 @@ final class JobSetupReviewViewController: UIViewController {
     init(
         viewModel: JobSetupReviewViewModel,
         displayLocale: Locale = CurrencySelectionItem.applicationDisplayLocale,
+        dateFormattingLocale: Locale = .autoupdatingCurrent,
         saveJob: @escaping (Job) throws -> Void
     ) {
         self.viewModel = viewModel
         self.displayLocale = displayLocale
+        self.dateFormattingLocale = dateFormattingLocale
         self.saveJob = saveJob
         super.init(nibName: nil, bundle: nil)
     }
@@ -77,7 +80,7 @@ final class JobSetupReviewViewController: UIViewController {
             currencyCode: viewModel.draft.currencyCode,
             payPeriodLabel: viewModel.payPeriodLabel,
             periodStartText: formattedPeriodStart,
-            timeZoneText: TimeZoneSelectionViewController.displayName(
+            timeZoneText: TimeZoneDisplayName.value(
                 for: viewModel.draft.timeZoneIdentifier,
                 locale: displayLocale
             ),
@@ -94,7 +97,7 @@ final class JobSetupReviewViewController: UIViewController {
         return JobSetupDateFormatting.string(
             for: anchorDate,
             timeZoneIdentifier: viewModel.draft.timeZoneIdentifier,
-            locale: displayLocale
+            locale: dateFormattingLocale
         )
     }
 
@@ -130,7 +133,7 @@ final class JobSetupReviewViewController: UIViewController {
             message: JobSetupReviewStrings.saveError,
             preferredStyle: .alert
         )
-        alert.addAction(UIAlertAction(title: JobSetupStrings.back, style: .default))
+        alert.addAction(UIAlertAction(title: JobSetupReviewStrings.ok, style: .default))
         present(alert, animated: true)
     }
 }

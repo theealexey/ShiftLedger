@@ -30,7 +30,6 @@ struct PayPeriodSetupViewModelTests {
     func cycleSelectionPreservesPreviousStepValues() throws {
         let anchor = try makeDate(year: 2026, month: 8, day: 30)
         var draft = makeViewModel().draft
-        draft.name = "Karolinska Hospital"
         draft.currencyCode = "AUD"
         draft.timeZoneIdentifier = "Europe/Stockholm"
         draft.payPeriodAnchorDate = anchor
@@ -41,7 +40,6 @@ struct PayPeriodSetupViewModelTests {
         #expect(viewModel.draft.basePayAmountText == "24.50")
         #expect(viewModel.draft.currencyCode == "AUD")
         #expect(viewModel.draft.timeZoneIdentifier == "Europe/Stockholm")
-        #expect(viewModel.draft.name == "Karolinska Hospital")
         #expect(viewModel.draft.payPeriodAnchorDate == anchor)
     }
 

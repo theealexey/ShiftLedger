@@ -5,15 +5,15 @@ final class PayPeriodSetupViewController: UIViewController {
     var onContinue: ((JobSetupDraft) -> Void)?
 
     private let viewModel: PayPeriodSetupViewModel
-    private let displayLocale: Locale
+    private let dateFormattingLocale: Locale
     private let payPeriodSetupView = PayPeriodSetupView(frame: .zero)
 
     init(
         viewModel: PayPeriodSetupViewModel,
-        displayLocale: Locale = CurrencySelectionItem.applicationDisplayLocale
+        dateFormattingLocale: Locale = .autoupdatingCurrent
     ) {
         self.viewModel = viewModel
-        self.displayLocale = displayLocale
+        self.dateFormattingLocale = dateFormattingLocale
         super.init(nibName: nil, bundle: nil)
     }
 
@@ -83,7 +83,7 @@ final class PayPeriodSetupViewController: UIViewController {
         return JobSetupDateFormatting.string(
             for: anchorDate,
             timeZoneIdentifier: viewModel.draft.timeZoneIdentifier,
-            locale: displayLocale
+            locale: dateFormattingLocale
         )
     }
 

@@ -125,7 +125,6 @@ struct JobSetupReviewViewModelTests {
 
     private func makeDraft() -> JobSetupDraft {
         JobSetupDraft(
-            name: "",
             basePayAmountText: "",
             currencyCode: "RUB",
             timeZoneIdentifier: "Europe/Stockholm",
