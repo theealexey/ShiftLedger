@@ -18,6 +18,27 @@
         }
       }
     },
+    "application.startupError.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Couldn't open your data" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Не удалось открыть данные" } }
+      }
+    },
+    "application.startupError.message" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Your local data couldn't be loaded. Try again." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Не удалось загрузить локальные данные. Попробуйте ещё раз." } }
+      }
+    },
+    "application.startupError.retry" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Try Again" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Повторить" } }
+      }
+    },
     "common.continue" : {
       "extractionState" : "manual",
       "localizations" : {

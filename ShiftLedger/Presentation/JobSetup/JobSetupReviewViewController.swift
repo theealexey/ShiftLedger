@@ -2,7 +2,7 @@ import UIKit
 
 final class JobSetupReviewViewController: UIViewController {
     var onBack: (() -> Void)?
-    var onFinished: (() -> Void)?
+    var onFinished: ((Job) -> Void)?
 
     private let viewModel: JobSetupReviewViewModel
     private let displayLocale: Locale
@@ -58,8 +58,9 @@ final class JobSetupReviewViewController: UIViewController {
         reviewView.setStartEnabled(false)
 
         do {
-            try saveJob(viewModel.makeJob())
-            onFinished?()
+            let job = try viewModel.makeJob()
+            try saveJob(job)
+            onFinished?(job)
         } catch {
             isSaving = false
             reviewView.setStartEnabled(viewModel.canFinish)
