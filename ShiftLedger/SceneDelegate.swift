@@ -5,6 +5,19 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     var window: UIWindow?
     private var startupTask: Task<Void, Never>?
     private var coreDataStack: CoreDataStack?
+    private let loadCoreDataStack: @MainActor () async throws -> CoreDataStack
+
+    override init() {
+        loadCoreDataStack = {
+            try await CoreDataStack.load()
+        }
+        super.init()
+    }
+
+    init(loadCoreDataStack: @escaping @MainActor () async throws -> CoreDataStack) {
+        self.loadCoreDataStack = loadCoreDataStack
+        super.init()
+    }
 
     func scene(
         _ scene: UIScene,
@@ -23,18 +36,23 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     }
 
     func sceneDidDisconnect(_ scene: UIScene) {
+        cancelStartup()
+    }
+
+    func cancelStartup() {
         startupTask?.cancel()
         startupTask = nil
         coreDataStack = nil
     }
 
-    private func startStartup() {
-        startupTask?.cancel()
+    @discardableResult
+    func startStartup() -> Task<Void, Never> {
+        cancelStartup()
 
         let loadingViewController = makeLoadingViewController()
         window?.rootViewController = loadingViewController
 
-        startupTask = Task { @MainActor [weak self] in
+        let task = Task { @MainActor [weak self] in
             guard let self else { return }
 
             do {
@@ -43,7 +61,7 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
                     try CoreDataStack.resetPersistentStoreForUITesting()
                 }
 #endif
-                let stack = try await CoreDataStack.load()
+                let stack = try await loadCoreDataStack()
                 try Task.checkCancellation()
 
                 let jobStorage = JobStorage(stack: stack)
@@ -94,6 +112,9 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
                 presentStartupError()
             }
         }
+
+        startupTask = task
+        return task
     }
 
     private func makeLoadingViewController() -> UIViewController {
