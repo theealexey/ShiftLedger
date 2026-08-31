@@ -344,6 +344,153 @@
           }
         }
       }
+    },
+    "jobSetup.step3.stepIndicator" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "3 / 3" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "3 / 3" } }
+      }
+    },
+    "jobSetup.step3.stepIndicator.accessibilityLabel" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Step 3 of 3" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Шаг 3 из 3" } }
+      }
+    },
+    "jobSetup.step3.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Review your setup" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Проверьте настройки" } }
+      }
+    },
+    "jobSetup.step3.subtitle" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "You can change these settings later." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Их можно будет изменить позже." } }
+      }
+    },
+    "jobSetup.review.pay" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Pay" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Оплата" } }
+      }
+    },
+    "jobSetup.review.pay.hourly" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "By the hour" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "За час" } }
+      }
+    },
+    "jobSetup.review.pay.fixedPerShift" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Per shift" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "За смену" } }
+      }
+    },
+    "jobSetup.review.amount" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Amount" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Сумма" } }
+      }
+    },
+    "jobSetup.review.currency" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Currency" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Валюта" } }
+      }
+    },
+    "jobSetup.review.payPeriod" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Pay period" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Расчётный период" } }
+      }
+    },
+    "jobSetup.review.payPeriod.perShift" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "One shift" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Одна смена" } }
+      }
+    },
+    "jobSetup.review.payPeriod.weekly" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "One week" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Неделя" } }
+      }
+    },
+    "jobSetup.review.payPeriod.biweekly" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Two weeks" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Две недели" } }
+      }
+    },
+    "jobSetup.review.payPeriod.calendarMonthly" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Calendar month" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Календарный месяц" } }
+      }
+    },
+    "jobSetup.review.periodStart" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Period start" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Начало периода" } }
+      }
+    },
+    "jobSetup.review.timeZone" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Time zone" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Часовой пояс" } }
+      }
+    },
+    "jobSetup.start" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Start" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Начать" } }
+      }
+    },
+    "jobSetup.review.saveError" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "We couldn’t save your setup. Try again." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Не удалось сохранить настройки. Попробуйте ещё раз." } }
+      }
+    },
+    "jobSetup.timeZone.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Time zone" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Часовой пояс" } }
+      }
+    },
+    "jobSetup.timeZone.searchPlaceholder" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Search time zones" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Поиск часовых поясов" } }
+      }
+    },
+    "jobSetup.timeZone.stockholm" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Stockholm" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Стокгольм" } }
+      }
     }
   },
   "version" : "1.0"

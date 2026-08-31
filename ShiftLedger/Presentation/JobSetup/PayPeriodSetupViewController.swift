@@ -76,21 +76,15 @@ final class PayPeriodSetupViewController: UIViewController {
     }
 
     private var formattedAnchorDate: String? {
-        guard
-            let anchorDate = viewModel.anchorDate,
-            let timeZone = TimeZone(identifier: viewModel.draft.timeZoneIdentifier),
-            let foundationDate = try? anchorDate.startOfDay(in: timeZone)
-        else {
+        guard let anchorDate = viewModel.anchorDate else {
             return nil
         }
 
-        let formatter = DateFormatter()
-        formatter.calendar = Calendar(identifier: .gregorian)
-        formatter.locale = displayLocale
-        formatter.timeZone = timeZone
-        formatter.dateStyle = .long
-        formatter.timeStyle = .none
-        return formatter.string(from: foundationDate)
+        return JobSetupDateFormatting.string(
+            for: anchorDate,
+            timeZoneIdentifier: viewModel.draft.timeZoneIdentifier,
+            locale: displayLocale
+        )
     }
 
     private func presentAnchorDatePicker() {
@@ -116,6 +110,25 @@ final class PayPeriodSetupViewController: UIViewController {
             sheet.prefersGrabberVisible = true
         }
         present(navigationController, animated: true)
+    }
+}
+
+enum JobSetupDateFormatting {
+    static func string(for date: LocalDate, timeZoneIdentifier: String, locale: Locale) -> String? {
+        guard
+            let timeZone = TimeZone(identifier: timeZoneIdentifier),
+            let foundationDate = try? date.startOfDay(in: timeZone)
+        else {
+            return nil
+        }
+
+        let formatter = DateFormatter()
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.locale = locale
+        formatter.timeZone = timeZone
+        formatter.dateStyle = .long
+        formatter.timeStyle = .none
+        return formatter.string(from: foundationDate)
     }
 }
 

@@ -31,8 +31,11 @@ final class JobSetupViewModel {
     }
 
     var basePayAmount: Decimal? {
-        let text = draft.basePayAmountText
-        let decimalSeparator = decimalInputLocale.decimalSeparator ?? "."
+        Self.parseDecimal(draft.basePayAmountText, locale: decimalInputLocale)
+    }
+
+    static func parseDecimal(_ text: String, locale: Locale) -> Decimal? {
+        let decimalSeparator = locale.decimalSeparator ?? "."
         let components = text.components(separatedBy: decimalSeparator)
 
         guard
@@ -40,7 +43,7 @@ final class JobSetupViewModel {
             components.allSatisfy({
                 $0.isEmpty == false && $0.allSatisfy(\.isWholeNumber)
             }),
-            let amount = Decimal(string: text, locale: decimalInputLocale)
+            let amount = Decimal(string: text, locale: locale)
         else {
             return nil
         }

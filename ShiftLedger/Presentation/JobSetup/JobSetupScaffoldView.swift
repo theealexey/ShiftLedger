@@ -31,7 +31,8 @@ final class JobSetupScaffoldView: UIView {
         stepIndicator: String,
         stepAccessibilityLabel: String,
         activeStep: Int,
-        backAccessibilityLabel: String? = nil
+        backAccessibilityLabel: String? = nil,
+        continueTitle: String = JobSetupStrings.continueTitle
     ) {
         showsBrand = brandText != nil
         super.init(frame: .zero)
@@ -41,7 +42,8 @@ final class JobSetupScaffoldView: UIView {
             stepIndicator: stepIndicator,
             stepAccessibilityLabel: stepAccessibilityLabel,
             activeStep: activeStep,
-            backAccessibilityLabel: backAccessibilityLabel
+            backAccessibilityLabel: backAccessibilityLabel,
+            continueTitle: continueTitle
         )
         configureSubviews()
         configureLayout()
@@ -76,7 +78,8 @@ final class JobSetupScaffoldView: UIView {
         stepIndicator: String,
         stepAccessibilityLabel: String,
         activeStep: Int,
-        backAccessibilityLabel: String?
+        backAccessibilityLabel: String?,
+        continueTitle: String
     ) {
         backgroundColor = ShiftLedgerColors.backgroundPrimary
         scrollView.alwaysBounceVertical = true
@@ -113,7 +116,7 @@ final class JobSetupScaffoldView: UIView {
         }
 
         var continueConfiguration = UIButton.Configuration.plain()
-        continueConfiguration.title = JobSetupStrings.continueTitle
+        continueConfiguration.title = continueTitle
         continueConfiguration.image = UIImage(systemName: "arrow.right")
         continueConfiguration.imagePlacement = .trailing
         continueConfiguration.imagePadding = 8
