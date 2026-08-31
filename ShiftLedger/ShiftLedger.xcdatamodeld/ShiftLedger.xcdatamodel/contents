@@ -9,6 +9,7 @@
         <attribute name="payPeriodAnchorDate" optional="YES" attributeType="Date"/>
         <attribute name="createdAt" optional="NO" attributeType="Date"/>
         <relationship name="payRates" optional="NO" minCount="1" toMany="YES" deletionRule="Cascade" destinationEntity="PayRateEntity" inverseName="job" inverseEntity="PayRateEntity"/>
+        <relationship name="shifts" optional="YES" minCount="0" toMany="YES" deletionRule="Cascade" destinationEntity="ShiftEntity" inverseName="job" inverseEntity="ShiftEntity"/>
     </entity>
     <entity name="PayRateEntity" representedClassName="PayRateEntity" customModuleProvider="target" codeGenerationType="none">
         <attribute name="id" optional="NO" attributeType="UUID"/>
@@ -16,8 +17,17 @@
         <attribute name="effectiveFrom" optional="YES" attributeType="Date"/>
         <relationship name="job" optional="NO" maxCount="1" deletionRule="Nullify" destinationEntity="JobEntity" inverseName="payRates" inverseEntity="JobEntity"/>
     </entity>
+    <entity name="ShiftEntity" representedClassName="ShiftEntity" customModuleProvider="target" codeGenerationType="none">
+        <attribute name="id" optional="NO" attributeType="UUID"/>
+        <attribute name="start" optional="NO" attributeType="Date"/>
+        <attribute name="end" optional="NO" attributeType="Date"/>
+        <attribute name="unpaidBreakStart" optional="YES" attributeType="Date"/>
+        <attribute name="unpaidBreakEnd" optional="YES" attributeType="Date"/>
+        <relationship name="job" optional="NO" maxCount="1" deletionRule="Nullify" destinationEntity="JobEntity" inverseName="shifts" inverseEntity="JobEntity"/>
+    </entity>
     <elements>
         <element name="JobEntity" positionX="-63" positionY="-18" width="128" height="195"/>
         <element name="PayRateEntity" positionX="135" positionY="-18" width="128" height="135"/>
+        <element name="ShiftEntity" positionX="330" positionY="-18" width="128" height="165"/>
     </elements>
 </model>

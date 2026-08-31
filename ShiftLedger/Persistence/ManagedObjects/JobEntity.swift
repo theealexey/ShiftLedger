@@ -11,4 +11,5 @@ class JobEntity: NSManagedObject {
     @NSManaged var payPeriodAnchorDate: Date?
     @NSManaged var createdAt: Date
     @NSManaged var payRates: NSSet
+    @NSManaged var shifts: NSSet?
 }
