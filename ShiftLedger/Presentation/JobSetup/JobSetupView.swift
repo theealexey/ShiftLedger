@@ -94,6 +94,7 @@ final class JobSetupView: UIView {
         questionLabel.numberOfLines = 0
         questionLabel.adjustsFontForContentSizeCategory = true
         questionLabel.accessibilityTraits = .header
+        questionLabel.accessibilityIdentifier = "jobSetup.payBasis.title"
 
         supportingTextLabel.text = JobSetupStrings.step1Subtitle
         supportingTextLabel.font = ShiftLedgerTypography.body

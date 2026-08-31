@@ -38,6 +38,11 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
             guard let self else { return }
 
             do {
+#if DEBUG
+                if ProcessInfo.processInfo.arguments.contains("-ui-testing-reset-store") {
+                    try CoreDataStack.resetPersistentStoreForUITesting()
+                }
+#endif
                 let stack = try await CoreDataStack.load()
                 try Task.checkCancellation()
 

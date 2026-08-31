@@ -37,4 +37,32 @@ final class CoreDataStack {
 
         return CoreDataStack(persistentContainer: persistentContainer)
     }
+
+#if DEBUG
+    static func resetPersistentStoreForUITesting() throws {
+        let persistentContainer = NSPersistentContainer(name: "ShiftLedger")
+        guard
+            let storeDescription = persistentContainer.persistentStoreDescriptions.first,
+            let storeURL = storeDescription.url
+        else {
+            return
+        }
+
+        let fileManager = FileManager.default
+        let storeFiles = [
+            storeURL,
+            URL(fileURLWithPath: "\(storeURL.path)-wal"),
+            URL(fileURLWithPath: "\(storeURL.path)-shm")
+        ]
+        guard storeFiles.contains(where: { fileManager.fileExists(atPath: $0.path) }) else {
+            return
+        }
+
+        try persistentContainer.persistentStoreCoordinator.destroyPersistentStore(
+            at: storeURL,
+            ofType: storeDescription.type,
+            options: storeDescription.options
+        )
+    }
+#endif
 }
