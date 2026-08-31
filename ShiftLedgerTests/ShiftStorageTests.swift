@@ -110,6 +110,32 @@ struct ShiftStorageTests {
         }
     }
 
+    @Test("Shift без связи с Job отклоняется как invalidShiftRelationship")
+    func rejectsShiftWithMissingJobRelationship() async throws {
+        let storeURL = try makeTemporaryStoreURL()
+        var stacks: [CoreDataStack] = []
+        defer { removeTemporaryStoreDirectory(for: storeURL, stacks: stacks) }
+        let stack = try await makeStack(storeURL: storeURL, stacks: &stacks)
+        try JobStorage(stack: stack).save(try makeJob())
+
+        let entityDescription = try #require(
+            NSEntityDescription.entity(forEntityName: "ShiftEntity", in: stack.viewContext)
+        )
+        let entity = ShiftEntity(entity: entityDescription, insertInto: stack.viewContext)
+        entity.id = try #require(UUID(uuidString: "15000000-0000-0000-0000-000000000001"))
+        entity.start = Date(timeIntervalSinceReferenceDate: 1_000)
+        entity.end = Date(timeIntervalSinceReferenceDate: 2_000)
+        entity.unpaidBreakStart = nil
+        entity.unpaidBreakEnd = nil
+        entity.job = nil
+
+        do {
+            _ = try ShiftStorage(stack: stack).loadAll()
+            Issue.record("Shift без обязательной связи с Job был принят")
+        } catch ShiftStorageError.corruptedData(.invalidShiftRelationship) {
+        }
+    }
+
     @Test("Две Job отклоняются как multipleJobsFound")
     func rejectsMultipleJobs() async throws {
         let storeURL = try makeTemporaryStoreURL()
