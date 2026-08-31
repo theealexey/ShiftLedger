@@ -11,28 +11,37 @@ struct AddShiftViewControllerTests {
 
     @Test("Успешное сохранение очищает draft и не повторяет вставку")
     func successfulSaveResetsDraftAndPreventsDuplicate() throws {
-        var saveCalls = 0
-        var savedShift: Shift?
+        var persistenceCallCount = 0
+        var completionCallCount = 0
+        var persistedShift: Shift?
+        var completedShift: Shift?
         let viewModel = AddShiftViewModel(
             timeZoneIdentifier: timeZoneIdentifier,
             initialStart: start,
             initialEnd: end,
             saveShift: { shift in
-                saveCalls += 1
-                savedShift = shift
+                persistenceCallCount += 1
+                persistedShift = shift
                 return .success(())
             },
             makeID: { self.knownID }
         )
         let viewController = AddShiftViewController(viewModel: viewModel)
-        viewController.onSaved = { savedShift = $0 }
+        viewController.onSaved = { shift in
+            completionCallCount += 1
+            completedShift = shift
+        }
         _ = viewController.view
 
         try tapSave(on: viewController)
 
         let expectedShift = try Shift(id: knownID, start: start, end: end)
-        #expect(saveCalls == 1)
-        #expect(savedShift == expectedShift)
+        #expect(persistenceCallCount == 1)
+        #expect(completionCallCount == 1)
+        #expect(persistedShift != nil)
+        #expect(completedShift != nil)
+        #expect(persistedShift == expectedShift)
+        #expect(persistedShift == completedShift)
         #expect(viewModel.start == nil)
         #expect(viewModel.end == nil)
         #expect(viewModel.isUnpaidBreakEnabled == false)
@@ -40,31 +49,32 @@ struct AddShiftViewControllerTests {
 
         try tapSave(on: viewController)
 
-        #expect(saveCalls == 1)
+        #expect(persistenceCallCount == 1)
+        #expect(completionCallCount == 1)
     }
 
     @Test("Ошибка сохранения не очищает draft")
     func failedSavePreservesDraftAndDoesNotFinish() throws {
-        var saveCalls = 0
-        var finished = false
+        var persistenceCallCount = 0
+        var completionCallCount = 0
         let viewModel = AddShiftViewModel(
             timeZoneIdentifier: timeZoneIdentifier,
             initialStart: start,
             initialEnd: end,
             saveShift: { _ in
-                saveCalls += 1
+                persistenceCallCount += 1
                 return .failure(.generic)
             },
             makeID: { self.knownID }
         )
         let viewController = AddShiftViewController(viewModel: viewModel)
-        viewController.onSaved = { _ in finished = true }
+        viewController.onSaved = { _ in completionCallCount += 1 }
         _ = viewController.view
 
         try tapSave(on: viewController)
 
-        #expect(saveCalls == 1)
-        #expect(finished == false)
+        #expect(persistenceCallCount == 1)
+        #expect(completionCallCount == 0)
         #expect(viewModel.start == start)
         #expect(viewModel.end == end)
         #expect(viewModel.canSave)
