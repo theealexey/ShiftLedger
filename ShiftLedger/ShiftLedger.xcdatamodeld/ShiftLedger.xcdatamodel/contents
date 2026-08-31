@@ -2,7 +2,6 @@
 <model type="com.apple.IDECoreDataModeler.DataModel" documentVersion="1.0" lastSavedToolsVersion="1" systemVersion="11A491" minimumToolsVersion="Automatic" sourceLanguage="Swift" usedWithCloudKit="false" userDefinedModelVersionIdentifier="">
     <entity name="JobEntity" representedClassName="JobEntity" customModuleProvider="target" codeGenerationType="none">
         <attribute name="id" optional="NO" attributeType="UUID"/>
-        <attribute name="name" optional="NO" attributeType="String"/>
         <attribute name="currencyCode" optional="NO" attributeType="String"/>
         <attribute name="timeZoneIdentifier" optional="NO" attributeType="String"/>
         <attribute name="basePayKind" optional="YES" attributeType="String"/>
@@ -14,7 +13,7 @@
     <entity name="PayRateEntity" representedClassName="PayRateEntity" customModuleProvider="target" codeGenerationType="none">
         <attribute name="id" optional="NO" attributeType="UUID"/>
         <attribute name="amount" optional="NO" attributeType="Decimal"/>
-        <attribute name="effectiveFrom" optional="NO" attributeType="Date"/>
+        <attribute name="effectiveFrom" optional="YES" attributeType="Date"/>
         <relationship name="job" optional="NO" maxCount="1" deletionRule="Nullify" destinationEntity="JobEntity" inverseName="payRates" inverseEntity="JobEntity"/>
     </entity>
     <elements>

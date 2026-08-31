@@ -241,25 +241,36 @@ struct ShiftLedgerTests {
         #expect(restoredFollowingDate == followingDate)
     }
 
-    @Test("Пустое название работы отклоняется")
-    func rejectsEmptyJobName() throws {
-        #expect(throws: JobValidationError.emptyName) {
-            try makeJob(name: "", payRates: [try makePayRate()])
+    @Test("Работа принимает ровно одну initial ставку без даты")
+    func acceptsExactlyOneInitialPayRate() throws {
+        let initialRate = try PayRate(amount: 120, effectiveFrom: nil)
+        let datedRate = try PayRate(
+            amount: 130,
+            effectiveFrom: try makeLocalDate(year: 2026, month: 10, day: 1)
+        )
+
+        let job = try makeJob(payRates: [datedRate, initialRate])
+
+        #expect(job.payRates == [initialRate, datedRate])
+    }
+
+    @Test("Работа без initial ставки отклоняется")
+    func rejectsMissingInitialPayRate() throws {
+        let datedRate = try makePayRate(effectiveFrom: try makeLocalDate())
+
+        #expect(throws: JobValidationError.missingInitialPayRate) {
+            try makeJob(payRates: [datedRate])
         }
     }
 
-    @Test("Название только из пробелов отклоняется")
-    func rejectsWhitespaceOnlyJobName() throws {
-        #expect(throws: JobValidationError.emptyName) {
-            try makeJob(name: " \n\t ", payRates: [try makePayRate()])
+    @Test("Две initial ставки отклоняются")
+    func rejectsMultipleInitialPayRates() throws {
+        let firstInitialRate = try PayRate(amount: 120, effectiveFrom: nil)
+        let secondInitialRate = try PayRate(amount: 130, effectiveFrom: nil)
+
+        #expect(throws: JobValidationError.multipleInitialPayRates) {
+            try makeJob(payRates: [firstInitialRate, secondInitialRate])
         }
-    }
-
-    @Test("Внешние пробелы в названии удаляются")
-    func normalizesJobName() throws {
-        let job = try makeJob(name: " \n Основная работа \t", payRates: [try makePayRate()])
-
-        #expect(job.name == "Основная работа")
     }
 
     @Test("Неизвестная зона времени отклоняется")
@@ -313,23 +324,42 @@ struct ShiftLedgerTests {
     @Test("Две ставки с одинаковой датой начала действия отклоняются")
     func rejectsDuplicatePayRateEffectiveFrom() throws {
         let effectiveFrom = try makeLocalDate()
+        let initialPayRate = try makePayRate()
         let firstPayRate = try PayRate(amount: 120, effectiveFrom: effectiveFrom)
         let secondPayRate = try PayRate(amount: 130, effectiveFrom: effectiveFrom)
 
         #expect(throws: JobValidationError.duplicatePayRateEffectiveFrom) {
-            try makeJob(payRates: [firstPayRate, secondPayRate])
+            try makeJob(payRates: [initialPayRate, firstPayRate, secondPayRate])
         }
     }
 
     @Test("Порядок ставок не влияет на обнаружение повторяющейся даты")
     func rejectsDuplicatePayRateEffectiveFromInAnyOrder() throws {
         let effectiveFrom = try makeLocalDate()
+        let initialPayRate = try makePayRate()
         let firstPayRate = try PayRate(amount: 120, effectiveFrom: effectiveFrom)
         let secondPayRate = try PayRate(amount: 130, effectiveFrom: effectiveFrom)
 
         #expect(throws: JobValidationError.duplicatePayRateEffectiveFrom) {
-            try makeJob(payRates: [secondPayRate, firstPayRate])
+            try makeJob(payRates: [initialPayRate, secondPayRate, firstPayRate])
         }
+    }
+
+    @Test("Сортировка ставок помещает initial первой")
+    func sortsInitialPayRateFirst() throws {
+        let laterRate = try PayRate(
+            amount: 140,
+            effectiveFrom: try makeLocalDate(year: 2026, month: 10, day: 1)
+        )
+        let initialRate = try PayRate(amount: 120, effectiveFrom: nil)
+        let earlierRate = try PayRate(
+            amount: 130,
+            effectiveFrom: try makeLocalDate(year: 2026, month: 9, day: 1)
+        )
+
+        let job = try makeJob(payRates: [laterRate, initialRate, earlierRate])
+
+        #expect(job.payRates == [initialRate, earlierRate, laterRate])
     }
 
     @Test("Положительная ставка принимается")
@@ -365,13 +395,11 @@ struct ShiftLedgerTests {
     }
 
     private func makeJob(
-        name: String = "Основная работа",
         currencyCode: String = "EUR",
         timeZoneIdentifier: String = "Europe/Stockholm",
         payRates: [PayRate]
     ) throws -> Job {
         try Job(
-            name: name,
             currencyCode: currencyCode,
             timeZoneIdentifier: timeZoneIdentifier,
             basePayBasis: .hourly,
@@ -381,8 +409,10 @@ struct ShiftLedgerTests {
         )
     }
 
-    private func makePayRate(amount: Decimal = 120) throws -> PayRate {
-        let effectiveFrom = try makeLocalDate()
+    private func makePayRate(
+        amount: Decimal = 120,
+        effectiveFrom: LocalDate? = nil
+    ) throws -> PayRate {
         return try PayRate(amount: amount, effectiveFrom: effectiveFrom)
     }
 

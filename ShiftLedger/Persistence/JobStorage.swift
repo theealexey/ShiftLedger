@@ -61,7 +61,10 @@ final class JobStorage {
         let timeZone = try makeTimeZone(from: job.timeZoneIdentifier)
         let storedPayPeriod = try encodePayCalculationCycle(job.payCalculationCycle, timeZone: timeZone)
         let storedPayRates = try job.payRates.map { payRate in
-            (payRate: payRate, effectiveFrom: try payRate.effectiveFrom.startOfDay(in: timeZone))
+            (
+                payRate: payRate,
+                effectiveFrom: try payRate.effectiveFrom.map { try $0.startOfDay(in: timeZone) }
+            )
         }
 
         guard let jobEntityDescription = NSEntityDescription.entity(
@@ -83,7 +86,6 @@ final class JobStorage {
 
         let jobEntity = JobEntity(entity: jobEntityDescription, insertInto: context)
         jobEntity.id = job.id
-        jobEntity.name = job.name
         jobEntity.currencyCode = job.currencyCode
         jobEntity.timeZoneIdentifier = job.timeZoneIdentifier
         jobEntity.basePayKind = encodeBasePayBasis(job.basePayBasis).rawValue
@@ -146,17 +148,14 @@ final class JobStorage {
             payRates.append(try makePayRate(from: payRateEntity, timeZone: timeZone))
         }
 
-        let sortedPayRates = payRates.sorted { $0.effectiveFrom < $1.effectiveFrom }
-
         do {
             return try Job(
                 id: jobEntity.id,
-                name: jobEntity.name,
                 currencyCode: jobEntity.currencyCode,
                 timeZoneIdentifier: jobEntity.timeZoneIdentifier,
                 basePayBasis: basePayBasis,
                 payCalculationCycle: payCalculationCycle,
-                payRates: sortedPayRates,
+                payRates: payRates,
                 createdAt: jobEntity.createdAt
             )
         } catch {
@@ -313,10 +312,22 @@ final class JobStorage {
         from payRateEntity: PayRateEntity,
         timeZone: TimeZone
     ) throws -> PayRate {
+        guard let storedEffectiveFrom = payRateEntity.effectiveFrom else {
+            do {
+                return try PayRate(
+                    id: payRateEntity.id,
+                    amount: payRateEntity.amount.decimalValue,
+                    effectiveFrom: nil
+                )
+            } catch {
+                throw JobStorageError.corruptedData(.invalidPayRate(underlying: error))
+            }
+        }
+
         let effectiveFrom: LocalDate
 
         do {
-            effectiveFrom = try LocalDate(date: payRateEntity.effectiveFrom, in: timeZone)
+            effectiveFrom = try LocalDate(date: storedEffectiveFrom, in: timeZone)
         } catch {
             throw JobStorageError.corruptedData(.invalidPayRate(underlying: error))
         }
@@ -328,7 +339,7 @@ final class JobStorage {
             throw JobStorageError.corruptedData(.invalidPayRate(underlying: error))
         }
 
-        guard canonicalDate == payRateEntity.effectiveFrom else {
+        guard canonicalDate == storedEffectiveFrom else {
             throw JobStorageError.corruptedData(.nonCanonicalPayRateEffectiveFrom)
         }
 

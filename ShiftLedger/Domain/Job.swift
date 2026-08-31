@@ -1,16 +1,16 @@
 import Foundation
 
 enum JobValidationError: Error, Equatable {
-    case emptyName
     case invalidCurrencyCode
     case invalidTimeZoneIdentifier
     case missingPayRates
+    case missingInitialPayRate
+    case multipleInitialPayRates
     case duplicatePayRateEffectiveFrom
 }
 
 struct Job: Equatable {
     let id: UUID
-    let name: String
     let currencyCode: String
     let timeZoneIdentifier: String
     let basePayBasis: BasePayBasis
@@ -20,7 +20,6 @@ struct Job: Equatable {
 
     init(
         id: UUID = UUID(),
-        name: String,
         currencyCode: String,
         timeZoneIdentifier: String,
         basePayBasis: BasePayBasis,
@@ -28,11 +27,6 @@ struct Job: Equatable {
         payRates: [PayRate],
         createdAt: Date = Date()
     ) throws {
-        let normalizedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard normalizedName.isEmpty == false else {
-            throw JobValidationError.emptyName
-        }
-
         let normalizedCurrencyCode = currencyCode.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
         guard Locale.Currency(normalizedCurrencyCode).isISOCurrency else {
             throw JobValidationError.invalidCurrencyCode
@@ -46,18 +40,31 @@ struct Job: Equatable {
             throw JobValidationError.missingPayRates
         }
 
-        let effectiveFromDates = Set(payRates.map(\.effectiveFrom))
-        guard effectiveFromDates.count == payRates.count else {
-            throw JobValidationError.duplicatePayRateEffectiveFrom
+        let initialPayRateCount = payRates.count { $0.effectiveFrom == nil }
+        guard initialPayRateCount > 0 else {
+            throw JobValidationError.missingInitialPayRate
+        }
+        guard initialPayRateCount == 1 else {
+            throw JobValidationError.multipleInitialPayRates
+        }
+
+        var datedEffectiveFroms = Set<LocalDate>()
+        for payRate in payRates {
+            guard let effectiveFrom = payRate.effectiveFrom else {
+                continue
+            }
+
+            guard datedEffectiveFroms.insert(effectiveFrom).inserted else {
+                throw JobValidationError.duplicatePayRateEffectiveFrom
+            }
         }
 
         self.id = id
-        self.name = normalizedName
         self.currencyCode = normalizedCurrencyCode
         self.timeZoneIdentifier = timeZoneIdentifier
         self.basePayBasis = basePayBasis
         self.payCalculationCycle = payCalculationCycle
-        self.payRates = payRates
+        self.payRates = payRates.sorted(by: PayRate.isOrderedBefore)
         self.createdAt = createdAt
     }
 }
