@@ -7,6 +7,7 @@ enum JobValidationError: Error, Equatable {
     case missingInitialPayRate
     case multipleInitialPayRates
     case duplicatePayRateEffectiveFrom
+    case duplicatePayRateID
 }
 
 struct Job: Equatable {
@@ -26,7 +27,7 @@ struct Job: Equatable {
         payCalculationCycle: PayCalculationCycle,
         payRates: [PayRate],
         createdAt: Date = Date()
-    ) throws {
+    ) throws(JobValidationError) {
         let normalizedCurrencyCode = currencyCode.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
         guard Locale.Currency(normalizedCurrencyCode).isISOCurrency else {
             throw JobValidationError.invalidCurrencyCode
@@ -56,6 +57,13 @@ struct Job: Equatable {
 
             guard datedEffectiveFroms.insert(effectiveFrom).inserted else {
                 throw JobValidationError.duplicatePayRateEffectiveFrom
+            }
+        }
+
+        var payRateIDs = Set<UUID>()
+        for payRate in payRates {
+            guard payRateIDs.insert(payRate.id).inserted else {
+                throw JobValidationError.duplicatePayRateID
             }
         }
 

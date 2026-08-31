@@ -9,7 +9,7 @@ struct PayRate: Equatable {
     let amount: Decimal
     let effectiveFrom: LocalDate?
 
-    init(id: UUID = UUID(), amount: Decimal, effectiveFrom: LocalDate?) throws {
+    init(id: UUID = UUID(), amount: Decimal, effectiveFrom: LocalDate?) throws(PayRateValidationError) {
         guard amount > .zero else {
             throw PayRateValidationError.nonPositiveAmount
         }

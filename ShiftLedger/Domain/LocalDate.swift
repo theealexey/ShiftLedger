@@ -6,6 +6,7 @@ enum LocalDateValidationError: Error, Equatable {
 
 enum LocalDateConversionError: Error, Equatable {
     case missingGregorianDateComponents
+    case invalidGregorianDateComponents
     case dateDoesNotExistInTimeZone
     case calendarArithmeticFailed
 }
@@ -15,7 +16,7 @@ struct LocalDate: Equatable, Hashable, Comparable {
     let month: Int
     let day: Int
 
-    init(year: Int, month: Int, day: Int) throws {
+    init(year: Int, month: Int, day: Int) throws(LocalDateValidationError) {
         let calendar = Self.gregorianCalendar(in: .gmt)
         let requestedComponents = DateComponents(year: year, month: month, day: day)
 
@@ -37,7 +38,7 @@ struct LocalDate: Equatable, Hashable, Comparable {
         self.day = day
     }
 
-    init(date: Date, in timeZone: TimeZone) throws {
+    init(date: Date, in timeZone: TimeZone) throws(LocalDateConversionError) {
         let calendar = Self.gregorianCalendar(in: timeZone)
         let components = calendar.dateComponents([.year, .month, .day], from: date)
 
@@ -49,10 +50,14 @@ struct LocalDate: Equatable, Hashable, Comparable {
             throw LocalDateConversionError.missingGregorianDateComponents
         }
 
-        try self.init(year: year, month: month, day: day)
+        do {
+            try self.init(year: year, month: month, day: day)
+        } catch {
+            throw LocalDateConversionError.invalidGregorianDateComponents
+        }
     }
 
-    func startOfDay(in timeZone: TimeZone) throws -> Date {
+    func startOfDay(in timeZone: TimeZone) throws(LocalDateConversionError) -> Date {
         let calendar = Self.gregorianCalendar(in: timeZone)
         let requestedComponents = DateComponents(year: year, month: month, day: day)
 

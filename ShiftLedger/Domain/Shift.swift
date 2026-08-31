@@ -26,7 +26,7 @@ struct Shift: Equatable, Identifiable {
         start: Date,
         end: Date,
         unpaidBreak: UnpaidBreak? = nil
-    ) throws {
+    ) throws(ShiftValidationError) {
         guard start < end else {
             throw ShiftValidationError.startNotBeforeEnd
         }

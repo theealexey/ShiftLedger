@@ -8,5 +8,5 @@ class ShiftEntity: NSManagedObject {
     @NSManaged var end: Date
     @NSManaged var unpaidBreakStart: Date?
     @NSManaged var unpaidBreakEnd: Date?
-    @NSManaged var job: JobEntity
+    @NSManaged var job: JobEntity?
 }

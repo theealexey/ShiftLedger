@@ -8,12 +8,13 @@ enum JobStorageError: Error {
         case unknownBasePayKind(String)
         case missingPayPeriodAnchorDate(payPeriodKind: String)
         case unexpectedPayPeriodAnchorDate(payPeriodKind: String)
-        case invalidPayPeriodAnchorDate(payPeriodKind: String, underlying: Error)
+        case invalidPayPeriodAnchorDate(payPeriodKind: String, underlying: LocalDateConversionError)
         case nonCanonicalPayPeriodAnchorDate(payPeriodKind: String)
         case invalidPayRatesRelationship
-        case invalidPayRate(underlying: Error)
+        case invalidPayRateEffectiveFrom(underlying: LocalDateConversionError)
+        case invalidPayRate(underlying: PayRateValidationError)
         case nonCanonicalPayRateEffectiveFrom
-        case invalidJob(underlying: Error)
+        case invalidJob(underlying: JobValidationError)
     }
 
     case jobAlreadyExists
@@ -329,14 +330,14 @@ final class JobStorage {
         do {
             effectiveFrom = try LocalDate(date: storedEffectiveFrom, in: timeZone)
         } catch {
-            throw JobStorageError.corruptedData(.invalidPayRate(underlying: error))
+            throw JobStorageError.corruptedData(.invalidPayRateEffectiveFrom(underlying: error))
         }
 
         let canonicalDate: Date
         do {
             canonicalDate = try effectiveFrom.startOfDay(in: timeZone)
         } catch {
-            throw JobStorageError.corruptedData(.invalidPayRate(underlying: error))
+            throw JobStorageError.corruptedData(.invalidPayRateEffectiveFrom(underlying: error))
         }
 
         guard canonicalDate == storedEffectiveFrom else {

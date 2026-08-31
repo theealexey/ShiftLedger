@@ -5,7 +5,7 @@ enum ShiftStorageError: Error {
     enum Corruption: Error {
         case invalidShiftRelationship
         case invalidBreakPair
-        case invalidShift(underlying: Error)
+        case invalidShift(underlying: ShiftValidationError)
     }
 
     case jobNotFound
@@ -34,7 +34,7 @@ final class ShiftStorage {
         let existingShifts = try fetchShifts()
 
         for entity in existingShifts {
-            guard let entityJob = entity.value(forKey: "job") as? JobEntity else {
+            guard let entityJob = entity.job else {
                 throw ShiftStorageError.corruptedData(.invalidShiftRelationship)
             }
 
@@ -81,7 +81,7 @@ final class ShiftStorage {
         let job = try singleJob()
 
         return try fetchShifts().map { entity in
-            guard let entityJob = entity.value(forKey: "job") as? JobEntity,
+            guard let entityJob = entity.job,
                   entityJob.objectID == job.objectID
             else {
                 throw ShiftStorageError.corruptedData(.invalidShiftRelationship)

@@ -345,6 +345,36 @@ struct ShiftLedgerTests {
         }
     }
 
+    @Test("Одинаковые идентификаторы ставок отклоняются")
+    func rejectsDuplicatePayRateIDs() throws {
+        let duplicateID = UUID(uuid: (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16))
+        let initialPayRate = try PayRate(id: duplicateID, amount: 120, effectiveFrom: nil)
+        let datedPayRate = try PayRate(
+            id: duplicateID,
+            amount: 130,
+            effectiveFrom: try makeLocalDate(year: 2026, month: 10, day: 1)
+        )
+
+        #expect(throws: JobValidationError.duplicatePayRateID) {
+            try makeJob(payRates: [initialPayRate, datedPayRate])
+        }
+    }
+
+    @Test("Одинаковые идентификаторы ставок отклоняются в любом порядке")
+    func rejectsDuplicatePayRateIDsInAnyOrder() throws {
+        let duplicateID = UUID(uuid: (16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1))
+        let initialPayRate = try PayRate(id: duplicateID, amount: 120, effectiveFrom: nil)
+        let datedPayRate = try PayRate(
+            id: duplicateID,
+            amount: 130,
+            effectiveFrom: try makeLocalDate(year: 2026, month: 11, day: 1)
+        )
+
+        #expect(throws: JobValidationError.duplicatePayRateID) {
+            try makeJob(payRates: [datedPayRate, initialPayRate])
+        }
+    }
+
     @Test("Сортировка ставок помещает initial первой")
     func sortsInitialPayRateFirst() throws {
         let laterRate = try PayRate(

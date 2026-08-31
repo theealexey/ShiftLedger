@@ -223,6 +223,36 @@ struct JobStorageTests {
         }
     }
 
+    @Test("Некорректная сумма ставки в SQLite отклоняется typed corruption")
+    func rejectsPersistedPayRateWithInvalidAmount() async throws {
+        let storeURL = try makeTemporaryStoreURL()
+        var stacks: [CoreDataStack] = []
+        defer { removeTemporaryStoreDirectory(for: storeURL, stacks: stacks) }
+
+        let timeZone = try #require(TimeZone(identifier: "Europe/Stockholm"))
+        let anchorDate = try LocalDate(year: 2026, month: 9, day: 1)
+        let stack = try await CoreDataStack.load(storeURL: storeURL)
+        stacks.append(stack)
+
+        try insertPersistedJob(
+            id: try #require(UUID(uuidString: "B1C2D3E4-F506-4789-ABCD-EF0123456780")),
+            payRateID: try #require(UUID(uuidString: "C1D2E3F4-A506-4789-BCDE-F01234567890")),
+            payRateEffectiveFrom: nil,
+            payRateAmount: 0,
+            payPeriodAnchorDate: try anchorDate.startOfDay(in: timeZone),
+            in: stack.viewContext
+        )
+        try stack.viewContext.save()
+
+        do {
+            _ = try JobStorage(stack: stack).load()
+            Issue.record("Некорректная сумма ставки была принята")
+        } catch JobStorageError.corruptedData(.invalidPayRate(underlying: .nonPositiveAmount)) {
+        } catch {
+            Issue.record("Некорректная сумма ставки вернула неверную ошибку")
+        }
+    }
+
     @Test("SQLite без initial ставки отклоняется typed corruption")
     func rejectsPersistedJobWithoutInitialPayRate() async throws {
         let storeURL = try makeTemporaryStoreURL()
@@ -280,6 +310,49 @@ struct JobStorageTests {
         } catch JobStorageError.corruptedData(.invalidJob(underlying: JobValidationError.multipleInitialPayRates)) {
         } catch {
             Issue.record("Job с двумя initial ставками вернул неверную ошибку")
+        }
+    }
+
+    @Test("Одинаковые ID ставок в SQLite отклоняются typed corruption")
+    func rejectsPersistedJobWithDuplicatePayRateIDs() async throws {
+        let storeURL = try makeTemporaryStoreURL()
+        var stacks: [CoreDataStack] = []
+        defer { removeTemporaryStoreDirectory(for: storeURL, stacks: stacks) }
+
+        let timeZone = try #require(TimeZone(identifier: "Europe/Stockholm"))
+        let firstEffectiveFrom = try LocalDate(year: 2026, month: 9, day: 1)
+        let secondEffectiveFrom = try LocalDate(year: 2026, month: 10, day: 1)
+        let duplicatePayRateID = try #require(UUID(uuidString: "6A7B8C9D-0E1F-4A2B-8C3D-4E5F60718293"))
+        let stack = try await CoreDataStack.load(storeURL: storeURL)
+        stacks.append(stack)
+
+        try insertPersistedJob(
+            id: try #require(UUID(uuidString: "A1B2C3D4-E5F6-4789-ABCD-EF0123456789")),
+            payRateID: duplicatePayRateID,
+            payRateEffectiveFrom: try firstEffectiveFrom.startOfDay(in: timeZone),
+            payPeriodAnchorDate: try firstEffectiveFrom.startOfDay(in: timeZone),
+            in: stack.viewContext
+        )
+
+        let jobEntity = try #require(
+            try stack.viewContext.fetch(NSFetchRequest<JobEntity>(entityName: "JobEntity")).first
+        )
+        let payRateEntityDescription = try #require(
+            NSEntityDescription.entity(forEntityName: "PayRateEntity", in: stack.viewContext)
+        )
+        let duplicatePayRateEntity = PayRateEntity(entity: payRateEntityDescription, insertInto: stack.viewContext)
+        duplicatePayRateEntity.id = duplicatePayRateID
+        duplicatePayRateEntity.amount = NSDecimalNumber(decimal: 130)
+        duplicatePayRateEntity.effectiveFrom = try secondEffectiveFrom.startOfDay(in: timeZone)
+        duplicatePayRateEntity.job = jobEntity
+        try stack.viewContext.save()
+
+        do {
+            _ = try JobStorage(stack: stack).load()
+            Issue.record("Job с повторяющимся ID ставки был принят")
+        } catch JobStorageError.corruptedData(.invalidJob(underlying: .duplicatePayRateID)) {
+        } catch {
+            Issue.record("Job с повторяющимся ID ставки вернул неверную ошибку")
         }
     }
 
@@ -418,6 +491,7 @@ struct JobStorageTests {
         id: UUID,
         payRateID: UUID,
         payRateEffectiveFrom: Date?,
+        payRateAmount: Decimal = 120,
         includeInitialPayRate: Bool = true,
         additionalInitialPayRate: Bool = false,
         basePayKind: String? = nil,
@@ -443,7 +517,7 @@ struct JobStorageTests {
 
         let payRateEntity = PayRateEntity(entity: payRateEntityDescription, insertInto: context)
         payRateEntity.id = payRateID
-        payRateEntity.amount = NSDecimalNumber(decimal: 120)
+        payRateEntity.amount = NSDecimalNumber(decimal: payRateAmount)
         payRateEntity.effectiveFrom = payRateEffectiveFrom
         payRateEntity.job = jobEntity
 
