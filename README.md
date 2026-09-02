@@ -10,7 +10,7 @@ Its core question is:
 
 The product focuses on transparent, explainable calculations rather than simply tracking hours.
 
-## Features
+## Product Scope
 
 - Three-step onboarding for one job
 - Hourly or fixed-per-shift base pay
@@ -41,7 +41,7 @@ The application foundation and shift-entry flow are implemented. Expected-pay ca
 
 ## Status
 
-ShiftLedger is under active development. The application foundation is complete, including onboarding, production startup, persisted job restoration, Add Shift, validation, and real shift persistence. The next development area is the payroll calculation engine for paid duration, applicable rates, pay-period boundaries, expected gross pay, employer-reported gross comparison, and explainable calculation breakdowns.
+ShiftLedger is under active development. The application foundation is complete, including onboarding, production startup, persisted job restoration, Add Shift, validation, and real shift persistence. The next development area is the payroll calculation engine. Employer-reported gross comparison and explainable pay-period results will follow after it.
 
 ## Requirements
 
