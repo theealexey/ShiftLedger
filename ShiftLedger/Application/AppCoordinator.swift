@@ -51,7 +51,6 @@ final class AppCoordinator {
                 try Task.checkCancellation()
 
                 let jobStorage = JobStorage(stack: stack)
-                let shiftStorage = ShiftStorage(stack: stack)
 
 #if DEBUG
                 if ProcessInfo.processInfo.arguments.contains("-ui-testing-seed-job"),
@@ -75,7 +74,7 @@ final class AppCoordinator {
                 if let job {
                     let addShiftViewController = AddShiftAssembly.make(
                         job: job,
-                        shiftStorage: shiftStorage
+                        stack: stack
                     )
                     let navigationController = UINavigationController(
                         rootViewController: addShiftViewController
@@ -84,8 +83,7 @@ final class AppCoordinator {
                     window.rootViewController = navigationController
                 } else {
                     let navigationController = makeOnboardingNavigationController(
-                        jobStorage: jobStorage,
-                        shiftStorage: shiftStorage
+                        stack: stack
                     )
                     navigationController.setNavigationBarHidden(true, animated: false)
                     try Task.checkCancellation()
@@ -116,8 +114,7 @@ final class AppCoordinator {
     }
 
     private func makeOnboardingNavigationController(
-        jobStorage: JobStorage,
-        shiftStorage: ShiftStorage
+        stack: CoreDataStack
     ) -> UINavigationController {
         let navigationController = UINavigationController()
         let startViewController = JobSetupAssembly.makeStart(
@@ -137,7 +134,7 @@ final class AppCoordinator {
 
                 let reviewViewController = JobSetupAssembly.makeReview(
                     draft: draft,
-                    jobStorage: jobStorage
+                    stack: stack
                 )
                 reviewViewController.onBack = { [weak navigationController] in
                     navigationController?.popViewController(animated: true)
@@ -147,7 +144,7 @@ final class AppCoordinator {
 
                     let addShiftViewController = AddShiftAssembly.make(
                         job: job,
-                        shiftStorage: shiftStorage
+                        stack: stack
                     )
                     navigationController.setNavigationBarHidden(false, animated: false)
                     navigationController.setViewControllers(

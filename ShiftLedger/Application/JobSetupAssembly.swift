@@ -24,8 +24,9 @@ enum JobSetupAssembly {
 
     static func makeReview(
         draft: JobSetupDraft,
-        jobStorage: JobStorage
+        stack: CoreDataStack
     ) -> JobSetupReviewViewController {
+        let jobStorage = JobStorage(stack: stack)
         let viewModel = JobSetupReviewViewModel(draft: draft)
 
         return JobSetupReviewViewController(
