@@ -2,7 +2,8 @@ import Foundation
 
 @MainActor
 enum AddShiftAssembly {
-    static func make(job: Job, shiftStorage: ShiftStorage) -> AddShiftViewController {
+    static func make(job: Job, stack: CoreDataStack) -> AddShiftViewController {
+        let shiftStorage = ShiftStorage(stack: stack)
         let viewModel = AddShiftViewModel(
             timeZoneIdentifier: job.timeZoneIdentifier,
             saveShift: { shift in
