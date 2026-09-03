@@ -142,7 +142,7 @@ struct AppCoordinatorTests {
         let stack = try await CoreDataStack.load(storeURL: storeURL)
         defer { removeTemporaryStoreDirectory(for: storeURL, stack: stack) }
 
-        let window = makeWindow()
+        let window = makeWindow(isKeyAndVisible: false)
         let coordinator = AppCoordinator(
             window: window,
             loadCoreDataStack: { stack }
@@ -161,62 +161,49 @@ struct AppCoordinatorTests {
         let draft = makeValidDraft()
 
         startViewController.onContinue?(draft)
-        await waitForNavigationTransition(navigationController)
+        await nextMainRunLoopTurn()
         let payPeriodViewController = try #require(
             navigationController.topViewController as? PayPeriodSetupViewController
         )
 
         payPeriodViewController.onBack?()
-        await waitForNavigationTransition(navigationController)
+        await nextMainRunLoopTurn()
         #expect(navigationController.topViewController === startViewController)
 
         startViewController.onContinue?(draft)
-        await waitForNavigationTransition(navigationController)
+        await nextMainRunLoopTurn()
         let secondPayPeriodViewController = try #require(
             navigationController.topViewController as? PayPeriodSetupViewController
         )
         secondPayPeriodViewController.onContinue?(draft)
-        await waitForNavigationTransition(navigationController)
+        await nextMainRunLoopTurn()
         let reviewViewController = try #require(
             navigationController.topViewController as? JobSetupReviewViewController
         )
 
         reviewViewController.onBack?()
-        await waitForNavigationTransition(navigationController)
+        await nextMainRunLoopTurn()
         #expect(navigationController.topViewController === secondPayPeriodViewController)
 
         secondPayPeriodViewController.onContinue?(draft)
-        await waitForNavigationTransition(navigationController)
+        await nextMainRunLoopTurn()
         let secondReviewViewController = try #require(
             navigationController.topViewController as? JobSetupReviewViewController
         )
         secondReviewViewController.start()
+        await nextMainRunLoopTurn()
 
         #expect(navigationController.viewControllers.count == 1)
         #expect(navigationController.viewControllers.first is AddShiftViewController)
         #expect(navigationController.navigationBar.isHidden == false)
     }
 
-    private func waitForNavigationTransition(_ navigationController: UINavigationController) async {
-        await Task.yield()
-        guard let transitionCoordinator = navigationController.transitionCoordinator else {
-            return
-        }
-
-        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
-            let registered = transitionCoordinator.animate(alongsideTransition: nil) { _ in
-                continuation.resume()
-            }
-            if registered == false {
-                continuation.resume()
-            }
-        }
-    }
-
-    private func makeWindow() -> UIWindow {
+    private func makeWindow(isKeyAndVisible: Bool = true) -> UIWindow {
         let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
         window.rootViewController = UIViewController()
-        window.makeKeyAndVisible()
+        if isKeyAndVisible {
+            window.makeKeyAndVisible()
+        }
         return window
     }
 
@@ -224,6 +211,14 @@ struct AppCoordinatorTests {
         coordinator.cancelStartup()
         window.isHidden = true
         window.rootViewController = nil
+    }
+
+    private func nextMainRunLoopTurn() async {
+        await withCheckedContinuation { continuation in
+            DispatchQueue.main.async {
+                continuation.resume()
+            }
+        }
     }
 
     private func makeTemporaryStoreURL() throws -> URL {
