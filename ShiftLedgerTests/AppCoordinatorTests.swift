@@ -1,4 +1,5 @@
 import CoreData
+import ObjectiveC.runtime
 import UIKit
 import Testing
 @testable import ShiftLedger
@@ -159,43 +160,37 @@ struct AppCoordinatorTests {
             navigationController.viewControllers.first as? JobSetupViewController
         )
         let draft = makeValidDraft()
+        try withNonAnimatedNavigationTransitions {
+            startViewController.onContinue?(draft)
+            let payPeriodViewController = try #require(
+                navigationController.topViewController as? PayPeriodSetupViewController
+            )
 
-        startViewController.onContinue?(draft)
-        await nextMainRunLoopTurn()
-        let payPeriodViewController = try #require(
-            navigationController.topViewController as? PayPeriodSetupViewController
-        )
+            payPeriodViewController.onBack?()
+            #expect(navigationController.topViewController === startViewController)
 
-        payPeriodViewController.onBack?()
-        await nextMainRunLoopTurn()
-        #expect(navigationController.topViewController === startViewController)
+            startViewController.onContinue?(draft)
+            let secondPayPeriodViewController = try #require(
+                navigationController.topViewController as? PayPeriodSetupViewController
+            )
+            secondPayPeriodViewController.onContinue?(draft)
+            let reviewViewController = try #require(
+                navigationController.topViewController as? JobSetupReviewViewController
+            )
 
-        startViewController.onContinue?(draft)
-        await nextMainRunLoopTurn()
-        let secondPayPeriodViewController = try #require(
-            navigationController.topViewController as? PayPeriodSetupViewController
-        )
-        secondPayPeriodViewController.onContinue?(draft)
-        await nextMainRunLoopTurn()
-        let reviewViewController = try #require(
-            navigationController.topViewController as? JobSetupReviewViewController
-        )
+            reviewViewController.onBack?()
+            #expect(navigationController.topViewController === secondPayPeriodViewController)
 
-        reviewViewController.onBack?()
-        await nextMainRunLoopTurn()
-        #expect(navigationController.topViewController === secondPayPeriodViewController)
+            secondPayPeriodViewController.onContinue?(draft)
+            let secondReviewViewController = try #require(
+                navigationController.topViewController as? JobSetupReviewViewController
+            )
+            secondReviewViewController.start()
 
-        secondPayPeriodViewController.onContinue?(draft)
-        await nextMainRunLoopTurn()
-        let secondReviewViewController = try #require(
-            navigationController.topViewController as? JobSetupReviewViewController
-        )
-        secondReviewViewController.start()
-        await nextMainRunLoopTurn()
-
-        #expect(navigationController.viewControllers.count == 1)
-        #expect(navigationController.viewControllers.first is AddShiftViewController)
-        #expect(navigationController.navigationBar.isHidden == false)
+            #expect(navigationController.viewControllers.count == 1)
+            #expect(navigationController.viewControllers.first is AddShiftViewController)
+            #expect(navigationController.navigationBar.isHidden == false)
+        }
     }
 
     private func makeWindow(isKeyAndVisible: Bool = true) -> UIWindow {
@@ -213,12 +208,47 @@ struct AppCoordinatorTests {
         window.rootViewController = nil
     }
 
-    private func nextMainRunLoopTurn() async {
-        await withCheckedContinuation { continuation in
-            DispatchQueue.main.async {
-                continuation.resume()
-            }
+    private func withNonAnimatedNavigationTransitions<T>(
+        _ operation: () throws -> T
+    ) rethrows -> T {
+        guard
+            let push = class_getInstanceMethod(
+                UINavigationController.self,
+                #selector(UINavigationController.pushViewController(_:animated:))
+            ),
+            let testPush = class_getInstanceMethod(
+                UINavigationController.self,
+                #selector(UINavigationController.sl106d_pushViewController(_:animated:))
+            ),
+            let pop = class_getInstanceMethod(
+                UINavigationController.self,
+                #selector(UINavigationController.popViewController(animated:))
+            ),
+            let testPop = class_getInstanceMethod(
+                UINavigationController.self,
+                #selector(UINavigationController.sl106d_popViewController(animated:))
+            ),
+            let set = class_getInstanceMethod(
+                UINavigationController.self,
+                #selector(UINavigationController.setViewControllers(_:animated:))
+            ),
+            let testSet = class_getInstanceMethod(
+                UINavigationController.self,
+                #selector(UINavigationController.sl106d_setViewControllers(_:animated:))
+            )
+        else {
+            return try operation()
         }
+
+        method_exchangeImplementations(push, testPush)
+        method_exchangeImplementations(pop, testPop)
+        method_exchangeImplementations(set, testSet)
+        defer {
+            method_exchangeImplementations(push, testPush)
+            method_exchangeImplementations(pop, testPop)
+            method_exchangeImplementations(set, testSet)
+        }
+        return try operation()
     }
 
     private func makeTemporaryStoreURL() throws -> URL {
@@ -261,6 +291,26 @@ struct AppCoordinatorTests {
             }
         }
         try? FileManager.default.removeItem(at: storeURL.deletingLastPathComponent())
+    }
+}
+
+private extension UINavigationController {
+    @objc func sl106d_pushViewController(
+        _ viewController: UIViewController,
+        animated: Bool
+    ) {
+        sl106d_pushViewController(viewController, animated: false)
+    }
+
+    @objc func sl106d_popViewController(animated: Bool) -> UIViewController? {
+        sl106d_popViewController(animated: false)
+    }
+
+    @objc func sl106d_setViewControllers(
+        _ viewControllers: [UIViewController],
+        animated: Bool
+    ) {
+        sl106d_setViewControllers(viewControllers, animated: false)
     }
 }
 
