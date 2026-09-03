@@ -145,7 +145,10 @@ struct AppCoordinatorTests {
         let window = makeWindow(isKeyAndVisible: false)
         let coordinator = AppCoordinator(
             window: window,
-            loadCoreDataStack: { stack }
+            loadCoreDataStack: { stack },
+            makeNavigationController: {
+                NonAnimatingNavigationController()
+            }
         )
         defer { tearDown(window, coordinator: coordinator) }
 
@@ -153,7 +156,7 @@ struct AppCoordinatorTests {
         await startupTask.value
 
         let navigationController = try #require(
-            window.rootViewController as? UINavigationController
+            window.rootViewController as? NonAnimatingNavigationController
         )
         let startViewController = try #require(
             navigationController.viewControllers.first as? JobSetupViewController
@@ -161,37 +164,30 @@ struct AppCoordinatorTests {
         let draft = makeValidDraft()
 
         startViewController.onContinue?(draft)
-        await nextMainRunLoopTurn()
         let payPeriodViewController = try #require(
             navigationController.topViewController as? PayPeriodSetupViewController
         )
 
         payPeriodViewController.onBack?()
-        await nextMainRunLoopTurn()
         #expect(navigationController.topViewController === startViewController)
 
         startViewController.onContinue?(draft)
-        await nextMainRunLoopTurn()
         let secondPayPeriodViewController = try #require(
             navigationController.topViewController as? PayPeriodSetupViewController
         )
         secondPayPeriodViewController.onContinue?(draft)
-        await nextMainRunLoopTurn()
         let reviewViewController = try #require(
             navigationController.topViewController as? JobSetupReviewViewController
         )
 
         reviewViewController.onBack?()
-        await nextMainRunLoopTurn()
         #expect(navigationController.topViewController === secondPayPeriodViewController)
 
         secondPayPeriodViewController.onContinue?(draft)
-        await nextMainRunLoopTurn()
         let secondReviewViewController = try #require(
             navigationController.topViewController as? JobSetupReviewViewController
         )
         secondReviewViewController.start()
-        await nextMainRunLoopTurn()
 
         #expect(navigationController.viewControllers.count == 1)
         #expect(navigationController.viewControllers.first is AddShiftViewController)
@@ -211,14 +207,6 @@ struct AppCoordinatorTests {
         coordinator.cancelStartup()
         window.isHidden = true
         window.rootViewController = nil
-    }
-
-    private func nextMainRunLoopTurn() async {
-        await withCheckedContinuation { continuation in
-            DispatchQueue.main.async {
-                continuation.resume()
-            }
-        }
     }
 
     private func makeTemporaryStoreURL() throws -> URL {
@@ -261,6 +249,26 @@ struct AppCoordinatorTests {
             }
         }
         try? FileManager.default.removeItem(at: storeURL.deletingLastPathComponent())
+    }
+}
+
+private final class NonAnimatingNavigationController: UINavigationController {
+    override func pushViewController(
+        _ viewController: UIViewController,
+        animated: Bool
+    ) {
+        super.pushViewController(viewController, animated: false)
+    }
+
+    override func popViewController(animated: Bool) -> UIViewController? {
+        super.popViewController(animated: false)
+    }
+
+    override func setViewControllers(
+        _ viewControllers: [UIViewController],
+        animated: Bool
+    ) {
+        super.setViewControllers(viewControllers, animated: false)
     }
 }
 
