@@ -14,8 +14,13 @@ struct JobSetupReviewViewControllerTests {
         var savedJobs: [Job] = []
         var completedJobs: [Job] = []
         let viewController = JobSetupReviewViewController(
-            viewModel: JobSetupReviewViewModel(draft: draft),
-            saveJob: { savedJobs.append($0) }
+            viewModel: JobSetupReviewViewModel(
+                draft: draft,
+                saveJob: { job in
+                    savedJobs.append(job)
+                    return .success(())
+                }
+            )
         )
         viewController.onFinished = { completedJobs.append($0) }
         viewController.loadViewIfNeeded()
@@ -37,14 +42,17 @@ struct JobSetupReviewViewControllerTests {
         var attempts = 0
         var savedJobs: [Job] = []
         let viewController = JobSetupReviewViewController(
-            viewModel: JobSetupReviewViewModel(draft: draft),
-            saveJob: { job in
-                attempts += 1
-                if attempts == 1 {
-                    throw JobStorageError.jobAlreadyExists
+            viewModel: JobSetupReviewViewModel(
+                draft: draft,
+                saveJob: { job in
+                    attempts += 1
+                    if attempts == 1 {
+                        return .failure(.persistence)
+                    }
+                    savedJobs.append(job)
+                    return .success(())
                 }
-                savedJobs.append(job)
-            }
+            )
         )
         var completedJobs: [Job] = []
         viewController.onFinished = { completedJobs.append($0) }

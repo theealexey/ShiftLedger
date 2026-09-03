@@ -7,20 +7,16 @@ final class JobSetupReviewViewController: UIViewController {
     private let viewModel: JobSetupReviewViewModel
     private let displayLocale: Locale
     private let dateFormattingLocale: Locale
-    private let saveJob: (Job) throws -> Void
     private let reviewView = JobSetupReviewView(frame: .zero)
-    private var isSaving = false
 
     init(
         viewModel: JobSetupReviewViewModel,
         displayLocale: Locale = CurrencySelectionItem.applicationDisplayLocale,
-        dateFormattingLocale: Locale = .autoupdatingCurrent,
-        saveJob: @escaping (Job) throws -> Void
+        dateFormattingLocale: Locale = .autoupdatingCurrent
     ) {
         self.viewModel = viewModel
         self.displayLocale = displayLocale
         self.dateFormattingLocale = dateFormattingLocale
-        self.saveJob = saveJob
         super.init(nibName: nil, bundle: nil)
     }
 
@@ -50,21 +46,22 @@ final class JobSetupReviewViewController: UIViewController {
     }
 
     func start() {
-        guard isSaving == false, viewModel.canFinish else {
+        guard viewModel.canFinish else {
             return
         }
 
-        isSaving = true
         reviewView.setStartEnabled(false)
 
-        do {
-            let job = try viewModel.makeJob()
-            try saveJob(job)
+        switch viewModel.save() {
+        case let .saved(job):
             onFinished?(job)
-        } catch {
-            isSaving = false
+        case .failed:
             reviewView.setStartEnabled(viewModel.canFinish)
             presentSaveError()
+        case .invalid:
+            reviewView.setStartEnabled(viewModel.canFinish)
+        case .ignored:
+            break
         }
     }
 

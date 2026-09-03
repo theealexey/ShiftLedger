@@ -5,14 +5,33 @@ enum JobSetupReviewError: Error, Equatable {
     case invalidTimeZoneIdentifier
 }
 
+enum JobSetupReviewSaveFailure: Error, Equatable {
+    case invalidDraft
+    case persistence
+}
+
+enum JobSetupReviewSaveResult: Equatable {
+    case saved(Job)
+    case failed(JobSetupReviewSaveFailure)
+    case invalid
+    case ignored
+}
+
 @MainActor
 final class JobSetupReviewViewModel {
     private(set) var draft: JobSetupDraft
+    private(set) var isSaving = false
     private let decimalInputLocale: Locale
+    private let saveJob: (Job) -> Result<Void, JobSetupReviewSaveFailure>
 
-    init(draft: JobSetupDraft, decimalInputLocale: Locale = .current) {
+    init(
+        draft: JobSetupDraft,
+        decimalInputLocale: Locale = .current,
+        saveJob: @escaping (Job) -> Result<Void, JobSetupReviewSaveFailure>
+    ) {
         self.draft = draft
         self.decimalInputLocale = decimalInputLocale
+        self.saveJob = saveJob
     }
 
     var basePayLabel: String? {
@@ -114,5 +133,32 @@ final class JobSetupReviewViewModel {
             payRates: [initialPayRate],
             createdAt: createdAt
         )
+    }
+
+    func save(createdAt: Date = Date()) -> JobSetupReviewSaveResult {
+        guard isSaving == false else {
+            return .ignored
+        }
+        guard canFinish else {
+            return .invalid
+        }
+
+        isSaving = true
+
+        let job: Job
+        do {
+            job = try makeJob(createdAt: createdAt)
+        } catch {
+            isSaving = false
+            return .failed(.invalidDraft)
+        }
+
+        switch saveJob(job) {
+        case .success:
+            return .saved(job)
+        case let .failure(failure):
+            isSaving = false
+            return .failed(failure)
+        }
     }
 }

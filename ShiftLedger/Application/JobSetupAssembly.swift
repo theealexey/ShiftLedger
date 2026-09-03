@@ -27,13 +27,18 @@ enum JobSetupAssembly {
         stack: CoreDataStack
     ) -> JobSetupReviewViewController {
         let jobStorage = JobStorage(stack: stack)
-        let viewModel = JobSetupReviewViewModel(draft: draft)
-
-        return JobSetupReviewViewController(
-            viewModel: viewModel,
+        let viewModel = JobSetupReviewViewModel(
+            draft: draft,
             saveJob: { job in
-                try jobStorage.save(job)
+                do {
+                    try jobStorage.save(job)
+                    return .success(())
+                } catch {
+                    return .failure(.persistence)
+                }
             }
         )
+
+        return JobSetupReviewViewController(viewModel: viewModel)
     }
 }

@@ -161,34 +161,56 @@ struct AppCoordinatorTests {
         let draft = makeValidDraft()
 
         startViewController.onContinue?(draft)
+        await waitForNavigationTransition(navigationController)
         let payPeriodViewController = try #require(
             navigationController.topViewController as? PayPeriodSetupViewController
         )
 
         payPeriodViewController.onBack?()
+        await waitForNavigationTransition(navigationController)
         #expect(navigationController.topViewController === startViewController)
 
         startViewController.onContinue?(draft)
+        await waitForNavigationTransition(navigationController)
         let secondPayPeriodViewController = try #require(
             navigationController.topViewController as? PayPeriodSetupViewController
         )
         secondPayPeriodViewController.onContinue?(draft)
+        await waitForNavigationTransition(navigationController)
         let reviewViewController = try #require(
             navigationController.topViewController as? JobSetupReviewViewController
         )
 
         reviewViewController.onBack?()
+        await waitForNavigationTransition(navigationController)
         #expect(navigationController.topViewController === secondPayPeriodViewController)
 
         secondPayPeriodViewController.onContinue?(draft)
+        await waitForNavigationTransition(navigationController)
         let secondReviewViewController = try #require(
             navigationController.topViewController as? JobSetupReviewViewController
         )
-        secondReviewViewController.onFinished?(try makeValidJob())
+        secondReviewViewController.start()
 
         #expect(navigationController.viewControllers.count == 1)
         #expect(navigationController.viewControllers.first is AddShiftViewController)
         #expect(navigationController.navigationBar.isHidden == false)
+    }
+
+    private func waitForNavigationTransition(_ navigationController: UINavigationController) async {
+        await Task.yield()
+        guard let transitionCoordinator = navigationController.transitionCoordinator else {
+            return
+        }
+
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            let registered = transitionCoordinator.animate(alongsideTransition: nil) { _ in
+                continuation.resume()
+            }
+            if registered == false {
+                continuation.resume()
+            }
+        }
     }
 
     private func makeWindow() -> UIWindow {
