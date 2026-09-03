@@ -4,20 +4,19 @@ import Testing
 @testable import ShiftLedger
 
 @MainActor
-struct SceneDelegateStartupTests {
+struct AppCoordinatorTests {
     @Test("Startup failure presents a localized retry alert")
     func startupFailurePresentsLocalizedError() async throws {
         var loaderCallCount = 0
         let loader: @MainActor () async throws -> CoreDataStack = {
             loaderCallCount += 1
-            throw SceneDelegateTestError.loadFailed
+            throw AppCoordinatorTestError.loadFailed
         }
-        let sceneDelegate = SceneDelegate(loadCoreDataStack: loader)
         let window = makeWindow()
-        sceneDelegate.window = window
-        defer { tearDown(window, sceneDelegate: sceneDelegate) }
+        let coordinator = AppCoordinator(window: window, loadCoreDataStack: loader)
+        defer { tearDown(window, coordinator: coordinator) }
 
-        let task = sceneDelegate.startStartup()
+        let task = coordinator.startStartup()
         await task.value
 
         #expect(loaderCallCount == 1)
@@ -50,22 +49,21 @@ struct SceneDelegateStartupTests {
         let loader: @MainActor () async throws -> CoreDataStack = {
             loaderCallCount += 1
             if loaderCallCount == 1 {
-                throw SceneDelegateTestError.loadFailed
+                throw AppCoordinatorTestError.loadFailed
             }
             return stack
         }
-        let sceneDelegate = SceneDelegate(loadCoreDataStack: loader)
         let window = makeWindow()
-        sceneDelegate.window = window
-        defer { tearDown(window, sceneDelegate: sceneDelegate) }
+        let coordinator = AppCoordinator(window: window, loadCoreDataStack: loader)
+        defer { tearDown(window, coordinator: coordinator) }
 
-        let firstTask = sceneDelegate.startStartup()
+        let firstTask = coordinator.startStartup()
         await firstTask.value
         #expect(loaderCallCount == 1)
         let failedRoot = try #require(window.rootViewController)
         #expect(failedRoot.presentedViewController is UIAlertController)
 
-        let retryTask = sceneDelegate.startStartup()
+        let retryTask = coordinator.startStartup()
         await retryTask.value
 
         #expect(loaderCallCount == 2)
@@ -86,29 +84,111 @@ struct SceneDelegateStartupTests {
 
             do {
                 try await Task.sleep(for: .seconds(60))
-                throw SceneDelegateTestError.unexpectedLoaderReturn
+                throw AppCoordinatorTestError.unexpectedLoaderReturn
             } catch is CancellationError {
                 cancellationObserved = true
                 throw CancellationError()
             }
         }
-        let sceneDelegate = SceneDelegate(loadCoreDataStack: loader)
         let window = makeWindow()
-        sceneDelegate.window = window
-        defer { tearDown(window, sceneDelegate: sceneDelegate) }
+        let coordinator = AppCoordinator(window: window, loadCoreDataStack: loader)
+        defer { tearDown(window, coordinator: coordinator) }
 
-        let task = sceneDelegate.startStartup()
+        let task = coordinator.startStartup()
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
             enteredContinuation = continuation
         }
         let loadingViewController = try #require(window.rootViewController)
 
-        sceneDelegate.cancelStartup()
+        coordinator.cancelStartup()
         await task.value
 
         #expect(cancellationObserved)
         #expect(window.rootViewController === loadingViewController)
         #expect(loadingViewController.presentedViewController == nil)
+    }
+
+    @Test("Persisted Job opens Add Shift")
+    func existingJobInstallsAddShift() async throws {
+        let storeURL = try makeTemporaryStoreURL()
+        let stack = try await CoreDataStack.load(storeURL: storeURL)
+        defer { removeTemporaryStoreDirectory(for: storeURL, stack: stack) }
+        let job = try makeValidJob()
+        try JobStorage(stack: stack).save(job)
+
+        var loaderCallCount = 0
+        let loader: @MainActor () async throws -> CoreDataStack = {
+            loaderCallCount += 1
+            return stack
+        }
+        let window = makeWindow()
+        let coordinator = AppCoordinator(window: window, loadCoreDataStack: loader)
+        defer { tearDown(window, coordinator: coordinator) }
+
+        let task = coordinator.startStartup()
+        await task.value
+
+        #expect(loaderCallCount == 1)
+        let navigationController = try #require(
+            window.rootViewController as? UINavigationController
+        )
+        #expect(navigationController.viewControllers.count == 1)
+        #expect(navigationController.viewControllers.first is AddShiftViewController)
+    }
+
+    @Test("Onboarding callbacks compose the production navigation flow")
+    func onboardingNavigationFlow() async throws {
+        let storeURL = try makeTemporaryStoreURL()
+        let stack = try await CoreDataStack.load(storeURL: storeURL)
+        defer { removeTemporaryStoreDirectory(for: storeURL, stack: stack) }
+
+        let window = makeWindow()
+        let coordinator = AppCoordinator(
+            window: window,
+            loadCoreDataStack: { stack }
+        )
+        defer { tearDown(window, coordinator: coordinator) }
+
+        let startupTask = coordinator.startStartup()
+        await startupTask.value
+
+        let navigationController = try #require(
+            window.rootViewController as? UINavigationController
+        )
+        let startViewController = try #require(
+            navigationController.viewControllers.first as? JobSetupViewController
+        )
+        let draft = makeValidDraft()
+
+        startViewController.onContinue?(draft)
+        let payPeriodViewController = try #require(
+            navigationController.topViewController as? PayPeriodSetupViewController
+        )
+
+        payPeriodViewController.onBack?()
+        #expect(navigationController.topViewController === startViewController)
+
+        startViewController.onContinue?(draft)
+        let secondPayPeriodViewController = try #require(
+            navigationController.topViewController as? PayPeriodSetupViewController
+        )
+        secondPayPeriodViewController.onContinue?(draft)
+        let reviewViewController = try #require(
+            navigationController.topViewController as? JobSetupReviewViewController
+        )
+
+        reviewViewController.onBack?()
+        #expect(navigationController.topViewController === secondPayPeriodViewController)
+
+        secondPayPeriodViewController.onContinue?(draft)
+        let secondReviewViewController = try #require(
+            navigationController.topViewController as? JobSetupReviewViewController
+        )
+        secondReviewViewController.onFinished?(try makeValidJob())
+
+        #expect(navigationController.viewControllers.count == 1)
+        #expect(navigationController.viewControllers.first is AddShiftViewController)
+        #expect(navigationController.navigationBar.isHidden == false)
     }
 
     private func makeWindow() -> UIWindow {
@@ -118,8 +198,8 @@ struct SceneDelegateStartupTests {
         return window
     }
 
-    private func tearDown(_ window: UIWindow, sceneDelegate: SceneDelegate) {
-        sceneDelegate.cancelStartup()
+    private func tearDown(_ window: UIWindow, coordinator: AppCoordinator) {
+        coordinator.cancelStartup()
         window.isHidden = true
         window.rootViewController = nil
     }
@@ -130,6 +210,29 @@ struct SceneDelegateStartupTests {
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         return directory.appendingPathComponent("ShiftLedger.sqlite")
+    }
+
+    private func makeValidDraft() -> JobSetupDraft {
+        JobSetupDraft(
+            basePayAmountText: "100",
+            currencyCode: "USD",
+            timeZoneIdentifier: "Europe/Stockholm",
+            basePayBasis: .hourly,
+            payCalculationCycleKind: .perShift,
+            payPeriodAnchorDate: nil
+        )
+    }
+
+    private func makeValidJob() throws -> Job {
+        try Job(
+            id: try #require(UUID(uuidString: "A0000000-0000-0000-0000-000000000001")),
+            currencyCode: "USD",
+            timeZoneIdentifier: "Europe/Stockholm",
+            basePayBasis: .hourly,
+            payCalculationCycle: .perShift,
+            payRates: [try PayRate(amount: 100, effectiveFrom: nil)],
+            createdAt: Date(timeIntervalSinceReferenceDate: 1_000)
+        )
     }
 
     private func removeTemporaryStoreDirectory(for storeURL: URL, stack: CoreDataStack) {
@@ -144,7 +247,7 @@ struct SceneDelegateStartupTests {
     }
 }
 
-private enum SceneDelegateTestError: Error {
+private enum AppCoordinatorTestError: Error {
     case loadFailed
     case unexpectedLoaderReturn
 }
