@@ -54,8 +54,13 @@ final class AddShiftViewModel {
 
     var validationError: ShiftValidationError? {
         guard let start, let end else { return nil }
-        let unpaidBreak = isUnpaidBreakEnabled ? (breakStart.flatMap { breakStart in breakEnd.map { UnpaidBreak(start: breakStart, end: $0) } }) : nil
-        guard isUnpaidBreakEnabled == false || unpaidBreak != nil else { return nil }
+        let unpaidBreak: UnpaidBreak?
+        if isUnpaidBreakEnabled {
+            guard let breakStart, let breakEnd else { return nil }
+            unpaidBreak = UnpaidBreak(start: breakStart, end: breakEnd)
+        } else {
+            unpaidBreak = nil
+        }
 
         do {
             _ = try Shift(id: Self.validationID, start: start, end: end, unpaidBreak: unpaidBreak)
