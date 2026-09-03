@@ -29,46 +29,15 @@ struct Job: Equatable {
         createdAt: Date = Date()
     ) throws(JobValidationError) {
         let normalizedCurrencyCode = currencyCode.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
-        guard Locale.Currency(normalizedCurrencyCode).isISOCurrency else {
-            throw JobValidationError.invalidCurrencyCode
-        }
-
-        guard TimeZone.knownTimeZoneIdentifiers.contains(timeZoneIdentifier) else {
-            throw JobValidationError.invalidTimeZoneIdentifier
-        }
-
-        guard payRates.isEmpty == false else {
-            throw JobValidationError.missingPayRates
-        }
-
-        let initialPayRateCount = payRates.count { $0.effectiveFrom == nil }
-        guard initialPayRateCount > 0 else {
-            throw JobValidationError.missingInitialPayRate
-        }
-        guard initialPayRateCount == 1 else {
-            throw JobValidationError.multipleInitialPayRates
-        }
-
-        var datedEffectiveFroms = Set<LocalDate>()
-        for payRate in payRates {
-            guard let effectiveFrom = payRate.effectiveFrom else {
-                continue
-            }
-
-            guard datedEffectiveFroms.insert(effectiveFrom).inserted else {
-                throw JobValidationError.duplicatePayRateEffectiveFrom
-            }
-        }
-
-        var payRateIDs = Set<UUID>()
-        for payRate in payRates {
-            guard payRateIDs.insert(payRate.id).inserted else {
-                throw JobValidationError.duplicatePayRateID
-            }
-        }
+        let validationContext = JobValidationContext(
+            currencyCode: normalizedCurrencyCode,
+            timeZoneIdentifier: timeZoneIdentifier,
+            payRates: payRates
+        )
+        try JobValidationChain().validate(validationContext)
 
         self.id = id
-        self.currencyCode = normalizedCurrencyCode
+        self.currencyCode = validationContext.currencyCode
         self.timeZoneIdentifier = timeZoneIdentifier
         self.basePayBasis = basePayBasis
         self.payCalculationCycle = payCalculationCycle
