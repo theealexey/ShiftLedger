@@ -64,6 +64,63 @@ struct JobStorageTests {
         }
     }
 
+    @Test("Неизвестная часовая зона в SQLite отклоняется с точной ошибкой")
+    func rejectsPersistedJobWithInvalidTimeZone() async throws {
+        let storeURL = try makeTemporaryStoreURL()
+        var stacks: [CoreDataStack] = []
+        defer { removeTemporaryStoreDirectory(for: storeURL, stacks: stacks) }
+
+        let timeZone = try #require(TimeZone(identifier: "Europe/Stockholm"))
+        let anchorDate = try LocalDate(year: 2026, month: 9, day: 1)
+        let stack = try await CoreDataStack.load(storeURL: storeURL)
+        stacks.append(stack)
+
+        try insertPersistedJob(
+            id: try #require(UUID(uuidString: "13A2E4F6-8B10-4C2D-9E7F-6A5B4C3D2E1F")),
+            payRateID: try #require(UUID(uuidString: "24B3F5A7-9C21-4D3E-8F60-7B6C5D4E3F20")),
+            payRateEffectiveFrom: nil,
+            timeZoneIdentifier: "Europe/Unknown",
+            payPeriodAnchorDate: try anchorDate.startOfDay(in: timeZone),
+            in: stack.viewContext
+        )
+        try stack.viewContext.save()
+
+        do {
+            _ = try JobStorage(stack: stack).load()
+            Issue.record("Неизвестная часовая зона была принята")
+        } catch JobStorageError.corruptedData(.invalidTimeZoneIdentifier(let identifier)) {
+            #expect(identifier == "Europe/Unknown")
+        } catch {
+            Issue.record("Неизвестная часовая зона вернула неверную ошибку")
+        }
+    }
+
+    @Test("Отсутствующий basePayKind восстанавливается как hourly для совместимости")
+    func restoresNilBasePayKindAsLegacyHourly() async throws {
+        let storeURL = try makeTemporaryStoreURL()
+        var stacks: [CoreDataStack] = []
+        defer { removeTemporaryStoreDirectory(for: storeURL, stacks: stacks) }
+
+        let timeZone = try #require(TimeZone(identifier: "Europe/Stockholm"))
+        let anchorDate = try LocalDate(year: 2026, month: 9, day: 1)
+        let stack = try await CoreDataStack.load(storeURL: storeURL)
+        stacks.append(stack)
+
+        try insertPersistedJob(
+            id: try #require(UUID(uuidString: "35C4A6F8-0B32-4E5D-9C71-8A6B5C4D3E2F")),
+            payRateID: try #require(UUID(uuidString: "46D5B7A9-1C43-5F6E-8D82-9B7C6D5E4F30")),
+            payRateEffectiveFrom: nil,
+            basePayKind: nil,
+            payPeriodAnchorDate: try anchorDate.startOfDay(in: timeZone),
+            in: stack.viewContext
+        )
+        try stack.viewContext.save()
+
+        let restoredJob = try #require(try JobStorage(stack: stack).load())
+
+        #expect(restoredJob.basePayBasis == .hourly)
+    }
+
     @Test("Job сохраняется в SQLite и восстанавливается новым Core Data stack")
     func persistsJobAcrossNewCoreDataStack() async throws {
         let storeURL = try makeTemporaryStoreURL()
@@ -495,6 +552,7 @@ struct JobStorageTests {
         includeInitialPayRate: Bool = true,
         additionalInitialPayRate: Bool = false,
         basePayKind: String? = nil,
+        timeZoneIdentifier: String = "Europe/Stockholm",
         payPeriodKind: String = "weekly",
         payPeriodAnchorDate: Date?,
         in context: NSManagedObjectContext
@@ -509,7 +567,7 @@ struct JobStorageTests {
         let jobEntity = JobEntity(entity: jobEntityDescription, insertInto: context)
         jobEntity.id = id
         jobEntity.currencyCode = "EUR"
-        jobEntity.timeZoneIdentifier = "Europe/Stockholm"
+        jobEntity.timeZoneIdentifier = timeZoneIdentifier
         jobEntity.basePayKind = basePayKind
         jobEntity.payPeriodKind = payPeriodKind
         jobEntity.payPeriodAnchorDate = payPeriodAnchorDate
