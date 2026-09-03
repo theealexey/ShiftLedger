@@ -5,6 +5,7 @@ import UIKit
 final class AppCoordinator {
     private let window: UIWindow
     private let loadCoreDataStack: @MainActor () async throws -> CoreDataStack
+    private let makeNavigationController: @MainActor () -> UINavigationController
     private var startupTask: Task<Void, Never>?
     private var coreDataStack: CoreDataStack?
 
@@ -13,14 +14,21 @@ final class AppCoordinator {
         loadCoreDataStack = {
             try await CoreDataStack.load()
         }
+        makeNavigationController = {
+            UINavigationController()
+        }
     }
 
     init(
         window: UIWindow,
-        loadCoreDataStack: @escaping @MainActor () async throws -> CoreDataStack
+        loadCoreDataStack: @escaping @MainActor () async throws -> CoreDataStack,
+        makeNavigationController: @escaping @MainActor () -> UINavigationController = {
+            UINavigationController()
+        }
     ) {
         self.window = window
         self.loadCoreDataStack = loadCoreDataStack
+        self.makeNavigationController = makeNavigationController
     }
 
     func start() {
@@ -76,8 +84,10 @@ final class AppCoordinator {
                         job: job,
                         stack: stack
                     )
-                    let navigationController = UINavigationController(
-                        rootViewController: addShiftViewController
+                    let navigationController = makeNavigationController()
+                    navigationController.setViewControllers(
+                        [addShiftViewController],
+                        animated: false
                     )
                     try Task.checkCancellation()
                     window.rootViewController = navigationController
@@ -116,7 +126,7 @@ final class AppCoordinator {
     private func makeOnboardingNavigationController(
         stack: CoreDataStack
     ) -> UINavigationController {
-        let navigationController = UINavigationController()
+        let navigationController = makeNavigationController()
         let startViewController = JobSetupAssembly.makeStart(
             initialCurrencyCode: Locale.autoupdatingCurrent.currency?.identifier ?? "USD",
             initialTimeZoneIdentifier: TimeZone.autoupdatingCurrent.identifier
