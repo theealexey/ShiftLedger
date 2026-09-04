@@ -75,4 +75,16 @@ struct Job: Equatable {
 
         throw PayRateResolutionError.missingInitialPayRate
     }
+
+    func basePay(for shift: Shift) throws(PayRateResolutionError) -> Decimal {
+        let payRate = try applicablePayRate(for: shift)
+
+        switch basePayBasis {
+        case .hourly:
+            let paidHours = Decimal(shift.paidDuration) / Decimal(3_600)
+            return payRate.amount * paidHours
+        case .fixedPerShift:
+            return payRate.amount
+        }
+    }
 }
