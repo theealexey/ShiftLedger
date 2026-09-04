@@ -10,6 +10,12 @@ enum JobValidationError: Error, Equatable {
     case duplicatePayRateID
 }
 
+enum PayRateResolutionError: Error, Equatable {
+    case invalidJobTimeZoneIdentifier
+    case localDateConversionFailed(LocalDateConversionError)
+    case missingInitialPayRate
+}
+
 struct Job: Equatable {
     let id: UUID
     let currencyCode: String
@@ -43,5 +49,30 @@ struct Job: Equatable {
         self.payCalculationCycle = payCalculationCycle
         self.payRates = payRates.sorted(by: PayRate.isOrderedBefore)
         self.createdAt = createdAt
+    }
+
+    func applicablePayRate(for shift: Shift) throws(PayRateResolutionError) -> PayRate {
+        guard let timeZone = TimeZone(identifier: timeZoneIdentifier) else {
+            throw PayRateResolutionError.invalidJobTimeZoneIdentifier
+        }
+
+        let localStartDate: LocalDate
+        do {
+            localStartDate = try LocalDate(date: shift.start, in: timeZone)
+        } catch {
+            throw PayRateResolutionError.localDateConversionFailed(error)
+        }
+
+        for payRate in payRates.reversed() {
+            if let effectiveFrom = payRate.effectiveFrom {
+                if effectiveFrom <= localStartDate {
+                    return payRate
+                }
+            } else {
+                return payRate
+            }
+        }
+
+        throw PayRateResolutionError.missingInitialPayRate
     }
 }
