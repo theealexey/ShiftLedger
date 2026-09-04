@@ -21,6 +21,15 @@ struct Shift: Equatable, Identifiable {
     let end: Date
     let unpaidBreak: UnpaidBreak?
 
+    var paidDuration: TimeInterval {
+        let totalDuration = end.timeIntervalSince(start)
+        let breakDuration = unpaidBreak.map {
+            $0.end.timeIntervalSince($0.start)
+        } ?? 0
+
+        return totalDuration - breakDuration
+    }
+
     init(
         id: UUID = UUID(),
         start: Date,
