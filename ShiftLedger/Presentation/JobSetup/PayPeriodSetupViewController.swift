@@ -132,42 +132,11 @@ enum JobSetupDateFormatting {
     }
 }
 
-private final class HeaderActionControl: UIControl {
-    private let titleLabel = UILabel()
-
-    init(title: String, color: UIColor) {
-        super.init(frame: .zero)
-
-        titleLabel.text = title
-        titleLabel.textColor = color
-        titleLabel.font = ShiftLedgerTypography.callout
-        titleLabel.textAlignment = .center
-        titleLabel.isUserInteractionEnabled = false
-        addSubview(titleLabel)
-
-        isAccessibilityElement = true
-        accessibilityLabel = title
-        accessibilityTraits = .button
-    }
-
-    @available(*, unavailable)
-    required init?(coder: NSCoder) {
-        nil
-    }
-
-    override func layoutSubviews() {
-        super.layoutSubviews()
-        titleLabel.frame = bounds.insetBy(dx: 4, dy: 0)
-    }
-}
-
 final class PayPeriodAnchorDateViewController: UIViewController {
     private let timeZoneIdentifier: String
     private let initialDate: LocalDate?
     private let onDateSelected: (LocalDate) -> Void
-    private let datePicker = UIDatePicker()
-    private let headerStack = UIStackView()
-    private let headerTitleLabel = UILabel()
+    private let anchorDateView = PayPeriodAnchorDateView(frame: .zero)
 
     init(
         timeZoneIdentifier: String,
@@ -185,73 +154,41 @@ final class PayPeriodAnchorDateViewController: UIViewController {
         nil
     }
 
+    override func loadView() {
+        view = anchorDateView
+    }
+
     override func viewDidLoad() {
         super.viewDidLoad()
 
-        view.backgroundColor = ShiftLedgerColors.backgroundPrimary
-        view.tintColor = ShiftLedgerColors.accentPrimary
         navigationController?.setNavigationBarHidden(true, animated: false)
+        bindView()
+        configureAnchorDateView()
+    }
 
-        let cancelControl = HeaderActionControl(
-            title: PayPeriodSetupStrings.cancel,
-            color: ShiftLedgerColors.textSecondary
-        )
-        cancelControl.addTarget(self, action: #selector(cancel), for: .touchUpInside)
-        let doneControl = HeaderActionControl(
-            title: PayPeriodSetupStrings.done,
-            color: ShiftLedgerColors.accentPrimary
-        )
-        doneControl.addTarget(self, action: #selector(done), for: .touchUpInside)
-        headerTitleLabel.text = title
-        headerTitleLabel.font = ShiftLedgerTypography.headline
-        headerTitleLabel.textColor = ShiftLedgerColors.textPrimary
-        headerTitleLabel.textAlignment = .center
-        headerTitleLabel.adjustsFontForContentSizeCategory = true
-        headerTitleLabel.numberOfLines = 1
-        headerStack.axis = .horizontal
-        headerStack.alignment = .center
-        headerStack.distribution = .fill
-        headerStack.addArrangedSubview(cancelControl)
-        headerStack.addArrangedSubview(headerTitleLabel)
-        headerStack.addArrangedSubview(doneControl)
-        cancelControl.widthAnchor.constraint(equalToConstant: 72).isActive = true
-        doneControl.widthAnchor.constraint(equalTo: cancelControl.widthAnchor).isActive = true
-        cancelControl.heightAnchor.constraint(equalToConstant: 44).isActive = true
-        doneControl.heightAnchor.constraint(equalTo: cancelControl.heightAnchor).isActive = true
-
-        datePicker.datePickerMode = .date
-        datePicker.preferredDatePickerStyle = .inline
-        datePicker.tintColor = ShiftLedgerColors.accentPrimary
-        let timeZone = TimeZone(identifier: timeZoneIdentifier) ?? .gmt
-        datePicker.timeZone = timeZone
-
-        if let initialDate, let date = try? initialDate.startOfDay(in: timeZone) {
-            datePicker.date = date
+    private func bindView() {
+        anchorDateView.onCancelTapped = { [weak self] in
+            self?.dismiss(animated: true)
         }
-
-        datePicker.translatesAutoresizingMaskIntoConstraints = false
-        headerStack.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(headerStack)
-        view.addSubview(datePicker)
-        NSLayoutConstraint.activate([
-            headerStack.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 8),
-            headerStack.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
-            headerStack.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
-            headerStack.heightAnchor.constraint(equalToConstant: 44),
-            datePicker.topAnchor.constraint(equalTo: headerStack.bottomAnchor, constant: 8),
-            datePicker.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 24),
-            datePicker.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -24)
-        ])
+        anchorDateView.onDoneTapped = { [weak self] in
+            self?.finishSelection()
+        }
     }
 
-    @objc private func cancel() {
-        dismiss(animated: true)
+    private func configureAnchorDateView() {
+        let timeZone = TimeZone(identifier: timeZoneIdentifier) ?? .gmt
+        let date = initialDate.flatMap { try? $0.startOfDay(in: timeZone) }
+        anchorDateView.configure(
+            title: title,
+            date: date,
+            timeZone: timeZone
+        )
     }
 
-    @objc private func done() {
+    private func finishSelection() {
         guard
             let timeZone = TimeZone(identifier: timeZoneIdentifier),
-            let localDate = try? LocalDate(date: datePicker.date, in: timeZone)
+            let localDate = try? LocalDate(date: anchorDateView.selectedDate, in: timeZone)
         else {
             return
         }
