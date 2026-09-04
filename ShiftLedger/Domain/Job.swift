@@ -87,4 +87,30 @@ struct Job: Equatable {
             return payRate.amount
         }
     }
+
+    func payCalculationPeriod(
+        for shift: Shift
+    ) throws(PayCalculationPeriodResolutionError) -> PayCalculationPeriod {
+        switch payCalculationCycle {
+        case .perShift:
+            return .perShift(shiftID: shift.id)
+        case let .scheduled(schedule):
+            guard let timeZone = TimeZone(identifier: timeZoneIdentifier) else {
+                throw PayCalculationPeriodResolutionError.invalidJobTimeZoneIdentifier
+            }
+
+            let localStartDate: LocalDate
+            do {
+                localStartDate = try LocalDate(date: shift.start, in: timeZone)
+            } catch {
+                throw PayCalculationPeriodResolutionError.localDateConversionFailed(error)
+            }
+
+            do {
+                return .scheduled(try schedule.period(containing: localStartDate))
+            } catch {
+                throw PayCalculationPeriodResolutionError.scheduledPeriodResolutionFailed
+            }
+        }
+    }
 }
