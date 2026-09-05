@@ -15,3 +15,8 @@ enum PayCalculationPeriodResolutionError: Error, Equatable {
     case localDateConversionFailed(LocalDateConversionError)
     case scheduledPeriodResolutionFailed
 }
+
+enum ShiftMembershipError: Error, Equatable {
+    case invalidJobTimeZoneIdentifier
+    case localDateConversionFailed(LocalDateConversionError)
+}

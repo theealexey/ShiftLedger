@@ -113,4 +113,28 @@ struct Job: Equatable {
             }
         }
     }
+
+    func contains(
+        _ shift: Shift,
+        in period: PayCalculationPeriod
+    ) throws(ShiftMembershipError) -> Bool {
+        switch period {
+        case let .perShift(shiftID):
+            return shift.id == shiftID
+        case let .scheduled(payPeriod):
+            guard let timeZone = TimeZone(identifier: timeZoneIdentifier) else {
+                throw ShiftMembershipError.invalidJobTimeZoneIdentifier
+            }
+
+            let localStartDate: LocalDate
+            do {
+                localStartDate = try LocalDate(date: shift.start, in: timeZone)
+            } catch {
+                throw ShiftMembershipError.localDateConversionFailed(error)
+            }
+
+            return localStartDate >= payPeriod.start
+                && localStartDate < payPeriod.endExclusive
+        }
+    }
 }
