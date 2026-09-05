@@ -16,6 +16,11 @@ enum PayRateResolutionError: Error, Equatable {
     case missingInitialPayRate
 }
 
+enum ExpectedGrossCalculationError: Error, Equatable {
+    case membershipFailed(ShiftMembershipError)
+    case basePayFailed(PayRateResolutionError)
+}
+
 struct Job: Equatable {
     let id: UUID
     let currencyCode: String
@@ -136,5 +141,42 @@ struct Job: Equatable {
             return localStartDate >= payPeriod.start
                 && localStartDate < payPeriod.endExclusive
         }
+    }
+
+    func expectedGross(
+        for period: PayCalculationPeriod,
+        from shifts: [Shift]
+    ) throws(ExpectedGrossCalculationError) -> Decimal {
+        let orderedShifts = shifts.sorted { lhs, rhs in
+            if lhs.start != rhs.start {
+                return lhs.start < rhs.start
+            }
+            if lhs.end != rhs.end {
+                return lhs.end < rhs.end
+            }
+            return lhs.id.uuidString < rhs.id.uuidString
+        }
+
+        var total = Decimal.zero
+        for shift in orderedShifts {
+            let belongsToPeriod: Bool
+            do {
+                belongsToPeriod = try contains(shift, in: period)
+            } catch {
+                throw ExpectedGrossCalculationError.membershipFailed(error)
+            }
+
+            guard belongsToPeriod else {
+                continue
+            }
+
+            do {
+                total += try basePay(for: shift)
+            } catch {
+                throw ExpectedGrossCalculationError.basePayFailed(error)
+            }
+        }
+
+        return total
     }
 }
