@@ -83,14 +83,7 @@ struct Job: Equatable {
 
     func basePay(for shift: Shift) throws(PayRateResolutionError) -> Decimal {
         let payRate = try applicablePayRate(for: shift)
-
-        switch basePayBasis {
-        case .hourly:
-            let paidHours = Decimal(shift.paidDuration) / Decimal(3_600)
-            return payRate.amount * paidHours
-        case .fixedPerShift:
-            return payRate.amount
-        }
+        return basePayAmount(for: shift, using: payRate)
     }
 
     func payCalculationPeriod(
@@ -147,16 +140,16 @@ struct Job: Equatable {
         for period: PayCalculationPeriod,
         from shifts: [Shift]
     ) throws(ExpectedGrossCalculationError) -> Decimal {
-        let orderedShifts = shifts.sorted { lhs, rhs in
-            if lhs.start != rhs.start {
-                return lhs.start < rhs.start
-            }
-            if lhs.end != rhs.end {
-                return lhs.end < rhs.end
-            }
-            return lhs.id.uuidString < rhs.id.uuidString
-        }
+        try expectedGrossBreakdown(for: period, from: shifts).expectedGross
+    }
 
+    func expectedGrossBreakdown(
+        for period: PayCalculationPeriod,
+        from shifts: [Shift]
+    ) throws(ExpectedGrossCalculationError) -> ExpectedGrossBreakdown {
+        let orderedShifts = shifts.sorted(by: Self.isShiftOrderedBefore)
+
+        var breakdowns: [ShiftPayBreakdown] = []
         var total = Decimal.zero
         for shift in orderedShifts {
             let belongsToPeriod: Bool
@@ -171,12 +164,51 @@ struct Job: Equatable {
             }
 
             do {
-                total += try basePay(for: shift)
+                let breakdown = try shiftPayBreakdown(for: shift)
+                breakdowns.append(breakdown)
+                total += breakdown.basePay
             } catch {
                 throw ExpectedGrossCalculationError.basePayFailed(error)
             }
         }
 
-        return total
+        return ExpectedGrossBreakdown(
+            period: period,
+            shiftBreakdowns: breakdowns,
+            expectedGross: total
+        )
+    }
+
+    private func basePayAmount(for shift: Shift, using payRate: PayRate) -> Decimal {
+        switch basePayBasis {
+        case .hourly:
+            let paidHours = Decimal(shift.paidDuration) / Decimal(3_600)
+            return payRate.amount * paidHours
+        case .fixedPerShift:
+            return payRate.amount
+        }
+    }
+
+    private func shiftPayBreakdown(for shift: Shift) throws(PayRateResolutionError) -> ShiftPayBreakdown {
+        let payRate = try applicablePayRate(for: shift)
+        let amount = basePayAmount(for: shift, using: payRate)
+
+        return ShiftPayBreakdown(
+            shift: shift,
+            basePayBasis: basePayBasis,
+            appliedPayRate: payRate,
+            paidDuration: shift.paidDuration,
+            basePay: amount
+        )
+    }
+
+    private static func isShiftOrderedBefore(_ lhs: Shift, _ rhs: Shift) -> Bool {
+        if lhs.start != rhs.start {
+            return lhs.start < rhs.start
+        }
+        if lhs.end != rhs.end {
+            return lhs.end < rhs.end
+        }
+        return lhs.id.uuidString < rhs.id.uuidString
     }
 }
