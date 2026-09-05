@@ -179,6 +179,16 @@ struct Job: Equatable {
         )
     }
 
+    func paycheckComparison(
+        for period: PayCalculationPeriod,
+        actualGross: ActualGross,
+        from shifts: [Shift]
+    ) throws(ExpectedGrossCalculationError) -> PaycheckComparison {
+        let expected = try expectedGrossBreakdown(for: period, from: shifts)
+
+        return PaycheckComparison(expected: expected, actualGross: actualGross)
+    }
+
     private func basePayAmount(for shift: Shift, using payRate: PayRate) -> Decimal {
         switch basePayBasis {
         case .hourly:
