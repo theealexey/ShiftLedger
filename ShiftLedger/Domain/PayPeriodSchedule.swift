@@ -17,6 +17,14 @@ enum PayPeriodSchedule: Equatable {
         }
     }
 
+    func period(before period: PayPeriod) throws -> PayPeriod {
+        try self.period(containing: period.start.addingDays(-1))
+    }
+
+    func period(after period: PayPeriod) throws -> PayPeriod {
+        try self.period(containing: period.endExclusive)
+    }
+
     private static func anchoredPeriod(
         containing date: LocalDate,
         anchorDate: LocalDate,

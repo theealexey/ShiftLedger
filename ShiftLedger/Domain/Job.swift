@@ -93,22 +93,18 @@ struct Job: Equatable {
         case .perShift:
             return .perShift(shiftID: shift.id)
         case let .scheduled(schedule):
-            guard let timeZone = TimeZone(identifier: timeZoneIdentifier) else {
-                throw PayCalculationPeriodResolutionError.invalidJobTimeZoneIdentifier
-            }
+            return .scheduled(try scheduledPayPeriod(containing: shift.start, schedule: schedule))
+        }
+    }
 
-            let localStartDate: LocalDate
-            do {
-                localStartDate = try LocalDate(date: shift.start, in: timeZone)
-            } catch {
-                throw PayCalculationPeriodResolutionError.localDateConversionFailed(error)
-            }
-
-            do {
-                return .scheduled(try schedule.period(containing: localStartDate))
-            } catch {
-                throw PayCalculationPeriodResolutionError.scheduledPeriodResolutionFailed
-            }
+    func payCalculationPeriod(
+        containing date: Date
+    ) throws(PayCalculationPeriodResolutionError) -> PayCalculationPeriod? {
+        switch payCalculationCycle {
+        case .perShift:
+            return nil
+        case let .scheduled(schedule):
+            return .scheduled(try scheduledPayPeriod(containing: date, schedule: schedule))
         }
     }
 
@@ -210,6 +206,28 @@ struct Job: Equatable {
             paidDuration: shift.paidDuration,
             basePay: amount
         )
+    }
+
+    private func scheduledPayPeriod(
+        containing date: Date,
+        schedule: PayPeriodSchedule
+    ) throws(PayCalculationPeriodResolutionError) -> PayPeriod {
+        guard let timeZone = TimeZone(identifier: timeZoneIdentifier) else {
+            throw PayCalculationPeriodResolutionError.invalidJobTimeZoneIdentifier
+        }
+
+        let localDate: LocalDate
+        do {
+            localDate = try LocalDate(date: date, in: timeZone)
+        } catch {
+            throw PayCalculationPeriodResolutionError.localDateConversionFailed(error)
+        }
+
+        do {
+            return try schedule.period(containing: localDate)
+        } catch {
+            throw PayCalculationPeriodResolutionError.scheduledPeriodResolutionFailed
+        }
     }
 
     private static func isShiftOrderedBefore(_ lhs: Shift, _ rhs: Shift) -> Bool {
