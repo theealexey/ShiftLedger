@@ -673,6 +673,104 @@
         "en" : { "stringUnit" : { "state" : "translated", "value" : "The break can’t cover the entire shift." } },
         "ru" : { "stringUnit" : { "state" : "translated", "value" : "Перерыв не может занимать всю смену." } }
       }
+    },
+    "overview.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Overview" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Обзор" } }
+      }
+    },
+    "overview.expectedGross" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Expected gross" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Ожидаемая сумма до вычетов" } }
+      }
+    },
+    "overview.shiftsInPeriod" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Shifts in period" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Смен в периоде" } }
+      }
+    },
+    "overview.checkPaycheck" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Check paycheck" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Проверить начисление" } }
+      }
+    },
+    "overview.addShift" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Add shift" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Добавить смену" } }
+      }
+    },
+    "overview.previousPeriod" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Previous pay period" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Предыдущий расчётный период" } }
+      }
+    },
+    "overview.nextPeriod" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Next pay period" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Следующий расчётный период" } }
+      }
+    },
+    "overview.empty.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "No shifts yet" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Смен пока нет" } }
+      }
+    },
+    "overview.empty.message" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Add a shift to calculate your expected gross." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Добавьте смену, чтобы рассчитать ожидаемую сумму до вычетов." } }
+      }
+    },
+    "overview.error.loading.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Couldn’t load your shifts" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Не удалось загрузить смены" } }
+      }
+    },
+    "overview.error.loading.message" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Try again." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Попробуйте ещё раз." } }
+      }
+    },
+    "overview.error.calculation.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Couldn’t calculate expected pay" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Не удалось рассчитать ожидаемую оплату" } }
+      }
+    },
+    "overview.error.calculation.message" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Try again." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Попробуйте ещё раз." } }
+      }
+    },
+    "overview.retry" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Try again" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Повторить" } }
+      }
     }
   },
   "version" : "1.0"
