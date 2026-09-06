@@ -674,6 +674,48 @@
         "ru" : { "stringUnit" : { "state" : "translated", "value" : "Перерыв не может занимать всю смену." } }
       }
     },
+    "actualGrossEntry.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Check paycheck" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Проверить начисление" } }
+      }
+    },
+    "actualGrossEntry.question" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "What gross amount did your employer report?" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Какую сумму до вычетов указал работодатель?" } }
+      }
+    },
+    "actualGrossEntry.supporting" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Enter the gross amount shown by your employer for this pay period." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Введите сумму до вычетов, указанную работодателем за этот расчётный период." } }
+      }
+    },
+    "actualGrossEntry.amount" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Actual gross" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Фактическая сумма до вычетов" } }
+      }
+    },
+    "actualGrossEntry.compare" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Compare" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Сравнить" } }
+      }
+    },
+    "actualGrossEntry.validation.invalid" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Enter a valid amount." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Введите корректную сумму." } }
+      }
+    },
     "overview.title" : {
       "extractionState" : "manual",
       "localizations" : {
