@@ -813,6 +813,125 @@
         "en" : { "stringUnit" : { "state" : "translated", "value" : "Try again" } },
         "ru" : { "stringUnit" : { "state" : "translated", "value" : "Повторить" } }
       }
+    },
+    "paycheckResult.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Paycheck comparison" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Сравнение начисления" } }
+      }
+    },
+    "paycheckResult.expected" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Expected gross" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Ожидаемая сумма до вычетов" } }
+      }
+    },
+    "paycheckResult.actual" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Reported gross" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Указанная сумма до вычетов" } }
+      }
+    },
+    "paycheckResult.difference" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Difference" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Разница" } }
+      }
+    },
+    "paycheckResult.lower" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Reported gross is lower than expected." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Указанная сумма ниже ожидаемой." } }
+      }
+    },
+    "paycheckResult.equal" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Reported gross matches expected gross." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Указанная сумма совпадает с ожидаемой." } }
+      }
+    },
+    "paycheckResult.higher" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Reported gross is higher than expected." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Указанная сумма выше ожидаемой." } }
+      }
+    },
+    "paycheckResult.breakdown.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Expected gross breakdown" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Расчёт ожидаемой суммы" } }
+      }
+    },
+    "paycheckResult.breakdown.empty" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "No shifts contributed to this expected gross." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "В эту ожидаемую сумму не вошла ни одна смена." } }
+      }
+    },
+    "paycheckResult.shift.paidTime" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Paid time" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Оплачиваемое время" } }
+      }
+    },
+    "paycheckResult.shift.rate" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Rate" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Ставка" } }
+      }
+    },
+    "paycheckResult.shift.expected" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Expected" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Ожидаемо" } }
+      }
+    },
+    "paycheckResult.rate.hour" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "hour" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "час" } }
+      }
+    },
+    "paycheckResult.rate.shift" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "shift" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "смена" } }
+      }
+    },
+    "paycheckResult.duration.hour" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "h" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "ч" } }
+      }
+    },
+    "paycheckResult.duration.minute" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "min" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "мин" } }
+      }
+    },
+    "paycheckResult.duration.second" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "sec" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "с" } }
+      }
     }
   },
   "version" : "1.0"
