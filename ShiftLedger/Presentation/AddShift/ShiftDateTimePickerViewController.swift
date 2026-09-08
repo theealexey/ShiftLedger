@@ -50,7 +50,7 @@ final class ShiftDateTimePickerViewController: UIViewController {
         datePicker.datePickerMode = .dateAndTime
         datePicker.minuteInterval = 1
         datePicker.timeZone = timeZone
-        datePicker.date = initialDate
+        datePicker.date = minuteBoundary(containing: initialDate)
         datePicker.preferredDatePickerStyle = .wheels
         view.addSubview(datePicker)
         NSLayoutConstraint.activate([
@@ -66,7 +66,12 @@ final class ShiftDateTimePickerViewController: UIViewController {
     }
 
     @objc private func done() {
-        onDateSelected(datePicker.date)
+        onDateSelected(minuteBoundary(containing: datePicker.date))
         dismiss(animated: true)
+    }
+
+    private func minuteBoundary(containing date: Date) -> Date {
+        let minute = (date.timeIntervalSinceReferenceDate / 60).rounded(.down)
+        return Date(timeIntervalSinceReferenceDate: minute * 60)
     }
 }

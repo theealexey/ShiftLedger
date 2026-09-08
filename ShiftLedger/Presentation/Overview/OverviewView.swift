@@ -67,10 +67,12 @@ final class OverviewView: UIView {
         previousButton.isEnabled = canNavigatePrevious
         nextButton.isEnabled = canNavigateNext
         checkPaycheckButton.isEnabled = canCheckPaycheck
+        applyAddShiftEmphasis(isPrimary: false)
         setVisible(content: true, checkPaycheck: true, addShift: true, empty: false, error: false)
     }
 
     func renderEmpty() {
+        applyAddShiftEmphasis(isPrimary: true)
         setVisible(content: false, checkPaycheck: false, addShift: true, empty: true, error: false)
     }
 
@@ -325,6 +327,15 @@ final class OverviewView: UIView {
         button.titleLabel?.adjustsFontForContentSizeCategory = true
         button.accessibilityLabel = title
         button.accessibilityIdentifier = identifier
+    }
+
+    private func applyAddShiftEmphasis(isPrimary: Bool) {
+        configureActionButton(
+            addShiftButton,
+            title: OverviewStrings.addShift,
+            identifier: "overview.addShift",
+            isPrimary: isPrimary
+        )
     }
 
     private func setVisible(

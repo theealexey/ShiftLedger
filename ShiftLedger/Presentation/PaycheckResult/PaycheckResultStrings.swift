@@ -30,5 +30,11 @@ enum PaycheckResultStrings {
     static var durationSecond: String {
         String(localized: "paycheckResult.duration.second", table: "Localizable")
     }
+    static var durationLessThanSecond: String {
+        String(
+            localized: "paycheckResult.duration.lessThanSecond",
+            table: "Localizable"
+        )
+    }
     static var done: String { String(localized: "common.done", table: "Localizable") }
 }

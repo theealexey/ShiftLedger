@@ -814,6 +814,20 @@
         "ru" : { "stringUnit" : { "state" : "translated", "value" : "Повторить" } }
       }
     },
+    "application.paycheckComparisonError.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Couldn't compare paycheck" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Не удалось сравнить начисление" } }
+      }
+    },
+    "application.paycheckComparisonError.message" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Try again." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Попробуйте ещё раз." } }
+      }
+    },
     "paycheckResult.title" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -924,6 +938,13 @@
       "localizations" : {
         "en" : { "stringUnit" : { "state" : "translated", "value" : "min" } },
         "ru" : { "stringUnit" : { "state" : "translated", "value" : "мин" } }
+      }
+    },
+    "paycheckResult.duration.lessThanSecond" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "< 1 sec" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "< 1 с" } }
       }
     },
     "paycheckResult.duration.second" : {

@@ -9,6 +9,7 @@ final class ActualGrossEntryView: UIView {
     private let contentStack = UIStackView()
     private let questionLabel = UILabel()
     private let supportingLabel = UILabel()
+    private let amountContainer = UIView()
     private let inputStack = UIStackView()
     private let amountLabel = UILabel()
     private let amountRow = UIStackView()
@@ -72,14 +73,19 @@ final class ActualGrossEntryView: UIView {
         )
         supportingLabel.accessibilityIdentifier = "actualGrossEntry.supporting"
 
+        amountContainer.backgroundColor = ShiftLedgerColors.surfacePrimary
+        amountContainer.layer.cornerCurve = .continuous
+        amountContainer.layer.cornerRadius = 18
+        amountContainer.accessibilityIdentifier = "actualGrossEntry.amount.container"
+
         inputStack.axis = .vertical
         inputStack.spacing = 8
 
         configureLabel(
             amountLabel,
             text: ActualGrossEntryStrings.amount,
-            font: ShiftLedgerTypography.headline,
-            color: ShiftLedgerColors.textPrimary
+            font: ShiftLedgerTypography.callout,
+            color: ShiftLedgerColors.textSecondary
         )
         amountLabel.accessibilityIdentifier = "actualGrossEntry.amount.label"
 
@@ -132,7 +138,7 @@ final class ActualGrossEntryView: UIView {
     }
 
     private func configureHierarchy() {
-        [scrollView, contentView, contentStack, inputStack].forEach {
+        [scrollView, contentView, contentStack, amountContainer, inputStack].forEach {
             $0.translatesAutoresizingMaskIntoConstraints = false
         }
 
@@ -140,11 +146,13 @@ final class ActualGrossEntryView: UIView {
         scrollView.addSubview(contentView)
         contentView.addSubview(contentStack)
 
-        [questionLabel, supportingLabel, inputStack, validationLabel, compareButton]
+        [questionLabel, supportingLabel, amountContainer, validationLabel, compareButton]
             .forEach(contentStack.addArrangedSubview)
+        amountContainer.addSubview(inputStack)
         [amountLabel, amountRow, inputUnderline].forEach(inputStack.addArrangedSubview)
         [amountTextField, currencyLabel].forEach(amountRow.addArrangedSubview)
 
+        contentStack.setCustomSpacing(8, after: questionLabel)
         contentStack.setCustomSpacing(24, after: supportingLabel)
     }
 
@@ -165,6 +173,11 @@ final class ActualGrossEntryView: UIView {
             contentStack.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 24),
             contentStack.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -24),
             contentStack.bottomAnchor.constraint(equalTo: contentView.bottomAnchor),
+
+            inputStack.topAnchor.constraint(equalTo: amountContainer.topAnchor, constant: 16),
+            inputStack.leadingAnchor.constraint(equalTo: amountContainer.leadingAnchor, constant: 16),
+            inputStack.trailingAnchor.constraint(equalTo: amountContainer.trailingAnchor, constant: -16),
+            inputStack.bottomAnchor.constraint(equalTo: amountContainer.bottomAnchor, constant: -16),
 
             amountTextField.heightAnchor.constraint(greaterThanOrEqualToConstant: 44),
             inputUnderline.heightAnchor.constraint(equalToConstant: 1 / traitCollection.displayScale),

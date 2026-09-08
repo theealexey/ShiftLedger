@@ -80,13 +80,15 @@ final class AppCoordinator {
                 coreDataStack = stack
 
                 if let job {
-                    let addShiftViewController = AddShiftAssembly.make(
-                        job: job,
-                        stack: stack
-                    )
                     let navigationController = makeNavigationController()
+                    let overview = makeOverviewViewController(
+                        job: job,
+                        stack: stack,
+                        navigationController: navigationController
+                    )
+                    navigationController.setNavigationBarHidden(false, animated: false)
                     navigationController.setViewControllers(
-                        [addShiftViewController],
+                        [overview],
                         animated: false
                     )
                     try Task.checkCancellation()
@@ -132,14 +134,14 @@ final class AppCoordinator {
             initialTimeZoneIdentifier: TimeZone.autoupdatingCurrent.identifier
         )
 
-        startViewController.onContinue = { [weak navigationController] draft in
+        startViewController.onContinue = { [weak self, weak navigationController] draft in
             guard let navigationController else { return }
 
             let payPeriodViewController = JobSetupAssembly.makePayPeriod(draft: draft)
             payPeriodViewController.onBack = { [weak navigationController] in
                 navigationController?.popViewController(animated: true)
             }
-            payPeriodViewController.onContinue = { [weak navigationController] draft in
+            payPeriodViewController.onContinue = { [weak self, weak navigationController] draft in
                 guard let navigationController else { return }
 
                 let reviewViewController = JobSetupAssembly.makeReview(
@@ -149,16 +151,17 @@ final class AppCoordinator {
                 reviewViewController.onBack = { [weak navigationController] in
                     navigationController?.popViewController(animated: true)
                 }
-                reviewViewController.onFinished = { [weak navigationController] job in
-                    guard let navigationController else { return }
+                reviewViewController.onFinished = { [weak self, weak navigationController] job in
+                    guard let self, let navigationController else { return }
 
-                    let addShiftViewController = AddShiftAssembly.make(
+                    let overview = makeOverviewViewController(
                         job: job,
-                        stack: stack
+                        stack: stack,
+                        navigationController: navigationController
                     )
                     navigationController.setNavigationBarHidden(false, animated: false)
                     navigationController.setViewControllers(
-                        [addShiftViewController],
+                        [overview],
                         animated: true
                     )
                 }
@@ -169,6 +172,64 @@ final class AppCoordinator {
 
         navigationController.setViewControllers([startViewController], animated: false)
         return navigationController
+    }
+
+    private func makeOverviewViewController(
+        job: Job,
+        stack: CoreDataStack,
+        navigationController: UINavigationController
+    ) -> OverviewViewController {
+        let overview = OverviewAssembly.make(job: job, stack: stack)
+        overview.onAddShift = { [weak overview, weak navigationController] in
+            guard let overview, let navigationController else { return }
+            let addShift = AddShiftAssembly.make(job: job, stack: stack)
+            addShift.onSaved = { [weak overview, weak navigationController] _ in
+                guard let overview, let navigationController else { return }
+                overview.reload()
+                navigationController.popToViewController(overview, animated: true)
+            }
+            navigationController.pushViewController(addShift, animated: true)
+        }
+        overview.onCheckPaycheck = { [weak overview, weak navigationController] period in
+            guard let overview, let navigationController else { return }
+            let entry = ActualGrossEntryAssembly.make(currencyCode: job.currencyCode)
+            entry.onContinue = { [weak entry, weak overview, weak navigationController] actualGross in
+                guard let entry, let overview, let navigationController,
+                      navigationController.topViewController === entry,
+                      entry.presentedViewController == nil else { return }
+                do {
+                    let shifts = try ShiftStorage(stack: stack).loadAll()
+                    let comparison = try job.paycheckComparison(
+                        for: period,
+                        actualGross: actualGross,
+                        from: shifts
+                    )
+                    let result = PaycheckResultAssembly.make(
+                        comparison: comparison,
+                        currencyCode: job.currencyCode,
+                        timeZoneIdentifier: job.timeZoneIdentifier
+                    )
+                    result.onDone = { [weak overview, weak navigationController] in
+                        guard let overview else { return }
+                        navigationController?.popToViewController(overview, animated: true)
+                    }
+                    navigationController.pushViewController(result, animated: true)
+                } catch {
+                    let alert = UIAlertController(
+                        title: String(localized: "application.paycheckComparisonError.title", table: "Localizable"),
+                        message: String(localized: "application.paycheckComparisonError.message", table: "Localizable"),
+                        preferredStyle: .alert
+                    )
+                    alert.addAction(UIAlertAction(
+                        title: String(localized: "common.cancel", table: "Localizable"),
+                        style: .cancel
+                    ))
+                    entry.present(alert, animated: true)
+                }
+            }
+            navigationController.pushViewController(entry, animated: true)
+        }
+        return overview
     }
 
     private func presentStartupError() {

@@ -208,6 +208,41 @@ struct OverviewViewControllerTests {
         #expect(isEffectivelyHidden(addButton) == false)
     }
 
+    @Test("Per-shift empty state gives Add Shift primary emphasis")
+    func perShiftEmptyStateUsesPrimaryAddShiftButton() throws {
+        let job = try makeJob(cycle: .perShift)
+        let subject = try makeSubject(job: job, shifts: [])
+
+        subject.viewController.loadViewIfNeeded()
+
+        let button: UIButton = try requireView(
+            identifier: "overview.addShift",
+            in: subject.viewController.view
+        )
+        #expect(button.configuration?.baseBackgroundColor == ShiftLedgerColors.accentPrimary)
+        #expect(button.configuration?.cornerStyle == .large)
+    }
+
+    @Test("Content state keeps Check Paycheck primary and Add Shift secondary")
+    func contentStateUsesDistinctActionEmphasis() throws {
+        let job = try makeJob(cycle: .scheduled(.calendarMonthly))
+        let subject = try makeSubject(job: job, shifts: [])
+
+        subject.viewController.loadViewIfNeeded()
+
+        let checkPaycheck: UIButton = try requireView(
+            identifier: "overview.checkPaycheck",
+            in: subject.viewController.view
+        )
+        let addShift: UIButton = try requireView(
+            identifier: "overview.addShift",
+            in: subject.viewController.view
+        )
+        #expect(checkPaycheck.configuration?.baseBackgroundColor == ShiftLedgerColors.accentPrimary)
+        #expect(addShift.configuration?.baseBackgroundColor == nil)
+        #expect(addShift.configuration?.baseForegroundColor == ShiftLedgerColors.accentPrimary)
+    }
+
     @Test("Check Paycheck is unavailable in per-shift empty state")
     func perShiftEmptyStateCannotCheckPaycheck() throws {
         let job = try makeJob(cycle: .perShift)

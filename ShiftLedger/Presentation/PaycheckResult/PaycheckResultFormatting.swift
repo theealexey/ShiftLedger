@@ -90,11 +90,14 @@ enum PaycheckResultFormatting {
     }
 
     static func paidDuration(_ paidDuration: TimeInterval) -> String {
-        let wholeSeconds = Int(paidDuration)
+        if paidDuration > 0, paidDuration < 0.5 {
+            return PaycheckResultStrings.durationLessThanSecond
+        }
+
+        let wholeSeconds = max(0, Int(paidDuration.rounded()))
         let hours = wholeSeconds / 3_600
         let minutes = wholeSeconds % 3_600 / 60
-        let elapsedBeforeSeconds = hours * 3_600 + minutes * 60
-        let seconds = paidDuration - TimeInterval(elapsedBeforeSeconds)
+        let seconds = wholeSeconds % 60
         var components: [String] = []
 
         if hours > 0 {
@@ -104,11 +107,7 @@ enum PaycheckResultFormatting {
             components.append("\(minutes) \(PaycheckResultStrings.durationMinute)")
         }
         if seconds > 0 || components.isEmpty {
-            let wholeSecondComponent = Int(seconds)
-            let secondsText = seconds == TimeInterval(wholeSecondComponent)
-                ? String(wholeSecondComponent)
-                : String(seconds)
-            components.append("\(secondsText) \(PaycheckResultStrings.durationSecond)")
+            components.append("\(seconds) \(PaycheckResultStrings.durationSecond)")
         }
 
         return components.joined(separator: " ")

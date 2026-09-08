@@ -225,12 +225,12 @@ final class PaycheckResultView: UIView {
         let card = UIView()
         card.backgroundColor = ShiftLedgerColors.surfacePrimary
         card.layer.cornerCurve = .continuous
-        card.layer.cornerRadius = 16
+        card.layer.cornerRadius = 18
         card.accessibilityIdentifier = "paycheckResult.breakdown.row.\(index)"
 
         let stack = UIStackView()
         stack.axis = .vertical
-        stack.spacing = 12
+        stack.spacing = 10
         stack.translatesAutoresizingMaskIntoConstraints = false
         card.addSubview(stack)
 
@@ -239,22 +239,24 @@ final class PaycheckResultView: UIView {
         dateLabel.text = row.date
         dateLabel.accessibilityIdentifier = "paycheckResult.breakdown.row.\(index).date"
         stack.addArrangedSubview(dateLabel)
+        stack.setCustomSpacing(14, after: dateLabel)
 
-        stack.addArrangedSubview(makeBreakdownValue(
-            title: PaycheckResultStrings.paidTime,
-            value: row.duration,
-            identifier: "paycheckResult.breakdown.row.\(index).duration"
-        ))
-        stack.addArrangedSubview(makeBreakdownValue(
-            title: PaycheckResultStrings.rate,
-            value: row.rate,
-            identifier: "paycheckResult.breakdown.row.\(index).rate"
-        ))
-        stack.addArrangedSubview(makeBreakdownValue(
-            title: PaycheckResultStrings.shiftExpected,
-            value: row.amount,
-            identifier: "paycheckResult.breakdown.row.\(index).amount"
-        ))
+        let metrics = [
+            (PaycheckResultStrings.paidTime, row.duration, ShiftLedgerTypography.body, "duration"),
+            (PaycheckResultStrings.rate, row.rate, ShiftLedgerTypography.body, "rate"),
+            (PaycheckResultStrings.shiftExpected, row.amount, ShiftLedgerTypography.headline, "amount")
+        ]
+        for (metricIndex, metric) in metrics.enumerated() {
+            stack.addArrangedSubview(makeBreakdownValue(
+                title: metric.0,
+                value: metric.1,
+                valueFont: metric.2,
+                identifier: "paycheckResult.breakdown.row.\(index).\(metric.3)"
+            ))
+            if metricIndex < metrics.count - 1 {
+                stack.addArrangedSubview(makeSeparator())
+            }
+        }
 
         NSLayoutConstraint.activate([
             stack.topAnchor.constraint(equalTo: card.topAnchor, constant: 16),
@@ -266,20 +268,25 @@ final class PaycheckResultView: UIView {
         return card
     }
 
-    private func makeBreakdownValue(title: String, value: String, identifier: String) -> UIStackView {
-        let stack = UIStackView()
-        stack.axis = .vertical
-        stack.spacing = 2
+    private func makeBreakdownValue(
+        title: String,
+        value: String,
+        valueFont: UIFont,
+        identifier: String
+    ) -> BreakdownMetricRow {
+        BreakdownMetricRow(
+            title: title,
+            value: value,
+            valueFont: valueFont,
+            identifier: identifier
+        )
+    }
 
-        let titleLabel = UILabel()
-        configureLabel(titleLabel, font: ShiftLedgerTypography.callout, color: ShiftLedgerColors.textSecondary)
-        titleLabel.text = title
-        let valueLabel = UILabel()
-        configureLabel(valueLabel, font: ShiftLedgerTypography.body, color: ShiftLedgerColors.textPrimary)
-        valueLabel.text = value
-        valueLabel.accessibilityIdentifier = identifier
-        [titleLabel, valueLabel].forEach(stack.addArrangedSubview)
-        return stack
+    private func makeSeparator() -> UIView {
+        let separator = UIView()
+        separator.backgroundColor = ShiftLedgerColors.separator
+        separator.heightAnchor.constraint(equalToConstant: 1 / traitCollection.displayScale).isActive = true
+        return separator
     }
 
     private func configureLabel(_ label: UILabel, font: UIFont, color: UIColor) {
@@ -287,5 +294,49 @@ final class PaycheckResultView: UIView {
         label.textColor = color
         label.numberOfLines = 0
         label.adjustsFontForContentSizeCategory = true
+    }
+
+    private final class BreakdownMetricRow: UIStackView {
+        private let titleLabel = UILabel()
+        private let valueLabel = UILabel()
+
+        init(title: String, value: String, valueFont: UIFont, identifier: String) {
+            super.init(frame: .zero)
+
+            configureLabel(titleLabel, font: ShiftLedgerTypography.callout, color: ShiftLedgerColors.textSecondary)
+            titleLabel.text = title
+            titleLabel.setContentHuggingPriority(.required, for: .horizontal)
+            titleLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
+
+            configureLabel(valueLabel, font: valueFont, color: ShiftLedgerColors.textPrimary)
+            valueLabel.text = value
+            valueLabel.accessibilityIdentifier = identifier
+
+            [titleLabel, valueLabel].forEach(addArrangedSubview)
+            registerForTraitChanges([UITraitPreferredContentSizeCategory.self]) { (self: BreakdownMetricRow, _) in
+                self.updateDynamicTypeLayout()
+            }
+            updateDynamicTypeLayout()
+        }
+
+        @available(*, unavailable)
+        required init(coder: NSCoder) {
+            super.init(coder: coder)
+        }
+
+        private func updateDynamicTypeLayout() {
+            let usesAccessibilityLayout = traitCollection.preferredContentSizeCategory.isAccessibilityCategory
+            axis = usesAccessibilityLayout ? .vertical : .horizontal
+            alignment = usesAccessibilityLayout ? .fill : .firstBaseline
+            spacing = usesAccessibilityLayout ? 4 : 12
+            valueLabel.textAlignment = usesAccessibilityLayout ? .natural : .right
+        }
+
+        private func configureLabel(_ label: UILabel, font: UIFont, color: UIColor) {
+            label.font = font
+            label.textColor = color
+            label.numberOfLines = 0
+            label.adjustsFontForContentSizeCategory = true
+        }
     }
 }

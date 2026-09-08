@@ -185,6 +185,7 @@ struct ActualGrossEntryViewControllerTests {
             "actualGrossEntry.screen",
             "actualGrossEntry.question",
             "actualGrossEntry.supporting",
+            "actualGrossEntry.amount.container",
             "actualGrossEntry.amount.label",
             "actualGrossEntry.amount.input",
             "actualGrossEntry.currency",
@@ -196,6 +197,35 @@ struct ActualGrossEntryViewControllerTests {
             let view = descendant(identifier: identifier, in: viewController.view)
             #expect(view != nil)
         }
+    }
+
+    @Test("Amount input uses a contained surface with secondary metadata")
+    func amountInputUsesContainedSurface() throws {
+        let viewController = makeViewController()
+        viewController.loadViewIfNeeded()
+
+        let container: UIView = try requireView(
+            identifier: "actualGrossEntry.amount.container",
+            in: viewController.view
+        )
+        let label: UILabel = try requireView(
+            identifier: "actualGrossEntry.amount.label",
+            in: viewController.view
+        )
+        let input: UITextField = try requireView(
+            identifier: "actualGrossEntry.amount.input",
+            in: viewController.view
+        )
+        let currency: UILabel = try requireView(
+            identifier: "actualGrossEntry.currency",
+            in: viewController.view
+        )
+
+        #expect(container.backgroundColor == ShiftLedgerColors.surfacePrimary)
+        #expect(container.layer.cornerRadius == 18)
+        #expect(label.textColor == ShiftLedgerColors.textSecondary)
+        #expect(input.isDescendant(of: container))
+        #expect(currency.isDescendant(of: container))
     }
 
     @Test("Amount input has a meaningful accessibility label")

@@ -201,6 +201,104 @@ struct PaycheckResultViewControllerTests {
         #expect(label.text == PaycheckResultFormatting.paidDuration(breakdown.paidDuration))
     }
 
+    @Test("Fractional paid duration renders without raw floating-point text")
+    func fractionalDurationRendersHumanReadableText() throws {
+        let breakdown = try hourlyBreakdown(
+            day: 20,
+            rate: 20,
+            paidDuration: 54.974985003471375,
+            basePay: 1
+        )
+        let viewController = makeViewController(try makeComparison(
+            expected: 1,
+            actual: 1,
+            breakdowns: [breakdown]
+        ))
+        viewController.loadViewIfNeeded()
+
+        let label: UILabel = try requireView(
+            identifier: "paycheckResult.breakdown.row.0.duration",
+            in: viewController.view
+        )
+        #expect(label.text == "55 \(PaycheckResultStrings.durationSecond)")
+        #expect(label.text?.contains("54.974985") == false)
+    }
+
+    @Test("One-minute breakdown renders a carried minute")
+    func oneMinuteBreakdownRendersMinute() throws {
+        let breakdown = try hourlyBreakdown(
+            day: 20,
+            rate: 20,
+            paidDuration: 60,
+            basePay: 1
+        )
+        let viewController = makeViewController(try makeComparison(
+            expected: 1,
+            actual: 1,
+            breakdowns: [breakdown]
+        ))
+        viewController.loadViewIfNeeded()
+
+        let label: UILabel = try requireView(
+            identifier: "paycheckResult.breakdown.row.0.duration",
+            in: viewController.view
+        )
+        #expect(label.text == "1 \(PaycheckResultStrings.durationMinute)")
+    }
+
+    @Test("Breakdown metrics use horizontal label and value rows at normal content size")
+    func breakdownMetricsUseHorizontalLayoutAtNormalContentSize() throws {
+        let fixture = try makeHostedResultViewController(contentSizeCategory: .large)
+
+        for identifier in ["duration", "rate", "amount"] {
+            let metricRow = try requireMetricRow(identifier: identifier, in: fixture.result.view)
+            let value: UILabel = try requireView(
+                identifier: "paycheckResult.breakdown.row.0.\(identifier)",
+                in: fixture.result.view
+            )
+
+            #expect(metricRow.axis == .horizontal)
+            #expect(metricRow.alignment == .firstBaseline)
+            #expect(metricRow.spacing == 12)
+            #expect(value.textAlignment == .right)
+        }
+    }
+
+    @Test("Breakdown metrics use vertical label and value rows at accessibility content size")
+    func breakdownMetricsUseVerticalLayoutAtAccessibilityContentSize() throws {
+        let fixture = try makeHostedResultViewController(contentSizeCategory: .accessibilityExtraExtraLarge)
+
+        for identifier in ["duration", "rate", "amount"] {
+            let metricRow = try requireMetricRow(identifier: identifier, in: fixture.result.view)
+            let value: UILabel = try requireView(
+                identifier: "paycheckResult.breakdown.row.0.\(identifier)",
+                in: fixture.result.view
+            )
+
+            #expect(metricRow.axis == .vertical)
+            #expect(metricRow.alignment == .fill)
+            #expect(metricRow.spacing == 4)
+            #expect(value.textAlignment == .natural)
+        }
+    }
+
+    @Test("Accessibility metric layout gives duration value readable width below its label")
+    func accessibilityMetricLayoutAvoidsPathologicalDurationWrapping() throws {
+        let fixture = try makeHostedResultViewController(contentSizeCategory: .accessibilityExtraExtraLarge)
+        let durationRow = try requireMetricRow(identifier: "duration", in: fixture.result.view)
+        let duration: UILabel = try requireView(
+            identifier: "paycheckResult.breakdown.row.0.duration",
+            in: fixture.result.view
+        )
+        let durationTitle = try #require(durationRow.arrangedSubviews.first as? UILabel)
+        let rateRow = try requireMetricRow(identifier: "rate", in: fixture.result.view)
+
+        #expect(duration.frame.minY >= durationTitle.frame.maxY + 4)
+        #expect(duration.bounds.width > duration.font.lineHeight)
+        #expect(duration.bounds.height <= duration.font.lineHeight * 1.5)
+        #expect(duration.frame.maxY < rateRow.frame.minY)
+    }
+
     @Test("Hourly row renders applied rate")
     func hourlyRowRendersAppliedRate() throws {
         let breakdown = try hourlyBreakdown(day: 20, rate: 20, basePay: 160)
@@ -446,6 +544,33 @@ struct PaycheckResultViewControllerTests {
         )
     }
 
+    private func makeHostedResultViewController(
+        contentSizeCategory: UIContentSizeCategory
+    ) throws -> (host: UIViewController, result: PaycheckResultViewController) {
+        let result = makeViewController(try makeComparison(
+            expected: 1,
+            actual: 1,
+            breakdowns: [try hourlyBreakdown(day: 20, rate: 20, paidDuration: 60, basePay: 1)]
+        ))
+        let host = UIViewController()
+        host.loadViewIfNeeded()
+        host.addChild(result)
+        result.traitOverrides.preferredContentSizeCategory = contentSizeCategory
+        host.view.addSubview(result.view)
+        result.view.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            result.view.topAnchor.constraint(equalTo: host.view.topAnchor),
+            result.view.leadingAnchor.constraint(equalTo: host.view.leadingAnchor),
+            result.view.trailingAnchor.constraint(equalTo: host.view.trailingAnchor),
+            result.view.bottomAnchor.constraint(equalTo: host.view.bottomAnchor)
+        ])
+        result.didMove(toParent: host)
+        host.view.frame = CGRect(x: 0, y: 0, width: 390, height: 844)
+        host.view.setNeedsLayout()
+        host.view.layoutIfNeeded()
+        return (host, result)
+    }
+
     private func makeComparison(
         expected: Decimal,
         actual: Decimal,
@@ -548,6 +673,14 @@ struct PaycheckResultViewControllerTests {
 
     private func requireView<View: UIView>(identifier: String, in root: UIView) throws -> View {
         try #require(descendant(identifier: identifier, in: root) as? View)
+    }
+
+    private func requireMetricRow(identifier: String, in root: UIView) throws -> UIStackView {
+        let value: UILabel = try requireView(
+            identifier: "paycheckResult.breakdown.row.0.\(identifier)",
+            in: root
+        )
+        return try #require(value.superview as? UIStackView)
     }
 
     private func descendant(identifier: String, in view: UIView) -> UIView? {

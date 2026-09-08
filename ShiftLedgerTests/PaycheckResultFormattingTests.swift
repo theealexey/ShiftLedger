@@ -251,12 +251,45 @@ struct PaycheckResultFormattingTests {
         #expect(PaycheckResultFormatting.paidDuration(45 * 60) == "45 \(PaycheckResultStrings.durationMinute)")
     }
 
+    @Test("Whole seconds render without fractional precision")
+    func wholeSecondsRender() {
+        #expect(PaycheckResultFormatting.paidDuration(15) == "15 \(PaycheckResultStrings.durationSecond)")
+    }
+
     @Test("Non-zero seconds are not silently removed")
     func secondsRender() {
         let expected = "7 \(PaycheckResultStrings.durationHour) "
             + "30 \(PaycheckResultStrings.durationMinute) "
             + "15 \(PaycheckResultStrings.durationSecond)"
         #expect(PaycheckResultFormatting.paidDuration(7 * 3_600 + 30 * 60 + 15) == expected)
+    }
+
+    @Test("Runtime fractional-second regression rounds to a human-readable second")
+    func runtimeFractionalSecondRegressionRoundsForDisplay() {
+        let value = PaycheckResultFormatting.paidDuration(54.974985003471375)
+
+        #expect(value == "55 \(PaycheckResultStrings.durationSecond)")
+        #expect(value.contains("54.974985") == false)
+    }
+
+    @Test("Seconds carry into minutes after presentation rounding")
+    func roundedSecondsCarryIntoMinutes() {
+        #expect(PaycheckResultFormatting.paidDuration(59.6) == "1 \(PaycheckResultStrings.durationMinute)")
+        #expect(PaycheckResultFormatting.paidDuration(60) == "1 \(PaycheckResultStrings.durationMinute)")
+    }
+
+    @Test("Rounded duration preserves hours minutes and seconds")
+    func roundedDurationPreservesComponents() {
+        let expected = "7 \(PaycheckResultStrings.durationHour) "
+            + "30 \(PaycheckResultStrings.durationMinute) "
+            + "15 \(PaycheckResultStrings.durationSecond)"
+
+        #expect(PaycheckResultFormatting.paidDuration(7 * 3_600 + 30 * 60 + 15.4) == expected)
+    }
+
+    @Test("Positive duration below half a second uses a complete localized phrase")
+    func subSecondDurationUsesLocalizedPhrase() {
+        #expect(PaycheckResultFormatting.paidDuration(0.4) == PaycheckResultStrings.durationLessThanSecond)
     }
 
     @Test("Hourly rate exposes per-hour semantics")
