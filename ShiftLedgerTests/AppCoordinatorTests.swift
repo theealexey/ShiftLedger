@@ -304,6 +304,49 @@ struct AppCoordinatorTests {
         }
     }
 
+    @Test("Actual Add Shift Save persists, reloads, and returns to the same Overview")
+    func actualAddShiftSavePersistsReloadsAndReturnsToSameOverview() async throws {
+        let job = try makeValidJob()
+        let expectedShift = try makeShift(day: 20)
+
+        try await withOverview(job: job) { stack, navigation, overview in
+            overview.onAddShift?()
+            let addShift = try #require(navigation.topViewController as? AddShiftViewController)
+            #expect(addShift.navigationController === navigation)
+            addShift.loadViewIfNeeded()
+
+            try await selectDate(
+                expectedShift.start,
+                in: addShift,
+                rowWithAccessibilityLabel: AddShiftStrings.start
+            )
+            try await selectDate(
+                expectedShift.end,
+                in: addShift,
+                rowWithAccessibilityLabel: AddShiftStrings.end
+            )
+            try tapBarButtonItem(addShift.navigationItem.rightBarButtonItem)
+
+            let persistedShifts = try ShiftStorage(stack: stack).loadAll()
+            #expect(persistedShifts.count == 1)
+            let persistedShift = try #require(persistedShifts.first)
+            #expect(persistedShift.start == expectedShift.start)
+            #expect(persistedShift.end == expectedShift.end)
+            #expect(persistedShift.unpaidBreak == nil)
+            #expect(navigation.topViewController === overview)
+            #expect(navigation.viewControllers.count == 1)
+
+            let count: UILabel = try requireView("overview.shiftCount.value", in: overview.view)
+            #expect(count.text == "1")
+            let period: UILabel = try requireView("overview.period.label", in: overview.view)
+            #expect(period.text == OverviewFormatting.perShiftPeriod(
+                persistedShift,
+                timeZoneIdentifier: job.timeZoneIdentifier,
+                locale: CurrencySelectionItem.applicationDisplayLocale
+            ))
+        }
+    }
+
     @Test("Check Paycheck uses supplied period, Job currency and persisted Domain comparison")
     func checkPaycheckUsesDomainOutput() async throws {
         let job = try makeValidJob()
@@ -411,7 +454,7 @@ struct AppCoordinatorTests {
 
     private func withOverview(
         job: Job,
-        body: (CoreDataStack, NonAnimatingNavigationController, OverviewViewController) throws -> Void
+        body: @MainActor (CoreDataStack, NonAnimatingNavigationController, OverviewViewController) async throws -> Void
     ) async throws {
         let storeURL = try makeTemporaryStoreURL()
         let stack = try await CoreDataStack.load(storeURL: storeURL)
@@ -429,7 +472,38 @@ struct AppCoordinatorTests {
         let navigation = try #require(window.rootViewController as? NonAnimatingNavigationController)
         let overview = try #require(navigation.topViewController as? OverviewViewController)
         overview.loadViewIfNeeded()
-        try body(stack, navigation, overview)
+        try await body(stack, navigation, overview)
+    }
+
+    private func selectDate(
+        _ date: Date,
+        in addShift: AddShiftViewController,
+        rowWithAccessibilityLabel accessibilityLabel: String
+    ) async throws {
+        let row = try requireControl(
+            accessibilityLabel: accessibilityLabel,
+            in: addShift.view
+        )
+        row.sendActions(for: .touchUpInside)
+
+        let pickerNavigationController = try #require(
+            addShift.presentedViewController as? UINavigationController
+        )
+        let pickerViewController = try #require(
+            pickerNavigationController.topViewController as? ShiftDateTimePickerViewController
+        )
+        pickerViewController.loadViewIfNeeded()
+        let picker: UIDatePicker = try requireFirstDescendant(of: UIDatePicker.self, in: pickerViewController.view)
+        picker.date = date
+        try tapBarButtonItem(pickerViewController.navigationItem.rightBarButtonItem)
+        try await waitUntil { addShift.presentedViewController == nil }
+    }
+
+    private func tapBarButtonItem(_ item: UIBarButtonItem?) throws {
+        let item = try #require(item)
+        let target = try #require(item.target as? NSObject)
+        let action = try #require(item.action)
+        _ = target.perform(action)
     }
 
     private func expectSummary(
@@ -462,6 +536,42 @@ struct AppCoordinatorTests {
             }
             return nil
         }
+        return try #require(find(in: root))
+    }
+
+    private func requireControl(accessibilityLabel: String, in root: UIView) throws -> UIControl {
+        func find(in view: UIView) -> UIControl? {
+            if let control = view as? UIControl,
+               control.accessibilityLabel == accessibilityLabel {
+                return control
+            }
+            for child in view.subviews {
+                if let found = find(in: child) {
+                    return found
+                }
+            }
+            return nil
+        }
+
+        return try #require(find(in: root))
+    }
+
+    private func requireFirstDescendant<View: UIView>(
+        of type: View.Type,
+        in root: UIView
+    ) throws -> View {
+        func find(in view: UIView) -> View? {
+            if let match = view as? View {
+                return match
+            }
+            for child in view.subviews {
+                if let found = find(in: child) {
+                    return found
+                }
+            }
+            return nil
+        }
+
         return try #require(find(in: root))
     }
 
