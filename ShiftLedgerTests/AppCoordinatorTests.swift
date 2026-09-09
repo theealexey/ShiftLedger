@@ -16,8 +16,11 @@ struct AppCoordinatorTests {
         let coordinator = AppCoordinator(window: window, loadCoreDataStack: loader)
         defer { tearDown(window, coordinator: coordinator) }
 
-        let task = coordinator.startStartup()
-        await task.value
+        coordinator.start()
+        try await waitUntil {
+            loaderCallCount == 1
+                && window.rootViewController?.presentedViewController is UIAlertController
+        }
 
         #expect(loaderCallCount == 1)
         let loadingViewController = try #require(window.rootViewController)
@@ -57,14 +60,20 @@ struct AppCoordinatorTests {
         let coordinator = AppCoordinator(window: window, loadCoreDataStack: loader)
         defer { tearDown(window, coordinator: coordinator) }
 
-        let firstTask = coordinator.startStartup()
-        await firstTask.value
+        coordinator.start()
+        try await waitUntil {
+            loaderCallCount == 1
+                && window.rootViewController?.presentedViewController is UIAlertController
+        }
         #expect(loaderCallCount == 1)
         let failedRoot = try #require(window.rootViewController)
         #expect(failedRoot.presentedViewController is UIAlertController)
 
-        let retryTask = coordinator.startStartup()
-        await retryTask.value
+        coordinator.start()
+        try await waitUntil {
+            loaderCallCount == 2
+                && window.rootViewController is UINavigationController
+        }
 
         #expect(loaderCallCount == 2)
         let navigationController = try #require(
@@ -74,8 +83,8 @@ struct AppCoordinatorTests {
         #expect(navigationController.presentedViewController == nil)
     }
 
-    @Test("Cancelling suspended startup leaves the loading root")
-    func cancellingSuspendedStartupDoesNotInstallRootOrError() async throws {
+    @Test("Cancelling suspended resolution does not install a stale root or error")
+    func cancellingSuspendedResolutionDoesNotInstallRootOrError() async throws {
         var enteredContinuation: CheckedContinuation<Void, Never>?
         var cancellationObserved = false
         let loader: @MainActor () async throws -> CoreDataStack = {
@@ -94,18 +103,85 @@ struct AppCoordinatorTests {
         let coordinator = AppCoordinator(window: window, loadCoreDataStack: loader)
         defer { tearDown(window, coordinator: coordinator) }
 
-        let task = coordinator.startStartup()
+        coordinator.start()
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
             enteredContinuation = continuation
         }
-        let loadingViewController = try #require(window.rootViewController)
+        let existingRootViewController = try #require(window.rootViewController)
 
-        coordinator.cancelStartup()
-        await task.value
+        coordinator.stop()
+        try await waitUntil { cancellationObserved }
 
         #expect(cancellationObserved)
-        #expect(window.rootViewController === loadingViewController)
-        #expect(loadingViewController.presentedViewController == nil)
+        #expect(window.rootViewController === existingRootViewController)
+        #expect(existingRootViewController.presentedViewController == nil)
+    }
+
+    @Test("Repeated start replaces a pending initial resolution")
+    func repeatedStartReplacesPendingResolution() async throws {
+        let storeURL = try makeTemporaryStoreURL()
+        let stack = try await CoreDataStack.load(storeURL: storeURL)
+        defer { removeTemporaryStoreDirectory(for: storeURL, stack: stack) }
+
+        var loadCallCount = 0
+        var firstLoadStarted: CheckedContinuation<Void, Never>?
+        var secondLoadStarted: CheckedContinuation<Void, Never>?
+        let loader: @MainActor () async throws -> CoreDataStack = {
+            loadCallCount += 1
+
+            if loadCallCount == 1 {
+                firstLoadStarted?.resume()
+                try await Task.sleep(for: .seconds(60))
+                throw AppCoordinatorTestError.unexpectedLoaderReturn
+            }
+
+            secondLoadStarted?.resume()
+            return stack
+        }
+        let window = makeWindow()
+        let coordinator = AppCoordinator(window: window, loadCoreDataStack: loader)
+        defer { tearDown(window, coordinator: coordinator) }
+
+        coordinator.start()
+        await withCheckedContinuation { continuation in
+            firstLoadStarted = continuation
+        }
+
+        coordinator.start()
+        await withCheckedContinuation { continuation in
+            secondLoadStarted = continuation
+        }
+        try await waitUntil { window.rootViewController is UINavigationController }
+
+        #expect(loadCallCount == 2)
+        #expect(window.rootViewController is UINavigationController)
+    }
+
+    @Test("Repeated start preserves an active flow")
+    func repeatedStartWithActiveFlowIsANoOp() async throws {
+        let storeURL = try makeTemporaryStoreURL()
+        let stack = try await CoreDataStack.load(storeURL: storeURL)
+        defer { removeTemporaryStoreDirectory(for: storeURL, stack: stack) }
+
+        var loadCallCount = 0
+        let window = makeWindow()
+        let coordinator = AppCoordinator(
+            window: window,
+            loadCoreDataStack: {
+                loadCallCount += 1
+                return stack
+            }
+        )
+        defer { tearDown(window, coordinator: coordinator) }
+
+        coordinator.start()
+        try await waitUntil { window.rootViewController is UINavigationController }
+        let initialRoot = try #require(window.rootViewController)
+        coordinator.start()
+        await Task.yield()
+
+        #expect(loadCallCount == 1)
+        #expect(window.rootViewController === initialRoot)
     }
 
     @Test("Persisted Job opens Overview as the only root")
@@ -125,8 +201,8 @@ struct AppCoordinatorTests {
         let coordinator = AppCoordinator(window: window, loadCoreDataStack: loader)
         defer { tearDown(window, coordinator: coordinator) }
 
-        let task = coordinator.startStartup()
-        await task.value
+        coordinator.start()
+        try await waitUntil { window.rootViewController is UINavigationController }
 
         #expect(loaderCallCount == 1)
         let navigationController = try #require(
@@ -138,7 +214,7 @@ struct AppCoordinatorTests {
         #expect(navigationController.isNavigationBarHidden == false)
     }
 
-    @Test("Onboarding callbacks compose the production navigation flow")
+    @Test("Onboarding completion replaces its root with a new Main flow")
     func onboardingNavigationFlow() async throws {
         let storeURL = try makeTemporaryStoreURL()
         let stack = try await CoreDataStack.load(storeURL: storeURL)
@@ -154,8 +230,8 @@ struct AppCoordinatorTests {
         )
         defer { tearDown(window, coordinator: coordinator) }
 
-        let startupTask = coordinator.startStartup()
-        await startupTask.value
+        coordinator.start()
+        try await waitUntil { window.rootViewController is NonAnimatingNavigationController }
 
         let navigationController = try #require(
             window.rootViewController as? NonAnimatingNavigationController
@@ -191,9 +267,13 @@ struct AppCoordinatorTests {
         )
         secondReviewViewController.start()
 
-        #expect(navigationController.viewControllers.count == 1)
-        #expect(navigationController.viewControllers.first is OverviewViewController)
-        #expect(navigationController.navigationBar.isHidden == false)
+        let mainNavigationController = try #require(
+            window.rootViewController as? NonAnimatingNavigationController
+        )
+        #expect(mainNavigationController !== navigationController)
+        #expect(mainNavigationController.viewControllers.count == 1)
+        #expect(mainNavigationController.viewControllers.first is OverviewViewController)
+        #expect(mainNavigationController.navigationBar.isHidden == false)
     }
 
     @Test("Add Shift saves return to the same Overview and reload persisted data")
@@ -344,7 +424,8 @@ struct AppCoordinatorTests {
             makeNavigationController: { NonAnimatingNavigationController() }
         )
         defer { tearDown(window, coordinator: coordinator) }
-        await coordinator.startStartup().value
+        coordinator.start()
+        try await waitUntil { window.rootViewController is NonAnimatingNavigationController }
         let navigation = try #require(window.rootViewController as? NonAnimatingNavigationController)
         let overview = try #require(navigation.topViewController as? OverviewViewController)
         overview.loadViewIfNeeded()
@@ -405,7 +486,7 @@ struct AppCoordinatorTests {
     }
 
     private func tearDown(_ window: UIWindow, coordinator: AppCoordinator) {
-        coordinator.cancelStartup()
+        coordinator.stop()
         window.isHidden = true
         window.rootViewController = nil
     }
@@ -416,6 +497,20 @@ struct AppCoordinatorTests {
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         return directory.appendingPathComponent("ShiftLedger.sqlite")
+    }
+
+    private func waitUntil(
+        _ condition: @escaping @MainActor () -> Bool
+    ) async throws {
+        for _ in 0..<100 {
+            if condition() {
+                return
+            }
+
+            await Task.yield()
+        }
+
+        throw AppCoordinatorTestError.timedOut
     }
 
     private func makeValidDraft() -> JobSetupDraft {
@@ -480,4 +575,5 @@ private final class NonAnimatingNavigationController: UINavigationController {
 private enum AppCoordinatorTestError: Error {
     case loadFailed
     case unexpectedLoaderReturn
+    case timedOut
 }
