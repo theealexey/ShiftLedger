@@ -12,7 +12,7 @@ final class ShiftLedgerUITests: XCTestCase {
     }
 
     @MainActor
-    func testPersistedJobRelaunchShowsAddShift() {
+    func testPersistedJobRelaunchShowsOverview() {
         let firstLaunch = XCUIApplication()
         firstLaunch.launchArguments.append(contentsOf: [
             "-ui-testing-reset-store",
@@ -20,15 +20,15 @@ final class ShiftLedgerUITests: XCTestCase {
         ])
         firstLaunch.launch()
 
-        let firstAddShiftScreen = firstLaunch.scrollViews["addShift.screen"]
-        XCTAssertTrue(firstAddShiftScreen.waitForExistence(timeout: 5))
+        let firstOverviewScreen = firstLaunch.otherElements["overview.screen"]
+        XCTAssertTrue(firstOverviewScreen.waitForExistence(timeout: 5))
         firstLaunch.terminate()
 
         let secondLaunch = XCUIApplication()
         secondLaunch.launch()
 
-        let secondAddShiftScreen = secondLaunch.scrollViews["addShift.screen"]
-        XCTAssertTrue(secondAddShiftScreen.waitForExistence(timeout: 5))
+        let secondOverviewScreen = secondLaunch.otherElements["overview.screen"]
+        XCTAssertTrue(secondOverviewScreen.waitForExistence(timeout: 5))
         secondLaunch.terminate()
     }
 }
