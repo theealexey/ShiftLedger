@@ -15,21 +15,28 @@ struct MainCoordinatorTests {
         #expect(harness.navigationController.isNavigationBarHidden == false)
     }
 
-    @Test("Add Shift completion reloads and returns to the same Overview")
+    @Test("Add Shift completion reloads the persisted saved ID and returns to the same Overview")
     func addShiftCompletionReturnsToSameOverview() throws {
-        let harness = try makeHarness()
+        let harness = try makeHarness(cycle: .perShift)
         harness.coordinator.start()
+        harness.overview.loadViewIfNeeded()
 
         harness.overview.onAddShift?()
         let addShift = try #require(
             harness.navigationController.topViewController as? AddShiftViewController
         )
         let callbackShift = try makeShift()
+        harness.metrics.overviewShifts = [callbackShift]
         addShift.onSaved?(callbackShift)
 
-        #expect(harness.metrics.overviewLoadCount == 1)
+        #expect(harness.metrics.overviewLoadCount == 2)
         #expect(harness.navigationController.topViewController === harness.overview)
         #expect(harness.navigationController.viewControllers.count == 1)
+        let card: UIView = try requireView(
+            "overview.shift.\(callbackShift.id.uuidString)",
+            in: harness.overview.view
+        )
+        #expect(card.accessibilityTraits.contains(.selected))
     }
 
     @Test("Actual Gross uses the comparison dependency and opens Result")
@@ -118,18 +125,19 @@ struct MainCoordinatorTests {
     }
 
     private func makeHarness(
+        cycle: PayCalculationCycle = .scheduled(.calendarMonthly),
         prepareComparison: @escaping @MainActor (Job, PayCalculationPeriod, ActualGross) throws -> PaycheckComparison = { job, period, actualGross in
             try job.paycheckComparison(for: period, actualGross: actualGross, from: [])
         }
     ) throws -> Harness {
-        let job = try makeJob()
+        let job = try makeJob(cycle: cycle)
         let metrics = Metrics()
         let overview = OverviewViewController(
             viewModel: OverviewViewModel(
                 job: job,
                 loadShifts: {
                     metrics.overviewLoadCount += 1
-                    return []
+                    return metrics.overviewShifts
                 },
                 currentDate: { Date(timeIntervalSinceReferenceDate: 0) }
             ),
@@ -181,12 +189,12 @@ struct MainCoordinatorTests {
         )
     }
 
-    private func makeJob() throws -> Job {
+    private func makeJob(cycle: PayCalculationCycle = .scheduled(.calendarMonthly)) throws -> Job {
         try Job(
             currencyCode: "USD",
             timeZoneIdentifier: "Europe/Stockholm",
             basePayBasis: .hourly,
-            payCalculationCycle: .scheduled(.calendarMonthly),
+            payCalculationCycle: cycle,
             payRates: [try PayRate(amount: 100, effectiveFrom: nil)],
             createdAt: Date(timeIntervalSinceReferenceDate: 0)
         )
@@ -195,6 +203,25 @@ struct MainCoordinatorTests {
     private func makeShift() throws -> Shift {
         let start = Date(timeIntervalSinceReferenceDate: 800_000_000)
         return try Shift(start: start, end: start.addingTimeInterval(3_600))
+    }
+
+    private func requireView<View: UIView>(
+        _ identifier: String,
+        in root: UIView
+    ) throws -> View {
+        func find(in view: UIView) -> View? {
+            if view.accessibilityIdentifier == identifier {
+                return view as? View
+            }
+            for subview in view.subviews {
+                if let match = find(in: subview) {
+                    return match
+                }
+            }
+            return nil
+        }
+
+        return try #require(find(in: root))
     }
 }
 
@@ -224,6 +251,7 @@ private final class Harness {
 @MainActor
 private final class Metrics {
     var overviewLoadCount = 0
+    var overviewShifts: [Shift] = []
     var preparedPeriods: [PayCalculationPeriod] = []
     var preparedActualGrosses: [ActualGross] = []
 }

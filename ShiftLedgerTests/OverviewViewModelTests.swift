@@ -297,6 +297,101 @@ struct OverviewViewModelTests {
         #expect(content(from: viewModel.state) != nil)
     }
 
+    @Test("Reload selecting a saved Shift keeps its current scheduled period and exposes its ID")
+    func reloadSelectingSavedShiftKeepsCurrentScheduledPeriod() throws {
+        let job = try makeJob(cycle: .scheduled(.calendarMonthly))
+        let existing = try makeShift(id: 1, day: 10)
+        let saved = try makeShift(id: 2, day: 20)
+        let now = try date(year: 2026, month: 9, day: 18, hour: 12)
+        var loadCalls = 0
+        let viewModel = OverviewViewModel(
+            job: job,
+            loadShifts: {
+                loadCalls += 1
+                return loadCalls == 1 ? [existing] : [existing, saved]
+            },
+            currentDate: { now }
+        )
+        viewModel.load()
+        let initialPeriod = try requireContent(viewModel.state).selectedPeriod
+
+        viewModel.reload(selectingShiftID: saved.id)
+
+        let content = try requireContent(viewModel.state)
+        #expect(loadCalls == 2)
+        #expect(content.selectedPeriod == initialPeriod)
+        #expect(content.selectedShiftID == saved.id)
+        #expect(content.expectedBreakdown?.shiftBreakdowns.map(\.shift) == [existing, saved])
+    }
+
+    @Test("Reload selecting a saved Shift switches to its scheduled period")
+    func reloadSelectingSavedShiftSwitchesToHistoricalScheduledPeriod() throws {
+        let job = try makeJob(cycle: .scheduled(.calendarMonthly))
+        let historical = try makeShift(id: 1, month: 8, day: 20)
+        let current = try makeShift(id: 2, month: 9, day: 20)
+        let now = try date(year: 2026, month: 9, day: 18, hour: 12)
+        var loadCalls = 0
+        let viewModel = OverviewViewModel(
+            job: job,
+            loadShifts: {
+                loadCalls += 1
+                return loadCalls == 1 ? [current] : [historical, current]
+            },
+            currentDate: { now }
+        )
+        viewModel.load()
+
+        viewModel.reload(selectingShiftID: historical.id)
+
+        let content = try requireContent(viewModel.state)
+        #expect(content.selectedPeriod == .scheduled(PayPeriod(
+            start: try localDate(year: 2026, month: 8, day: 1),
+            endExclusive: try localDate(year: 2026, month: 9, day: 1)
+        )))
+        #expect(content.selectedShiftID == historical.id)
+        #expect(content.expectedBreakdown?.shiftBreakdowns.map(\.shift) == [historical])
+    }
+
+    @Test("Reload selecting a saved Shift uses its persisted per-shift period")
+    func reloadSelectingSavedShiftUsesPersistedPerShiftPeriod() throws {
+        let job = try makeJob(cycle: .perShift)
+        let existing = try makeShift(id: 1, day: 10)
+        let saved = try makeShift(id: 2, day: 20)
+        var loadCalls = 0
+        let viewModel = OverviewViewModel(
+            job: job,
+            loadShifts: {
+                loadCalls += 1
+                return loadCalls == 1 ? [existing] : [existing, saved]
+            },
+            currentDate: { Date(timeIntervalSinceReferenceDate: 0) }
+        )
+        viewModel.load()
+
+        viewModel.reload(selectingShiftID: saved.id)
+
+        let content = try requireContent(viewModel.state)
+        #expect(content.selectedPeriod == .perShift(shiftID: saved.id))
+        #expect(content.selectedShiftID == saved.id)
+        #expect(content.expectedBreakdown?.shiftBreakdowns.map(\.shift) == [saved])
+    }
+
+    @Test("Reload with a missing saved Shift ID falls back to normal persisted content")
+    func reloadSelectingMissingShiftFallsBackToNormalContent() throws {
+        let job = try makeJob(cycle: .scheduled(.calendarMonthly))
+        let existing = try makeShift(id: 1, day: 10)
+        let missingID = UUID(uuid: (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2))
+        let now = try date(year: 2026, month: 9, day: 18, hour: 12)
+        let viewModel = makeViewModel(job: job, shifts: [existing], now: now)
+        viewModel.load()
+
+        viewModel.reload(selectingShiftID: missingID)
+
+        let content = try requireContent(viewModel.state)
+        #expect(content.selectedShiftID == nil)
+        #expect(content.expectedBreakdown?.shiftBreakdowns.map(\.shift) == [existing])
+    }
+
     @Test("Scheduled reload preserves the selected historical period")
     func scheduledReloadPreservesHistoricalPeriod() throws {
         let anchor = try localDate(year: 2026, month: 9, day: 7)

@@ -737,6 +737,13 @@
         "ru" : { "stringUnit" : { "state" : "translated", "value" : "Смен в периоде" } }
       }
     },
+    "overview.shiftHistory.empty" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "No shifts in this pay period." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "В этом расчётном периоде нет смен." } }
+      }
+    },
     "overview.checkPaycheck" : {
       "extractionState" : "manual",
       "localizations" : {

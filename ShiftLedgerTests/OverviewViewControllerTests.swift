@@ -54,6 +54,114 @@ struct OverviewViewControllerTests {
         #expect(content.totalStoredShiftCount == 2)
     }
 
+    @Test("Shift history renders one reverse-chronological card per selected-period breakdown")
+    func shiftHistoryRendersReverseChronologicalBreakdownCards() throws {
+        let job = try makeJob(cycle: .scheduled(.calendarMonthly))
+        let older = try makeShift(id: 1, month: 9, day: 10)
+        let newer = try makeShift(id: 2, month: 9, day: 20)
+        let subject = try makeSubject(job: job, shifts: [older, newer])
+
+        subject.viewController.loadViewIfNeeded()
+
+        #expect(shiftCardIdentifiers(in: subject.viewController.view) == [newer.id, older.id])
+
+        let date: UILabel = try requireView(
+            identifier: "overview.shift.\(newer.id.uuidString).date",
+            in: subject.viewController.view
+        )
+        let time: UILabel = try requireView(
+            identifier: "overview.shift.\(newer.id.uuidString).time",
+            in: subject.viewController.view
+        )
+        let amount: UILabel = try requireView(
+            identifier: "overview.shift.\(newer.id.uuidString).expected",
+            in: subject.viewController.view
+        )
+        let duration: UILabel = try requireView(
+            identifier: "overview.shift.\(newer.id.uuidString).duration",
+            in: subject.viewController.view
+        )
+        #expect(date.text == OverviewFormatting.shiftDate(
+            newer,
+            timeZoneIdentifier: job.timeZoneIdentifier,
+            locale: displayLocale
+        ))
+        #expect(time.text == OverviewFormatting.shiftTimeRange(
+            newer,
+            timeZoneIdentifier: job.timeZoneIdentifier,
+            locale: displayLocale
+        ))
+        #expect(amount.text == OverviewFormatting.currency(
+            Decimal(160),
+            currencyCode: job.currencyCode,
+            locale: displayLocale
+        ))
+        #expect(duration.text == OverviewFormatting.duration(newer.paidDuration))
+    }
+
+    @Test("Shift history renders an unpaid-break indicator only when the Shift contains one")
+    func shiftHistoryRendersUnpaidBreakOnlyWhenPresent() throws {
+        let job = try makeJob(cycle: .scheduled(.calendarMonthly))
+        let withoutBreak = try makeShift(id: 1, month: 9, day: 10)
+        let start = try date(year: 2026, month: 9, day: 20, hour: 8)
+        let withBreak = try Shift(
+            id: UUID(uuid: (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2)),
+            start: start,
+            end: start.addingTimeInterval(8 * 60 * 60),
+            unpaidBreak: UnpaidBreak(
+                start: start.addingTimeInterval(4 * 60 * 60),
+                end: start.addingTimeInterval(4.5 * 60 * 60)
+            )
+        )
+        let subject = try makeSubject(job: job, shifts: [withoutBreak, withBreak])
+
+        subject.viewController.loadViewIfNeeded()
+
+        let breakLabel: UILabel = try requireView(
+            identifier: "overview.shift.\(withBreak.id.uuidString).break",
+            in: subject.viewController.view
+        )
+        let absentBreakLabel: UILabel = try requireView(
+            identifier: "overview.shift.\(withoutBreak.id.uuidString).break",
+            in: subject.viewController.view
+        )
+        #expect(breakLabel.isHidden == false)
+        #expect(breakLabel.text?.contains(OverviewFormatting.duration(30 * 60)) == true)
+        #expect(absentBreakLabel.isHidden)
+    }
+
+    @Test("Post-save selected Shift card keeps its persisted identity and accessibility selection")
+    func selectedShiftCardUsesPersistedIdentityAndAccessibilitySelection() throws {
+        let job = try makeJob(cycle: .scheduled(.calendarMonthly))
+        let shift = try makeShift(id: 1, month: 9, day: 20)
+        let subject = try makeSubject(job: job, shifts: [shift])
+        subject.viewController.loadViewIfNeeded()
+
+        subject.viewController.reload(selectingShiftID: shift.id)
+
+        let card: UIView = try requireView(
+            identifier: "overview.shift.\(shift.id.uuidString)",
+            in: subject.viewController.view
+        )
+        #expect(card.accessibilityTraits.contains(.selected))
+        #expect(hasFixedHeight(card) == false)
+    }
+
+    @Test("Scheduled zero-shift period renders an honest Shift history empty state")
+    func scheduledZeroShiftPeriodRendersShiftHistoryEmptyState() throws {
+        let job = try makeJob(cycle: .scheduled(.calendarMonthly))
+        let subject = try makeSubject(job: job, shifts: [])
+
+        subject.viewController.loadViewIfNeeded()
+
+        let label: UILabel = try requireView(
+            identifier: "overview.shiftHistory.empty",
+            in: subject.viewController.view
+        )
+        #expect(isEffectivelyHidden(label) == false)
+        #expect(label.text == OverviewStrings.shiftHistoryEmpty)
+    }
+
     @Test("Previous button follows ViewModel navigation state")
     func previousButtonUsesViewModelState() throws {
         let job = try makeJob(cycle: .scheduled(.calendarMonthly))
@@ -508,6 +616,23 @@ struct OverviewViewControllerTests {
             }
         }
         return nil
+    }
+
+    private func shiftCardIdentifiers(in view: UIView) -> [UUID] {
+        let identifierPrefix = "overview.shift."
+        var identifiers: [UUID] = []
+
+        func collect(from candidate: UIView) {
+            if let identifier = candidate.accessibilityIdentifier,
+               identifier.hasPrefix(identifierPrefix),
+               let id = UUID(uuidString: String(identifier.dropFirst(identifierPrefix.count))) {
+                identifiers.append(id)
+            }
+            candidate.subviews.forEach(collect)
+        }
+
+        collect(from: view)
+        return identifiers
     }
 
     private func isEffectivelyHidden(_ view: UIView) -> Bool {

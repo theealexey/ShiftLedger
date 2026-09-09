@@ -65,14 +65,14 @@ final class MainCoordinator {
 
     private func showAddShift() {
         let viewController = dependencies.makeAddShift(job)
-        viewController.onSaved = { [weak self] _ in
-            self?.completeAddShift()
+        viewController.onSaved = { [weak self] shift in
+            self?.completeAddShift(selectingShiftID: shift.id)
         }
         navigationController.pushViewController(viewController, animated: true)
     }
 
-    private func completeAddShift() {
-        overviewViewController.reload()
+    private func completeAddShift(selectingShiftID: UUID) {
+        overviewViewController.reload(selectingShiftID: selectingShiftID)
         navigationController.popToViewController(overviewViewController, animated: true)
     }
 

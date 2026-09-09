@@ -344,6 +344,11 @@ struct AppCoordinatorTests {
                 timeZoneIdentifier: job.timeZoneIdentifier,
                 locale: CurrencySelectionItem.applicationDisplayLocale
             ))
+            let card: UIView = try requireView(
+                "overview.shift.\(persistedShift.id.uuidString)",
+                in: overview.view
+            )
+            #expect(card.accessibilityTraits.contains(.selected))
         }
     }
 

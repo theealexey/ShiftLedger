@@ -40,8 +40,12 @@ final class OverviewViewController: UIViewController {
         render()
     }
 
-    func reload() {
-        viewModel.reload()
+    func reload(selectingShiftID: UUID? = nil) {
+        if let selectingShiftID {
+            viewModel.reload(selectingShiftID: selectingShiftID)
+        } else {
+            viewModel.reload()
+        }
         render()
     }
 
@@ -87,6 +91,17 @@ final class OverviewViewController: UIViewController {
                 return
             }
 
+            let cards: [OverviewView.ShiftCard]
+            do {
+                cards = try shiftCards(
+                    from: breakdown,
+                    selectedShiftID: content.selectedShiftID
+                )
+            } catch {
+                renderFailure(.calculation)
+                return
+            }
+
             overviewView.renderContent(
                 expectedGross: OverviewFormatting.currency(
                     breakdown.expectedGross,
@@ -95,10 +110,15 @@ final class OverviewViewController: UIViewController {
                 ),
                 period: periodText,
                 shiftCount: breakdown.shiftBreakdowns.count,
+                shiftCards: cards,
                 canNavigatePrevious: content.canNavigatePrevious,
                 canNavigateNext: content.canNavigateNext,
                 canCheckPaycheck: true
             )
+
+            if let selectedShiftID = content.selectedShiftID {
+                overviewView.focusShiftCard(with: selectedShiftID)
+            }
         default:
             renderFailure(.calculation)
         }
@@ -157,5 +177,58 @@ final class OverviewViewController: UIViewController {
         }
 
         onCheckPaycheck?(period)
+    }
+
+    private func shiftCards(
+        from breakdown: ExpectedGrossBreakdown,
+        selectedShiftID: UUID?
+    ) throws -> [OverviewView.ShiftCard] {
+        try breakdown.shiftBreakdowns.reversed().map { shiftBreakdown in
+            let shift = shiftBreakdown.shift
+            guard
+                let date = OverviewFormatting.shiftDate(
+                    shift,
+                    timeZoneIdentifier: timeZoneIdentifier,
+                    locale: displayLocale
+                ),
+                let timeRange = OverviewFormatting.shiftTimeRange(
+                    shift,
+                    timeZoneIdentifier: timeZoneIdentifier,
+                    locale: displayLocale
+                )
+            else {
+                throw OverviewViewModel.Failure.calculation
+            }
+
+            let expectedAmount = OverviewFormatting.currency(
+                shiftBreakdown.basePay,
+                currencyCode: currencyCode,
+                locale: displayLocale
+            )
+            let paidDuration = OverviewFormatting.duration(shiftBreakdown.paidDuration)
+            let unpaidBreak = shift.unpaidBreak.map {
+                OverviewFormatting.duration($0.end.timeIntervalSince($0.start))
+            }
+            let accessibilityLabel = [
+                date,
+                timeRange,
+                "\(PaycheckResultStrings.shiftExpected): \(expectedAmount)",
+                "\(PaycheckResultStrings.paidTime): \(paidDuration)",
+                unpaidBreak.map { "\(AddShiftStrings.unpaidBreak): \($0)" }
+            ]
+            .compactMap { $0 }
+            .joined(separator: ", ")
+
+            return OverviewView.ShiftCard(
+                id: shift.id,
+                date: date,
+                timeRange: timeRange,
+                expectedAmount: expectedAmount,
+                paidDuration: paidDuration,
+                unpaidBreak: unpaidBreak,
+                isSelected: shift.id == selectedShiftID,
+                accessibilityLabel: accessibilityLabel
+            )
+        }
     }
 }

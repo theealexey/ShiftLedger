@@ -181,6 +181,36 @@ struct OverviewFormattingTests {
         #expect(stockholm.contains("2:00"))
     }
 
+    @Test("Shift card date and time use the supplied Job timezone")
+    func shiftCardDateAndTimeUseJobTimeZone() throws {
+        let shift = try makeShift(
+            start: try date(year: 2026, month: 9, day: 20, hour: 0, minute: 30),
+            duration: 90 * 60
+        )
+
+        let date = try #require(OverviewFormatting.shiftDate(
+            shift,
+            timeZoneIdentifier: "Europe/Stockholm",
+            locale: locale
+        ))
+        let time = try #require(OverviewFormatting.shiftTimeRange(
+            shift,
+            timeZoneIdentifier: "Europe/Stockholm",
+            locale: locale
+        ))
+
+        #expect(date.contains("Sep 20"))
+        #expect(time.contains("2:30"))
+        #expect(time.contains("4:00"))
+    }
+
+    @Test("Shift card duration uses complete localized components")
+    func shiftCardDurationUsesCompleteLocalizedComponents() {
+        let result = OverviewFormatting.duration(8 * 3_600 + 30 * 60)
+
+        #expect(result == "8 \(PaycheckResultStrings.durationHour) 30 \(PaycheckResultStrings.durationMinute)")
+    }
+
     private func decimal(_ value: String) throws -> Decimal {
         try #require(Decimal(string: value, locale: locale))
     }

@@ -50,6 +50,46 @@ enum OverviewFormatting {
         return formatter.string(from: shift.start, to: shift.end)
     }
 
+    static func shiftDate(
+        _ shift: Shift,
+        timeZoneIdentifier: String,
+        locale: Locale
+    ) -> String? {
+        guard let timeZone = TimeZone(identifier: timeZoneIdentifier) else {
+            return nil
+        }
+
+        let formatter = DateFormatter()
+        formatter.calendar = configuredCalendar(timeZone: timeZone)
+        formatter.locale = locale
+        formatter.timeZone = timeZone
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .none
+        return formatter.string(from: shift.start)
+    }
+
+    static func shiftTimeRange(
+        _ shift: Shift,
+        timeZoneIdentifier: String,
+        locale: Locale
+    ) -> String? {
+        guard let timeZone = TimeZone(identifier: timeZoneIdentifier) else {
+            return nil
+        }
+
+        let formatter = DateIntervalFormatter()
+        formatter.calendar = configuredCalendar(timeZone: timeZone)
+        formatter.locale = locale
+        formatter.timeZone = timeZone
+        formatter.dateStyle = .none
+        formatter.timeStyle = .short
+        return formatter.string(from: shift.start, to: shift.end)
+    }
+
+    static func duration(_ duration: TimeInterval) -> String {
+        PaycheckResultFormatting.paidDuration(duration)
+    }
+
     private static func configuredCalendar(timeZone: TimeZone) -> Calendar {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = timeZone

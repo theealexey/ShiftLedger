@@ -10,6 +10,7 @@ final class OverviewViewModel {
     struct Content: Equatable {
         let selectedPeriod: PayCalculationPeriod?
         let expectedBreakdown: ExpectedGrossBreakdown?
+        let selectedShiftID: UUID?
         let totalStoredShiftCount: Int
         let canNavigatePrevious: Bool
         let canNavigateNext: Bool
@@ -45,7 +46,11 @@ final class OverviewViewModel {
     }
 
     func reload() {
-        refresh(preservingSelection: true)
+        refresh(preservingSelection: true, selectingShiftID: nil)
+    }
+
+    func reload(selectingShiftID: UUID) {
+        refresh(preservingSelection: true, selectingShiftID: selectingShiftID)
     }
 
     func navigateToPreviousPeriod() {
@@ -132,7 +137,10 @@ final class OverviewViewModel {
         }
     }
 
-    private func refresh(preservingSelection: Bool) {
+    private func refresh(
+        preservingSelection: Bool,
+        selectingShiftID: UUID? = nil
+    ) {
         let loadedShifts: [Shift]
         do {
             loadedShifts = try loadShifts()
@@ -144,44 +152,79 @@ final class OverviewViewModel {
         shifts = loadedShifts
 
         do {
-            switch job.payCalculationCycle {
-            case .scheduled:
-                guard let currentPayPeriod = try currentScheduledPayPeriod() else {
-                    state = .failure(.calculation)
-                    return
-                }
-
-                let selectedPayPeriod: PayPeriod
-                if preservingSelection,
-                   case let .scheduled(payPeriod)? = selectedPeriod {
-                    selectedPayPeriod = payPeriod
-                } else {
-                    selectedPayPeriod = currentPayPeriod
-                }
-
-                try publishScheduledContent(
-                    selectedPayPeriod: selectedPayPeriod,
-                    currentPayPeriod: currentPayPeriod
-                )
-            case .perShift:
-                let selectedShift: Shift?
-                if preservingSelection,
-                   case let .perShift(shiftID)? = selectedPeriod,
-                   let preservedShift = shifts.first(where: { $0.id == shiftID }) {
-                    selectedShift = preservedShift
-                } else {
-                    selectedShift = shifts.last
-                }
-
-                guard let content = try perShiftContent(for: selectedShift) else {
-                    state = .failure(.calculation)
-                    return
-                }
-
-                publish(content)
+            if let selectingShiftID,
+               let selectedShift = shifts.first(where: { $0.id == selectingShiftID }) {
+                try publishContent(selectingSavedShift: selectedShift)
+            } else {
+                try publishRefreshedContent(preservingSelection: preservingSelection)
             }
         } catch {
             state = .failure(.calculation)
+        }
+    }
+
+    private func publishRefreshedContent(preservingSelection: Bool) throws {
+        switch job.payCalculationCycle {
+        case .scheduled:
+            guard let currentPayPeriod = try currentScheduledPayPeriod() else {
+                state = .failure(.calculation)
+                return
+            }
+
+            let selectedPayPeriod: PayPeriod
+            if preservingSelection,
+               case let .scheduled(payPeriod)? = selectedPeriod {
+                selectedPayPeriod = payPeriod
+            } else {
+                selectedPayPeriod = currentPayPeriod
+            }
+
+            try publishScheduledContent(
+                selectedPayPeriod: selectedPayPeriod,
+                currentPayPeriod: currentPayPeriod
+            )
+        case .perShift:
+            let selectedShift: Shift?
+            if preservingSelection,
+               case let .perShift(shiftID)? = selectedPeriod,
+               let preservedShift = shifts.first(where: { $0.id == shiftID }) {
+                selectedShift = preservedShift
+            } else {
+                selectedShift = shifts.last
+            }
+
+            guard let content = try perShiftContent(for: selectedShift) else {
+                state = .failure(.calculation)
+                return
+            }
+
+            publish(content)
+        }
+    }
+
+    private func publishContent(selectingSavedShift shift: Shift) throws {
+        switch job.payCalculationCycle {
+        case .scheduled:
+            guard let currentPayPeriod = try currentScheduledPayPeriod(),
+                  case let .scheduled(savedPayPeriod) = try job.payCalculationPeriod(for: shift),
+                  savedPayPeriod.start <= currentPayPeriod.start
+            else {
+                try publishRefreshedContent(preservingSelection: true)
+                return
+            }
+
+            try publishScheduledContent(
+                selectedPayPeriod: savedPayPeriod,
+                currentPayPeriod: currentPayPeriod,
+                selectedShiftID: shift.id
+            )
+        case .perShift:
+            guard let content = try perShiftContent(for: shift, selectedShiftID: shift.id) else {
+                state = .failure(.calculation)
+                return
+            }
+
+            publish(content)
         }
     }
 
@@ -197,7 +240,8 @@ final class OverviewViewModel {
 
     private func publishScheduledContent(
         selectedPayPeriod: PayPeriod,
-        currentPayPeriod: PayPeriod
+        currentPayPeriod: PayPeriod,
+        selectedShiftID: UUID? = nil
     ) throws {
         let period = PayCalculationPeriod.scheduled(selectedPayPeriod)
         let breakdown = try job.expectedGrossBreakdown(for: period, from: shifts)
@@ -205,17 +249,22 @@ final class OverviewViewModel {
         publish(Content(
             selectedPeriod: period,
             expectedBreakdown: breakdown,
+            selectedShiftID: selectedShiftID,
             totalStoredShiftCount: shifts.count,
             canNavigatePrevious: true,
             canNavigateNext: selectedPayPeriod.start < currentPayPeriod.start
         ))
     }
 
-    private func perShiftContent(for selectedShift: Shift?) throws -> Content? {
+    private func perShiftContent(
+        for selectedShift: Shift?,
+        selectedShiftID: UUID? = nil
+    ) throws -> Content? {
         guard let selectedShift else {
             return Content(
                 selectedPeriod: nil,
                 expectedBreakdown: nil,
+                selectedShiftID: nil,
                 totalStoredShiftCount: shifts.count,
                 canNavigatePrevious: false,
                 canNavigateNext: false
@@ -232,6 +281,7 @@ final class OverviewViewModel {
         return Content(
             selectedPeriod: period,
             expectedBreakdown: breakdown,
+            selectedShiftID: selectedShiftID,
             totalStoredShiftCount: shifts.count,
             canNavigatePrevious: index > shifts.startIndex,
             canNavigateNext: index < shifts.index(before: shifts.endIndex)
