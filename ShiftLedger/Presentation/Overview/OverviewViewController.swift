@@ -58,6 +58,10 @@ final class OverviewViewController: UIViewController {
             self?.viewModel.navigateToNextPeriod()
             self?.render()
         }
+        overviewView.onPeriodTapped = { [weak self] period in
+            self?.viewModel.selectPeriod(period)
+            self?.render()
+        }
         overviewView.onAddShiftTapped = { [weak self] in
             self?.onAddShift?()
         }
@@ -103,12 +107,14 @@ final class OverviewViewController: UIViewController {
             }
 
             overviewView.renderContent(
-                expectedGross: OverviewFormatting.currency(
+                expectedGross: OverviewFormatting.heroAmount(
                     breakdown.expectedGross,
                     currencyCode: currencyCode,
                     locale: displayLocale
                 ),
+                expectedGrossContext: OverviewStrings.expectedGrossContext(currencyCode: currencyCode),
                 period: periodText,
+                periodItems: railItems(from: content.railPeriods, selectedPeriod: period),
                 shiftCount: breakdown.shiftBreakdowns.count,
                 shiftCards: cards,
                 canNavigatePrevious: content.canNavigatePrevious,
@@ -160,6 +166,46 @@ final class OverviewViewController: UIViewController {
             }
 
             return OverviewFormatting.perShiftPeriod(
+                shift,
+                timeZoneIdentifier: timeZoneIdentifier,
+                locale: displayLocale
+            )
+        }
+    }
+
+    private func railItems(
+        from periods: [OverviewViewModel.Content.RailPeriod],
+        selectedPeriod: PayCalculationPeriod
+    ) -> [OverviewView.PeriodItem] {
+        periods.compactMap { railPeriod in
+            guard let title = formattedRailPeriod(railPeriod) else {
+                return nil
+            }
+
+            return OverviewView.PeriodItem(
+                period: railPeriod.period,
+                title: title,
+                isSelected: railPeriod.period == selectedPeriod
+            )
+        }
+    }
+
+    private func formattedRailPeriod(
+        _ railPeriod: OverviewViewModel.Content.RailPeriod
+    ) -> String? {
+        switch railPeriod.period {
+        case let .scheduled(payPeriod):
+            return OverviewFormatting.compactScheduledPeriod(
+                payPeriod,
+                timeZoneIdentifier: timeZoneIdentifier,
+                locale: displayLocale
+            )
+        case let .perShift(shiftID):
+            guard let shift = railPeriod.shift, shift.id == shiftID else {
+                return nil
+            }
+
+            return OverviewFormatting.compactPerShiftPeriod(
                 shift,
                 timeZoneIdentifier: timeZoneIdentifier,
                 locale: displayLocale

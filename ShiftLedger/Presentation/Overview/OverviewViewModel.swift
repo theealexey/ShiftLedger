@@ -8,7 +8,13 @@ final class OverviewViewModel {
     }
 
     struct Content: Equatable {
+        struct RailPeriod: Equatable {
+            let period: PayCalculationPeriod
+            let shift: Shift?
+        }
+
         let selectedPeriod: PayCalculationPeriod?
+        let railPeriods: [RailPeriod]
         let expectedBreakdown: ExpectedGrossBreakdown?
         let selectedShiftID: UUID?
         let totalStoredShiftCount: Int
@@ -137,6 +143,25 @@ final class OverviewViewModel {
         }
     }
 
+    func selectPeriod(_ period: PayCalculationPeriod) {
+        guard case .content = state else { return }
+
+        do {
+            switch (job.payCalculationCycle, period) {
+            case let (.scheduled, .scheduled(payPeriod)):
+                guard let currentPayPeriod = try currentScheduledPayPeriod(), payPeriod.start <= currentPayPeriod.start else { return }
+                try publishScheduledContent(selectedPayPeriod: payPeriod, currentPayPeriod: currentPayPeriod)
+            case let (.perShift, .perShift(shiftID)):
+                guard let shift = shifts.first(where: { $0.id == shiftID }), let content = try perShiftContent(for: shift) else { return }
+                publish(content)
+            default:
+                return
+            }
+        } catch {
+            state = .failure(.calculation)
+        }
+    }
+
     private func refresh(
         preservingSelection: Bool,
         selectingShiftID: UUID? = nil
@@ -248,6 +273,7 @@ final class OverviewViewModel {
 
         publish(Content(
             selectedPeriod: period,
+            railPeriods: scheduledRailPeriods(selectedPayPeriod, currentPayPeriod: currentPayPeriod),
             expectedBreakdown: breakdown,
             selectedShiftID: selectedShiftID,
             totalStoredShiftCount: shifts.count,
@@ -263,6 +289,7 @@ final class OverviewViewModel {
         guard let selectedShift else {
             return Content(
                 selectedPeriod: nil,
+                railPeriods: [],
                 expectedBreakdown: nil,
                 selectedShiftID: nil,
                 totalStoredShiftCount: shifts.count,
@@ -280,12 +307,33 @@ final class OverviewViewModel {
 
         return Content(
             selectedPeriod: period,
+            railPeriods: shifts.map {
+                Content.RailPeriod(period: .perShift(shiftID: $0.id), shift: $0)
+            },
             expectedBreakdown: breakdown,
             selectedShiftID: selectedShiftID,
             totalStoredShiftCount: shifts.count,
             canNavigatePrevious: index > shifts.startIndex,
             canNavigateNext: index < shifts.index(before: shifts.endIndex)
         )
+    }
+
+    private func scheduledRailPeriods(
+        _ selected: PayPeriod,
+        currentPayPeriod: PayPeriod
+    ) -> [Content.RailPeriod] {
+        guard case let .scheduled(schedule) = job.payCalculationCycle else { return [] }
+        var periods: [Content.RailPeriod] = []
+        if let previous = try? schedule.period(before: selected) {
+            periods.append(.init(period: .scheduled(previous), shift: nil))
+        }
+        periods.append(.init(period: .scheduled(selected), shift: nil))
+        if selected.start < currentPayPeriod.start,
+           let next = try? schedule.period(after: selected),
+           next.start <= currentPayPeriod.start {
+            periods.append(.init(period: .scheduled(next), shift: nil))
+        }
+        return periods
     }
 
     private func publish(_ content: Content) {

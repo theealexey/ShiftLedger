@@ -6,6 +6,45 @@ import Testing
 struct OverviewViewControllerTests {
     private let displayLocale = Locale(identifier: "en_US_POSIX")
 
+    @Test("Normal rail replaces fallback and exposes real neighbour context")
+    func normalRailHasNoDuplicatePeriod() throws {
+        let subject = try makeSubject(job: makeJob(cycle: .perShift), shifts: [makeShift(id: 1, month: 9, day: 10), makeShift(id: 2, month: 9, day: 11)])
+        subject.viewController.traitOverrides.preferredContentSizeCategory = .large
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+        window.rootViewController = subject.viewController
+        window.isHidden = false
+        defer { window.isHidden = true }
+        window.layoutIfNeeded()
+        subject.viewController.view.layoutIfNeeded()
+        let fallback: UILabel = try requireView(identifier: "overview.period.label", in: subject.viewController.view)
+        let rail: UIScrollView = try requireView(identifier: "overview.period.rail", in: subject.viewController.view)
+        #expect(isEffectivelyHidden(fallback))
+        #expect(!isEffectivelyHidden(rail))
+        let previous: UIControl = try requireView(identifier: "overview.period.item.0", in: rail)
+        let selected: UIControl = try requireView(identifier: "overview.period.item.1", in: rail)
+        #expect(selected.accessibilityTraits.contains(.selected))
+        #expect(abs(selected.convert(selected.bounds, to: rail).midX - rail.bounds.midX) < 1)
+        #expect(previous.convert(previous.bounds, to: rail).intersection(rail.bounds).width > 0)
+        for item in [previous, selected] {
+            let title: UILabel = try requireView(identifier: "overview.period.item.title", in: item)
+            #expect(title.bounds.height + 0.5 >= title.sizeThatFits(CGSize(width: title.bounds.width, height: CGFloat.greatestFiniteMagnitude)).height)
+        }
+    }
+
+    @Test("Hero currency context and the single Shift heading are explicit")
+    func heroAndShiftHeadingHaveOneHierarchy() throws {
+        let subject = try makeSubject(job: makeJob(cycle: .scheduled(.calendarMonthly)), shifts: [makeShift(id: 1, month: 9, day: 10)])
+        subject.viewController.loadViewIfNeeded()
+        let context: UILabel = try requireView(identifier: "overview.expectedGross.label", in: subject.viewController.view)
+        let amount: UILabel = try requireView(identifier: "overview.expectedGross.amount", in: subject.viewController.view)
+        let heading: UIStackView = try requireView(identifier: "overview.shiftHistory.title", in: subject.viewController.view)
+        #expect(context.text == OverviewStrings.expectedGrossContext(currencyCode: "EUR"))
+        #expect(amount.text == OverviewFormatting.heroAmount(160, currencyCode: "EUR", locale: displayLocale))
+        #expect(heading.isAccessibilityElement)
+        #expect(heading.accessibilityLabel == "\(OverviewStrings.shiftSectionPrefix) 1")
+        #expect(heading.arrangedSubviews.count == 2)
+    }
+
     @Test("Content displays the expected gross")
     func contentDisplaysExpectedGross() throws {
         let job = try makeJob(cycle: .scheduled(.calendarMonthly))
@@ -19,6 +58,34 @@ struct OverviewViewControllerTests {
             in: subject.viewController.view
         )
         #expect(label.text?.contains("160") == true)
+        #expect(label.font.pointSize == ShiftLedgerTypography.expectedGrossDisplay.pointSize)
+    }
+
+    @Test("Tapping a scheduled rail item updates the selected period and Shift history")
+    func scheduledRailTapUpdatesVisibleContent() throws {
+        let job = try makeJob(cycle: .scheduled(.calendarMonthly))
+        let august = try makeShift(id: 1, month: 8, day: 20)
+        let september = try makeShift(id: 2, month: 9, day: 20)
+        let subject = try makeSubject(job: job, shifts: [august, september])
+        subject.viewController.loadViewIfNeeded()
+        let railItem: UIControl = try requireView(
+            identifier: "overview.period.item.0",
+            in: subject.viewController.view
+        )
+
+        railItem.sendActions(for: .touchUpInside)
+
+        let content = try requireContent(subject.viewModel.state)
+        #expect(content.selectedPeriod == .scheduled(PayPeriod(
+            start: try LocalDate(year: 2026, month: 8, day: 1),
+            endExclusive: try LocalDate(year: 2026, month: 9, day: 1)
+        )))
+        #expect(shiftCardIdentifiers(in: subject.viewController.view) == [august.id])
+        let selectedRailItem: UIControl = try requireView(
+            identifier: "overview.period.item.1",
+            in: subject.viewController.view
+        )
+        #expect(selectedRailItem.accessibilityTraits.contains(.selected))
     }
 
     @Test("Content displays the selected scheduled period")
@@ -470,11 +537,19 @@ struct OverviewViewControllerTests {
         #expect(countLabel.text == "1")
     }
 
-    @Test("Large accessibility content does not use fixed label heights")
+    @Test("Accessibility amount and period receive enough height for their text")
     func labelsSupportAccessibilityContentSizes() throws {
         let job = try makeJob(cycle: .scheduled(.calendarMonthly))
         let subject = try makeSubject(job: job, shifts: [])
+        subject.viewController.traitOverrides.preferredContentSizeCategory = .accessibilityExtraExtraExtraLarge
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+        window.rootViewController = subject.viewController
+        window.isHidden = false
+        defer { window.isHidden = true }
         subject.viewController.loadViewIfNeeded()
+        subject.viewController.view.setNeedsLayout()
+        window.layoutIfNeeded()
+        subject.viewController.view.layoutIfNeeded()
         let amount: UILabel = try requireView(
             identifier: "overview.expectedGross.amount",
             in: subject.viewController.view
@@ -488,8 +563,19 @@ struct OverviewViewControllerTests {
         #expect(period.adjustsFontForContentSizeCategory)
         #expect(amount.numberOfLines == 0)
         #expect(period.numberOfLines == 0)
-        #expect(hasFixedHeight(amount) == false)
-        #expect(hasFixedHeight(period) == false)
+        let rail: UIScrollView = try requireView(identifier: "overview.period.rail", in: subject.viewController.view)
+        #expect(isEffectivelyHidden(rail))
+        for label in [amount, period] {
+            #expect(label.traitCollection.preferredContentSizeCategory == .accessibilityExtraExtraExtraLarge)
+            #expect(isEffectivelyHidden(label) == false)
+            try #require(label.text?.isEmpty == false)
+            try #require(label.bounds.width > 0)
+            let requiredHeight = label.sizeThatFits(
+                CGSize(width: label.bounds.width, height: CGFloat.greatestFiniteMagnitude)
+            ).height
+            try #require(requiredHeight > 0)
+            #expect(label.bounds.height + 0.5 >= requiredHeight)
+        }
     }
 
     @Test("Core buttons have stable accessibility labels, identifiers, and sizes")

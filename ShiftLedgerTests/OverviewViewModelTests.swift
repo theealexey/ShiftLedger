@@ -554,6 +554,66 @@ struct OverviewViewModelTests {
         #expect(breakdown.expectedGross == expected)
     }
 
+    @Test("Scheduled rail exposes a real previous period and never a future period")
+    func scheduledRailUsesCurrentPeriodAsForwardBoundary() throws {
+        let job = try makeJob(cycle: .scheduled(.calendarMonthly))
+        let now = try date(year: 2026, month: 9, day: 18, hour: 12)
+        let viewModel = makeViewModel(job: job, shifts: [], now: now)
+
+        viewModel.load()
+
+        let content = try requireContent(viewModel.state)
+        #expect(content.railPeriods.map(\.period) == [
+            .scheduled(PayPeriod(
+                start: try localDate(year: 2026, month: 8, day: 1),
+                endExclusive: try localDate(year: 2026, month: 9, day: 1)
+            )),
+            .scheduled(PayPeriod(
+                start: try localDate(year: 2026, month: 9, day: 1),
+                endExclusive: try localDate(year: 2026, month: 10, day: 1)
+            ))
+        ])
+    }
+
+    @Test("Selecting a scheduled rail period updates the period and its breakdown")
+    func selectingScheduledRailPeriodUpdatesContent() throws {
+        let job = try makeJob(cycle: .scheduled(.calendarMonthly))
+        let august = try makeShift(id: 1, month: 8, day: 20)
+        let september = try makeShift(id: 2, month: 9, day: 20)
+        let now = try date(year: 2026, month: 9, day: 18, hour: 12)
+        let viewModel = makeViewModel(job: job, shifts: [august, september], now: now)
+        viewModel.load()
+        let historicalPeriod = try #require(requireContent(viewModel.state).railPeriods.first?.period)
+
+        viewModel.selectPeriod(historicalPeriod)
+
+        let content = try requireContent(viewModel.state)
+        #expect(content.selectedPeriod == historicalPeriod)
+        #expect(content.expectedBreakdown?.shiftBreakdowns.map(\.shift) == [august])
+        #expect(content.canNavigateNext)
+    }
+
+    @Test("Per-shift rail contains only stored Shift-backed periods")
+    func perShiftRailContainsStoredShiftPeriods() throws {
+        let job = try makeJob(cycle: .perShift)
+        let older = try makeShift(id: 1, day: 10)
+        let latest = try makeShift(id: 2, day: 20)
+        let viewModel = makeViewModel(
+            job: job,
+            shifts: [older, latest],
+            now: Date(timeIntervalSinceReferenceDate: 0)
+        )
+
+        viewModel.load()
+
+        let content = try requireContent(viewModel.state)
+        #expect(content.railPeriods.map(\.period) == [
+            .perShift(shiftID: older.id),
+            .perShift(shiftID: latest.id)
+        ])
+        #expect(content.railPeriods.map(\.shift) == [older, latest])
+    }
+
     private func makeViewModel(job: Job, shifts: [Shift], now: Date) -> OverviewViewModel {
         OverviewViewModel(
             job: job,

@@ -730,6 +730,20 @@
         "ru" : { "stringUnit" : { "state" : "translated", "value" : "Ожидаемая сумма до вычетов" } }
       }
     },
+    "overview.expectedGross.context" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Expected gross · %@" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Ожидаемая сумма до вычетов · %@" } }
+      }
+    },
+    "overview.shiftSection.prefix" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Shifts ·" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Смены ·" } }
+      }
+    },
     "overview.shiftsInPeriod" : {
       "extractionState" : "manual",
       "localizations" : {

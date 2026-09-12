@@ -1,6 +1,13 @@
 import Foundation
 
 enum OverviewStrings {
+    static var shiftSectionPrefix: String {
+        String(localized: "overview.shiftSection.prefix", table: "Localizable")
+    }
+
+    static func expectedGrossContext(currencyCode: String) -> String {
+        String(format: String(localized: "overview.expectedGross.context", table: "Localizable"), currencyCode)
+    }
     static var title: String { String(localized: "overview.title", table: "Localizable") }
     static var expectedGross: String { String(localized: "overview.expectedGross", table: "Localizable") }
     static var shiftsInPeriod: String { String(localized: "overview.shiftsInPeriod", table: "Localizable") }

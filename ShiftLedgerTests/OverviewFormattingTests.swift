@@ -3,6 +3,36 @@ import Testing
 @testable import ShiftLedger
 
 struct OverviewFormattingTests {
+    @Test("Hero formats numeric currency precision without currency text", arguments: ["SEK", "JPY", "KWD"])
+    func heroUsesCurrencyPrecision(_ code: String) {
+        let value = Decimal(2400)
+        let result = OverviewFormatting.heroAmount(value, currencyCode: code, locale: Locale(identifier: "en_US"))
+        #expect(result.contains(code) == false)
+        #expect(result == (code == "JPY" ? "2,400" : code == "KWD" ? "2,400.000" : "2,400.00"))
+    }
+
+    @Test("Compact rail identifies monthly and weekly periods")
+    func compactScheduledTitles() throws {
+        let monthly = PayPeriod(start: try localDate(year: 2026, month: 9, day: 1), endExclusive: try localDate(year: 2026, month: 10, day: 1))
+        #expect(OverviewFormatting.compactScheduledPeriod(monthly, timeZoneIdentifier: "UTC", locale: locale) == "September 2026")
+        let weekly = PayPeriod(start: try localDate(year: 2026, month: 9, day: 7), endExclusive: try localDate(year: 2026, month: 9, day: 14))
+        let text = try #require(OverviewFormatting.compactScheduledPeriod(weekly, timeZoneIdentifier: "UTC", locale: locale, referenceDate: try date(year: 2026, month: 9, day: 18, hour: 12, minute: 0)))
+        #expect(text.contains("7"))
+        #expect(text.contains("13"))
+        #expect(!text.contains("2026"))
+    }
+
+    @Test("Compact overnight rail title contains only local Shift start")
+    func compactShiftDoesNotRepeatInterval() throws {
+        let start = try date(year: 2026, month: 9, day: 12, hour: 21, minute: 36)
+        let shift = try makeShift(start: start, duration: 12 * 3600)
+        let text = try #require(OverviewFormatting.compactPerShiftPeriod(shift, timeZoneIdentifier: "UTC", locale: locale, referenceDate: start))
+        #expect(text.contains("Sep 12"))
+        #expect(text.contains("9:36"))
+        #expect(!text.contains("Sep 13"))
+        #expect(!text.contains("2026"))
+    }
+
     private let locale = Locale(identifier: "en_US_POSIX")
 
     @Test("Expected gross uses the requested currency code")
