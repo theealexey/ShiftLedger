@@ -511,48 +511,122 @@ struct OverviewViewControllerTests {
         #expect(hasFixedHeight(card) == false)
     }
 
-    @Test("Tapping a Shift card expands only its persisted detail and a second tap collapses it")
-    func shiftCardTapControlsSingleExpandedDetail() throws {
+    @Test("Tapping a Shift makes that persisted Shift the only full deck front")
+    func shiftCardTapControlsSingleExpandedDetailAndDeckFront() throws {
         let job = try makeJob(cycle: .scheduled(.calendarMonthly))
         let older = try makeShift(id: 1, month: 9, day: 10)
-        let newer = try makeShift(id: 2, month: 9, day: 20)
-        let subject = try makeSubject(job: job, shifts: [older, newer])
+        let middle = try makeShift(id: 2, month: 9, day: 15)
+        let newer = try makeShift(id: 3, month: 9, day: 20)
+        let subject = try makeSubject(job: job, shifts: [older, middle, newer])
         subject.viewController.loadViewIfNeeded()
-        subject.viewController.reload(selectingShiftID: newer.id)
 
-        let newerDetail: UIView = try requireView(
-            identifier: "overview.shift.\(newer.id.uuidString).detail.paidTime",
+        let newerFront: UIView = try requireView(
+            identifier: "overview.shift.\(newer.id.uuidString).frontContent",
             in: subject.viewController.view
         )
+        #expect(isEffectivelyHidden(newerFront) == false)
+        #expect(visibleFrontCardIdentifiers(in: subject.viewController.view) == [newer.id])
+
+        let middleCard: UIControl = try requireView(
+            identifier: "overview.shift.\(middle.id.uuidString)",
+            in: subject.viewController.view
+        )
+        middleCard.sendActions(for: .touchUpInside)
+
+        let middleFront: UIView = try requireView(
+            identifier: "overview.shift.\(middle.id.uuidString).frontContent",
+            in: subject.viewController.view
+        )
+        let newerCovered: UIView = try requireView(
+            identifier: "overview.shift.\(newer.id.uuidString).header",
+            in: subject.viewController.view
+        )
+        let middleDetail: UIView = try requireView(
+            identifier: "overview.shift.\(middle.id.uuidString).detail.paidTime",
+            in: subject.viewController.view
+        )
+        #expect(isEffectivelyHidden(middleFront) == false)
+        #expect(isEffectivelyHidden(newerCovered) == false)
+        #expect(isEffectivelyHidden(middleDetail) == false)
+        #expect(visibleFrontCardIdentifiers(in: subject.viewController.view) == [middle.id])
+
         let olderCard: UIControl = try requireView(
             identifier: "overview.shift.\(older.id.uuidString)",
             in: subject.viewController.view
         )
-        #expect(isEffectivelyHidden(newerDetail) == false)
-        #expect(shiftCardIdentifiers(in: subject.viewController.view) == [newer.id, older.id])
-
         olderCard.sendActions(for: .touchUpInside)
 
-        let olderDetail: UIView = try requireView(
-            identifier: "overview.shift.\(older.id.uuidString).detail.paidTime",
+        let olderFront: UIView = try requireView(
+            identifier: "overview.shift.\(older.id.uuidString).frontContent",
             in: subject.viewController.view
         )
         let newerCard: UIControl = try requireView(
             identifier: "overview.shift.\(newer.id.uuidString)",
             in: subject.viewController.view
         )
-        #expect(isEffectivelyHidden(olderDetail) == false)
-        #expect(isEffectivelyHidden(newerDetail))
+        #expect(isEffectivelyHidden(olderFront) == false)
+        #expect(visibleFrontCardIdentifiers(in: subject.viewController.view) == [older.id])
         #expect(olderCard.accessibilityTraits.contains(.selected))
         #expect(newerCard.accessibilityTraits.contains(.selected) == false)
-        #expect(olderCard.accessibilityLabel?.contains(PaycheckResultStrings.rate) == true)
-        #expect(olderCard.accessibilityLabel?.contains(OverviewStrings.payBasis) == true)
-        #expect(shiftCardIdentifiers(in: subject.viewController.view) == [newer.id, older.id])
+        #expect(shiftCardIdentifiers(in: subject.viewController.view) == [newer.id, middle.id, older.id])
+        
+        let olderDetail: UIView = try requireView(
+            identifier: "overview.shift.\(older.id.uuidString).detail.paidTime",
+            in: subject.viewController.view
+        )
+
+        #expect(isEffectivelyHidden(olderDetail) == false)
 
         olderCard.sendActions(for: .touchUpInside)
+
         #expect(isEffectivelyHidden(olderDetail))
         #expect(olderCard.accessibilityTraits.contains(.selected))
-        #expect(shiftCardIdentifiers(in: subject.viewController.view) == [newer.id, older.id])
+        #expect(visibleFrontCardIdentifiers(in: subject.viewController.view) == [older.id])
+    }
+
+    @Test("Covered Shift strips resolve hit testing to their own card before making it front")
+    func coveredShiftStripsReceiveTouches() throws {
+        let job = try makeJob(cycle: .scheduled(.calendarMonthly))
+        let oldest = try makeShift(id: 1, month: 9, day: 10)
+        let middle = try makeShift(id: 2, month: 9, day: 15)
+        let newest = try makeShift(id: 3, month: 9, day: 20)
+        let subject = try makeSubject(job: job, shifts: [oldest, middle, newest])
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+        window.rootViewController = subject.viewController
+        window.isHidden = false
+        defer { window.isHidden = true }
+        subject.viewController.loadViewIfNeeded()
+        window.layoutIfNeeded()
+
+        let deck: UIView = try requireView(identifier: "overview.shiftStack", in: subject.viewController.view)
+        let middleCard: UIControl = try requireView(
+            identifier: "overview.shift.\(middle.id.uuidString)",
+            in: subject.viewController.view
+        )
+        let oldestCard: UIControl = try requireView(
+            identifier: "overview.shift.\(oldest.id.uuidString)",
+            in: subject.viewController.view
+        )
+
+        let middleHits = visibleSlicePoints(for: middleCard, in: deck).map {
+            deck.hitTest($0, with: nil)
+        }
+        
+        #expect(middleHits.allSatisfy { $0 === middleCard })
+        #expect(middleHits.allSatisfy { $0 === middleCard })
+        middleCard.sendActions(for: .touchUpInside)
+        window.layoutIfNeeded()
+        #expect(visibleFrontCardIdentifiers(in: subject.viewController.view) == [middle.id])
+
+        let oldestHits = visibleSlicePoints(for: oldestCard, in: deck).map {
+            deck.hitTest($0, with: nil)
+        }
+        
+        #expect(oldestHits.allSatisfy { $0 === oldestCard })
+        #expect(oldestHits.allSatisfy { $0 === oldestCard })
+        oldestCard.sendActions(for: .touchUpInside)
+        window.layoutIfNeeded()
+        #expect(visibleFrontCardIdentifiers(in: subject.viewController.view) == [oldest.id])
     }
 
     @Test("Normal Shift history is a static deck while accessibility size remains a vertical accordion")
@@ -616,8 +690,8 @@ struct OverviewViewControllerTests {
         }
     }
 
-    @Test("Static deck geometry is independent from selected Shift state")
-    func shiftStackGeometryDoesNotDependOnSelection() throws {
+    @Test("Selected or missing selection determines the visual front without changing canonical card order")
+    func shiftStackUsesSelectedCardOrNewestFallbackAsVisualFront() throws {
         let ids = (1...4).map {
             UUID(uuid: (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, UInt8($0)))
         }
@@ -634,12 +708,18 @@ struct OverviewViewControllerTests {
         let cards: [UIView] = try ids.map {
             try requireView(identifier: "overview.shift.\($0.uuidString)", in: view)
         }
-        let unselectedFrames = cards.map { $0.convert($0.bounds, to: window) }
+        let deck: UIView = try requireView(identifier: "overview.shiftStack", in: view)
+        #expect(visibleFrontCardIdentifiers(in: view) == [ids[0]])
+        expectBackgroundDeck([cards[0], cards[1], cards[2], cards[3]], in: deck, window: window)
 
-        renderPresentationCards(ids: ids, selectedID: ids[3], in: view)
+        renderPresentationCards(ids: ids, selectedID: ids[2], in: view)
         window.layoutIfNeeded()
-        let selectedFrames = cards.map { $0.convert($0.bounds, to: window) }
-        #expect(unselectedFrames == selectedFrames)
+        #expect(visibleFrontCardIdentifiers(in: view) == [ids[2]])
+        expectBackgroundDeck([cards[2], cards[0], cards[1], cards[3]], in: deck, window: window)
+
+        renderPresentationCards(ids: ids, selectedID: UUID(), in: view)
+        window.layoutIfNeeded()
+        #expect(visibleFrontCardIdentifiers(in: view) == [ids[0]])
     }
 
     @Test("Six decorative Shift surface roles each provide a foreground")
@@ -1178,6 +1258,28 @@ struct OverviewViewControllerTests {
                 return nil
             }
             return UUID(uuidString: String(identifier.dropFirst(identifierPrefix.count)))
+        }
+    }
+
+    private func visibleFrontCardIdentifiers(in view: UIView) -> [UUID] {
+        shiftCardIdentifiers(in: view).filter { id in
+            guard let front = descendant(identifier: "overview.shift.\(id.uuidString).frontContent", in: view) else {
+                return false
+            }
+            return isEffectivelyHidden(front) == false
+        }
+    }
+
+    private func visibleSlicePoints(for card: UIView, in deck: UIView) -> [CGPoint] {
+        let cardFrame = card.convert(card.bounds, to: deck)
+        let nextCardTop = deck.subviews
+            .filter { $0 !== card }
+            .map { $0.convert($0.bounds, to: deck).minY }
+            .filter { $0 > cardFrame.minY }
+            .min() ?? cardFrame.maxY
+        let visibleHeight = nextCardTop - cardFrame.minY
+        return [0.15, 0.5, 0.85].map {
+            CGPoint(x: cardFrame.midX, y: cardFrame.minY + visibleHeight * $0)
         }
     }
 

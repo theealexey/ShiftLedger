@@ -662,11 +662,15 @@ private final class OverviewShiftStackView: UIView {
         }
 
         let surfaceRoles = ShiftLedgerColors.shiftSurfaceRoles(for: cards.map(\.id))
-        for (index, pair) in zip(cards, surfaceRoles).enumerated() {
-            let (card, surfaceRole) = pair
-            let isDeckFront = index == 0
+        let frontCardID = cards.first(where: \.isSelected)?.id ?? cards.first?.id
+        for (card, surfaceRole) in zip(cards, surfaceRoles) {
+            let isDeckFront = card.id == frontCardID
             if let view = cardViews[card.id] {
-                view.update(with: card, surfaceRole: surfaceRole, isDeckFront: isDeckFront)
+                view.update(
+                    with: card,
+                    surfaceRole: surfaceRole,
+                    isDeckFront: isDeckFront
+                )
             } else {
                 let view = OverviewShiftCardView(
                     card: card,
@@ -687,6 +691,27 @@ private final class OverviewShiftStackView: UIView {
         cardViews[id]
     }
 
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        updateCardAccessibilityFrames()
+    }
+
+    override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+        guard usesAccessibleListLayout == false else {
+            return super.hitTest(point, with: event)
+        }
+        guard bounds.contains(point) else { return nil }
+
+        let views = visualCardViews
+        for (index, view) in views.enumerated() {
+            guard visibleRegion(for: view, at: index, in: views).contains(point) else { continue }
+            
+            return view
+        }
+        
+        return nil
+    }
+
     private func rebuildLayout(animated: Bool = false) {
         NSLayoutConstraint.deactivate(activeLayoutConstraints)
         activeLayoutConstraints.removeAll()
@@ -694,7 +719,13 @@ private final class OverviewShiftStackView: UIView {
         guard cards.isEmpty == false else { return }
         let views = cards.compactMap { cardViews[$0.id] }
         guard views.count == cards.count else { return }
-        let visualViews = usesAccessibleListLayout ? views : Array(views.reversed())
+        guard let frontCard = cards.first(where: \.isSelected) ?? cards.first else {
+            return
+        }
+        let visualCards = cards.reversed().filter { $0.id != frontCard.id } + [frontCard]
+        let visualViews = usesAccessibleListLayout
+            ? views
+            : visualCards.compactMap { cardViews[$0.id] }
 
         for (index, view) in visualViews.enumerated() {
             activeLayoutConstraints += [
@@ -743,6 +774,36 @@ private final class OverviewShiftStackView: UIView {
         }
     }
 
+    private var visualCardViews: [OverviewShiftCardView] {
+        subviews.compactMap { $0 as? OverviewShiftCardView }
+    }
+
+    private func visibleRegion(
+        for view: OverviewShiftCardView,
+        at index: Int,
+        in views: [OverviewShiftCardView]
+    ) -> CGRect {
+        let lowerEdge = index + 1 < views.count
+            ? min(view.frame.maxY, views[index + 1].frame.minY)
+            : view.frame.maxY
+        return CGRect(
+            x: view.frame.minX,
+            y: view.frame.minY,
+            width: view.frame.width,
+            height: max(0, lowerEdge - view.frame.minY)
+        )
+    }
+
+    private func updateCardAccessibilityFrames() {
+        let views = visualCardViews
+        for (index, view) in views.enumerated() {
+            let region = usesAccessibleListLayout
+                ? view.frame
+                : visibleRegion(for: view, at: index, in: views)
+            view.updateAccessibilityFrame(for: region, in: self)
+        }
+    }
+
 }
 
 private final class OverviewShiftCardView: UIControl {
@@ -784,7 +845,6 @@ private final class OverviewShiftCardView: UIControl {
     private let unpaidBreakDetailGroup = UIStackView()
     private let rateDetailGroup = UIStackView()
     private let payBasisDetailGroup = UIStackView()
-
     init(
         card: OverviewView.ShiftCard,
         surfaceRole: ShiftSurfaceRole,
@@ -793,7 +853,11 @@ private final class OverviewShiftCardView: UIControl {
         super.init(frame: .zero)
         configureHierarchy()
         configureLayout()
-        update(with: card, surfaceRole: surfaceRole, isDeckFront: isDeckFront)
+        update(
+            with: card,
+            surfaceRole: surfaceRole,
+            isDeckFront: isDeckFront
+        )
     }
 
     @available(*, unavailable)
@@ -935,6 +999,7 @@ private final class OverviewShiftCardView: UIControl {
 
     private func configureHierarchy() {
         contentStack.axis = .vertical
+        contentStack.isUserInteractionEnabled = false
         contentStack.spacing = 12
         contentStack.translatesAutoresizingMaskIntoConstraints = false
 
@@ -1045,6 +1110,14 @@ private final class OverviewShiftCardView: UIControl {
             frontHeaderRow.spacing = usesVerticalFrontHeader ? 4 : Layout.frontHeaderSpacing
         }
         frontHeaderSpacer.isHidden = usesVerticalFrontHeader
+    }
+
+    func updateAccessibilityFrame(for region: CGRect, in container: UIView) {
+        accessibilityFrame = container.convert(region, to: nil)
+        accessibilityActivationPoint = container.convert(
+            CGPoint(x: region.midX, y: region.midY),
+            to: nil
+        )
     }
 }
 
