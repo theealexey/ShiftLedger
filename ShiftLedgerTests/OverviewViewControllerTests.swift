@@ -569,7 +569,7 @@ struct OverviewViewControllerTests {
         #expect(olderCard.accessibilityTraits.contains(.selected))
         #expect(newerCard.accessibilityTraits.contains(.selected) == false)
         #expect(shiftCardIdentifiers(in: subject.viewController.view) == [newer.id, middle.id, older.id])
-        
+
         let olderDetail: UIView = try requireView(
             identifier: "overview.shift.\(older.id.uuidString).detail.paidTime",
             in: subject.viewController.view
@@ -611,8 +611,7 @@ struct OverviewViewControllerTests {
         let middleHits = visibleSlicePoints(for: middleCard, in: deck).map {
             deck.hitTest($0, with: nil)
         }
-        
-        #expect(middleHits.allSatisfy { $0 === middleCard })
+
         #expect(middleHits.allSatisfy { $0 === middleCard })
         middleCard.sendActions(for: .touchUpInside)
         window.layoutIfNeeded()
@@ -621,8 +620,7 @@ struct OverviewViewControllerTests {
         let oldestHits = visibleSlicePoints(for: oldestCard, in: deck).map {
             deck.hitTest($0, with: nil)
         }
-        
-        #expect(oldestHits.allSatisfy { $0 === oldestCard })
+
         #expect(oldestHits.allSatisfy { $0 === oldestCard })
         oldestCard.sendActions(for: .touchUpInside)
         window.layoutIfNeeded()

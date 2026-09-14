@@ -705,10 +705,10 @@ private final class OverviewShiftStackView: UIView {
         let views = visualCardViews
         for (index, view) in views.enumerated() {
             guard visibleRegion(for: view, at: index, in: views).contains(point) else { continue }
-            
+
             return view
         }
-        
+
         return nil
     }
 
