@@ -234,11 +234,164 @@ struct OverviewFormattingTests {
         #expect(time.contains("4:00"))
     }
 
+    @Test("Shift endpoints use the supplied Job timezone")
+    func shiftEndpointsUseJobTimeZone() throws {
+        let start = try date(year: 2026, month: 9, day: 19, hour: 23, minute: 30)
+        let shift = try Shift(
+            start: start,
+            end: start.addingTimeInterval(2 * 60 * 60),
+            unpaidBreak: UnpaidBreak(
+                start: start.addingTimeInterval(60 * 60),
+                end: start.addingTimeInterval(90 * 60)
+            )
+        )
+
+        let utc = try #require(OverviewFormatting.shiftEndpoints(
+            shift,
+            timeZoneIdentifier: "UTC",
+            locale: locale
+        ))
+        let stockholm = try #require(OverviewFormatting.shiftEndpoints(
+            shift,
+            timeZoneIdentifier: "Europe/Stockholm",
+            locale: locale
+        ))
+
+        #expect(utc.startTime.contains("11:30"))
+        #expect(utc.endTime.contains("1:30"))
+        #expect(stockholm.startTime.contains("1:30"))
+        #expect(stockholm.endTime.contains("3:30"))
+        #expect(utc.startDate?.contains("19") == true)
+        #expect(utc.endDate?.contains("20") == true)
+        #expect(stockholm.startDate == nil)
+        #expect(stockholm.endDate == nil)
+    }
+
+    @Test("Endpoint dates distinguish overnight and multi-day Shifts", arguments: [1, 2])
+    func shiftEndpointsIdentifyDifferentDays(_ days: Int) throws {
+        let start = try date(year: 2026, month: 9, day: 15, hour: 22, minute: 43)
+        let shift = try makeShift(start: start, duration: Double(days) * 24 * 3600)
+        let result = try #require(OverviewFormatting.shiftEndpoints(
+            shift, timeZoneIdentifier: "UTC", locale: locale
+        ))
+        #expect(result.startDate?.contains("15") == true)
+        #expect(result.endDate?.contains(String(15 + days)) == true)
+        #expect(result.startDate != result.endDate)
+        #expect(result.startTime == result.endTime)
+    }
+
+    @Test("Endpoint dates retain both years when a Shift crosses New Year")
+    func shiftEndpointsIdentifyYearBoundary() throws {
+        let start = try date(year: 2026, month: 12, day: 31, hour: 22, minute: 0)
+        let shift = try makeShift(start: start, duration: 8 * 3600)
+        let result = try #require(OverviewFormatting.shiftEndpoints(
+            shift, timeZoneIdentifier: "UTC", locale: locale
+        ))
+        #expect(result.startDate?.contains("2026") == true)
+        #expect(result.endDate?.contains("2027") == true)
+    }
+
+    @Test("Compact Shift date uses the supplied Job timezone")
+    func frontShiftDateUsesJobTimeZone() throws {
+        let shift = try makeShift(
+            start: try date(year: 2026, month: 9, day: 19, hour: 23, minute: 30),
+            duration: 60 * 60
+        )
+
+        let utc = try #require(OverviewFormatting.frontShiftDate(
+            shift,
+            timeZoneIdentifier: "UTC",
+            locale: locale
+        ))
+        let stockholm = try #require(OverviewFormatting.frontShiftDate(
+            shift,
+            timeZoneIdentifier: "Europe/Stockholm",
+            locale: locale
+        ))
+
+        #expect(utc.contains("19"))
+        #expect(stockholm.contains("20"))
+    }
+
+    @Test("Same-day card header keeps only its time context beside compact date")
+    func compactSameDayShiftHeaderContext() throws {
+        let shift = try makeShift(
+            start: try date(year: 2026, month: 9, day: 15, hour: 12, minute: 56),
+            duration: 5 * 60 * 60
+        )
+        let locale = Locale(identifier: "en_GB")
+        let time = try #require(OverviewFormatting.compactShiftTimeRange(
+            shift,
+            timeZoneIdentifier: "UTC",
+            locale: locale
+        ))
+
+        #expect(time.contains("12:56"))
+        #expect(time.contains("17:56"))
+        #expect(time.contains("15") == false)
+        #expect(time.contains("Sep") == false)
+    }
+
+    @Test("Overnight card header keeps only truthful end-date context")
+    func compactOvernightShiftHeaderContext() throws {
+        let shift = try makeShift(
+            start: try date(year: 2026, month: 9, day: 15, hour: 22, minute: 43),
+            duration: 8 * 60 * 60
+        )
+        let locale = Locale(identifier: "en_GB")
+        let time = try #require(OverviewFormatting.compactShiftTimeRange(
+            shift,
+            timeZoneIdentifier: "UTC",
+            locale: locale
+        ))
+
+        #expect(time.contains("22:43"))
+        #expect(time.contains("06:43"))
+        #expect(time.contains("16"))
+        #expect(time.contains("15") == false)
+    }
+
+    @Test("Multi-day card header keeps only truthful end-date context")
+    func compactMultiDayShiftHeaderContext() throws {
+        let shift = try makeShift(
+            start: try date(year: 2026, month: 9, day: 15, hour: 12, minute: 56),
+            duration: 48 * 60 * 60
+        )
+        let locale = Locale(identifier: "en_GB")
+        let time = try #require(OverviewFormatting.compactShiftTimeRange(
+            shift,
+            timeZoneIdentifier: "UTC",
+            locale: locale
+        ))
+
+        #expect(time.contains("12:56"))
+        #expect(time.contains("17"))
+        #expect(time.contains("15") == false)
+    }
+
     @Test("Shift card duration uses complete localized components")
     func shiftCardDurationUsesCompleteLocalizedComponents() {
         let result = OverviewFormatting.duration(8 * 3_600 + 30 * 60)
 
         #expect(result == "8 \(PaycheckResultStrings.durationHour) 30 \(PaycheckResultStrings.durationMinute)")
+    }
+
+    @Test("Expanded Shift break detail uses the Job timezone and local interval")
+    func unpaidBreakIntervalUsesJobTimeZone() throws {
+        let start = try date(year: 2026, month: 9, day: 20, hour: 8, minute: 0)
+        let unpaidBreak = UnpaidBreak(
+            start: start.addingTimeInterval(4 * 3_600),
+            end: start.addingTimeInterval(4.5 * 3_600)
+        )
+
+        let result = try #require(OverviewFormatting.unpaidBreakTimeRange(
+            unpaidBreak,
+            timeZoneIdentifier: "Europe/Stockholm",
+            locale: locale
+        ))
+
+        #expect(result.contains("2:00"))
+        #expect(result.contains("2:30"))
     }
 
     private func decimal(_ value: String) throws -> Decimal {

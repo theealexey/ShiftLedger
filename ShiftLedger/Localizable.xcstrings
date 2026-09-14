@@ -758,6 +758,48 @@
         "ru" : { "stringUnit" : { "state" : "translated", "value" : "В этом расчётном периоде нет смен." } }
       }
     },
+    "overview.shift.paidDuration" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "%@ paid" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "%@ оплачено" } }
+      }
+    },
+    "overview.shift.payBasis" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Pay basis" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Основание оплаты" } }
+      }
+    },
+    "overview.shift.expand" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Shows shift details." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Показывает детали смены." } }
+      }
+    },
+    "overview.shift.collapse" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Hides shift details." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Скрывает детали смены." } }
+      }
+    },
+    "overview.shift.expanded" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Expanded" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Развернута" } }
+      }
+    },
+    "overview.shift.collapsed" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Collapsed" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Свернута" } }
+      }
+    },
     "overview.checkPaycheck" : {
       "extractionState" : "manual",
       "localizations" : {

@@ -1,6 +1,10 @@
 import Foundation
 
 enum OverviewStrings {
+    static func paidDuration(_ duration: String) -> String {
+        String(format: String(localized: "overview.shift.paidDuration", table: "Localizable"), duration)
+    }
+
     static var shiftSectionPrefix: String {
         String(localized: "overview.shiftSection.prefix", table: "Localizable")
     }
@@ -14,6 +18,11 @@ enum OverviewStrings {
     static var shiftHistoryEmpty: String {
         String(localized: "overview.shiftHistory.empty", table: "Localizable")
     }
+    static var payBasis: String { String(localized: "overview.shift.payBasis", table: "Localizable") }
+    static var expandShift: String { String(localized: "overview.shift.expand", table: "Localizable") }
+    static var collapseShift: String { String(localized: "overview.shift.collapse", table: "Localizable") }
+    static var expanded: String { String(localized: "overview.shift.expanded", table: "Localizable") }
+    static var collapsed: String { String(localized: "overview.shift.collapsed", table: "Localizable") }
     static var checkPaycheck: String { String(localized: "overview.checkPaycheck", table: "Localizable") }
     static var addShift: String { String(localized: "overview.addShift", table: "Localizable") }
     static var previousPeriod: String { String(localized: "overview.previousPeriod", table: "Localizable") }

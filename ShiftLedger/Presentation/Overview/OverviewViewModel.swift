@@ -16,7 +16,9 @@ final class OverviewViewModel {
         let selectedPeriod: PayCalculationPeriod?
         let railPeriods: [RailPeriod]
         let expectedBreakdown: ExpectedGrossBreakdown?
+        let shiftHistoryBreakdowns: [ShiftPayBreakdown]
         let selectedShiftID: UUID?
+        let expandedShiftID: UUID?
         let totalStoredShiftCount: Int
         let canNavigatePrevious: Bool
         let canNavigateNext: Bool
@@ -36,6 +38,8 @@ final class OverviewViewModel {
 
     private var shifts: [Shift] = []
     private var selectedPeriod: PayCalculationPeriod?
+    private var selectedShiftID: UUID?
+    private var expandedShiftID: UUID?
 
     init(
         job: Job,
@@ -162,6 +166,27 @@ final class OverviewViewModel {
         }
     }
 
+    func toggleShiftExpansion(with id: UUID) {
+        guard
+            case let .content(content) = state,
+            content.shiftHistoryBreakdowns.contains(where: { $0.shift.id == id })
+        else {
+            return
+        }
+
+        if selectedShiftID == id, expandedShiftID == id {
+            expandedShiftID = nil
+        } else {
+            selectedShiftID = id
+            expandedShiftID = id
+        }
+
+        publish(content.replacingSelection(
+            selectedShiftID: selectedShiftID,
+            expandedShiftID: expandedShiftID
+        ))
+    }
+
     private func refresh(
         preservingSelection: Bool,
         selectingShiftID: UUID? = nil
@@ -228,6 +253,8 @@ final class OverviewViewModel {
     }
 
     private func publishContent(selectingSavedShift shift: Shift) throws {
+        selectedShiftID = shift.id
+        expandedShiftID = shift.id
         switch job.payCalculationCycle {
         case .scheduled:
             guard let currentPayPeriod = try currentScheduledPayPeriod(),
@@ -240,11 +267,10 @@ final class OverviewViewModel {
 
             try publishScheduledContent(
                 selectedPayPeriod: savedPayPeriod,
-                currentPayPeriod: currentPayPeriod,
-                selectedShiftID: shift.id
+                currentPayPeriod: currentPayPeriod
             )
         case .perShift:
-            guard let content = try perShiftContent(for: shift, selectedShiftID: shift.id) else {
+            guard let content = try perShiftContent(for: shift) else {
                 state = .failure(.calculation)
                 return
             }
@@ -265,33 +291,37 @@ final class OverviewViewModel {
 
     private func publishScheduledContent(
         selectedPayPeriod: PayPeriod,
-        currentPayPeriod: PayPeriod,
-        selectedShiftID: UUID? = nil
+        currentPayPeriod: PayPeriod
     ) throws {
         let period = PayCalculationPeriod.scheduled(selectedPayPeriod)
         let breakdown = try job.expectedGrossBreakdown(for: period, from: shifts)
+        let shiftHistoryBreakdowns = try allShiftHistoryBreakdowns()
 
+        let selection = selection(in: shiftHistoryBreakdowns)
         publish(Content(
             selectedPeriod: period,
             railPeriods: scheduledRailPeriods(selectedPayPeriod, currentPayPeriod: currentPayPeriod),
             expectedBreakdown: breakdown,
-            selectedShiftID: selectedShiftID,
-            totalStoredShiftCount: shifts.count,
+            shiftHistoryBreakdowns: shiftHistoryBreakdowns,
+            selectedShiftID: selection.selectedShiftID,
+            expandedShiftID: selection.expandedShiftID,
+            totalStoredShiftCount: shiftHistoryBreakdowns.count,
             canNavigatePrevious: true,
             canNavigateNext: selectedPayPeriod.start < currentPayPeriod.start
         ))
     }
 
     private func perShiftContent(
-        for selectedShift: Shift?,
-        selectedShiftID: UUID? = nil
+        for selectedShift: Shift?
     ) throws -> Content? {
         guard let selectedShift else {
             return Content(
                 selectedPeriod: nil,
                 railPeriods: [],
                 expectedBreakdown: nil,
+                shiftHistoryBreakdowns: [],
                 selectedShiftID: nil,
+                expandedShiftID: nil,
                 totalStoredShiftCount: shifts.count,
                 canNavigatePrevious: false,
                 canNavigateNext: false
@@ -304,15 +334,19 @@ final class OverviewViewModel {
 
         let period = try job.payCalculationPeriod(for: selectedShift)
         let breakdown = try job.expectedGrossBreakdown(for: period, from: shifts)
+        let shiftHistoryBreakdowns = try allShiftHistoryBreakdowns()
 
+        let selection = selection(in: shiftHistoryBreakdowns)
         return Content(
             selectedPeriod: period,
             railPeriods: shifts.map {
                 Content.RailPeriod(period: .perShift(shiftID: $0.id), shift: $0)
             },
             expectedBreakdown: breakdown,
-            selectedShiftID: selectedShiftID,
-            totalStoredShiftCount: shifts.count,
+            shiftHistoryBreakdowns: shiftHistoryBreakdowns,
+            selectedShiftID: selection.selectedShiftID,
+            expandedShiftID: selection.expandedShiftID,
+            totalStoredShiftCount: shiftHistoryBreakdowns.count,
             canNavigatePrevious: index > shifts.startIndex,
             canNavigateNext: index < shifts.index(before: shifts.endIndex)
         )
@@ -339,5 +373,64 @@ final class OverviewViewModel {
     private func publish(_ content: Content) {
         selectedPeriod = content.selectedPeriod
         state = .content(content)
+    }
+
+    private func allShiftHistoryBreakdowns() throws -> [ShiftPayBreakdown] {
+        try shifts
+            .map { shift in
+                let period = try job.payCalculationPeriod(for: shift)
+                guard let breakdown = try job.expectedGrossBreakdown(
+                    for: period,
+                    from: [shift]
+                ).shiftBreakdowns.first else {
+                    throw Failure.calculation
+                }
+                return breakdown
+            }
+            .sorted { lhs, rhs in
+                if lhs.shift.start != rhs.shift.start {
+                    return lhs.shift.start < rhs.shift.start
+                }
+                if lhs.shift.end != rhs.shift.end {
+                    return lhs.shift.end < rhs.shift.end
+                }
+                return lhs.shift.id.uuidString < rhs.shift.id.uuidString
+            }
+    }
+
+    private func selection(
+        in shiftHistoryBreakdowns: [ShiftPayBreakdown]
+    ) -> (selectedShiftID: UUID?, expandedShiftID: UUID?) {
+        guard
+            let selectedShiftID,
+            shiftHistoryBreakdowns.contains(where: { $0.shift.id == selectedShiftID })
+        else {
+            self.selectedShiftID = nil
+            expandedShiftID = nil
+            return (nil, nil)
+        }
+
+        guard expandedShiftID == selectedShiftID else {
+            expandedShiftID = nil
+            return (selectedShiftID, nil)
+        }
+
+        return (selectedShiftID, expandedShiftID)
+    }
+}
+
+private extension OverviewViewModel.Content {
+    func replacingSelection(selectedShiftID: UUID?, expandedShiftID: UUID?) -> Self {
+        Self(
+            selectedPeriod: selectedPeriod,
+            railPeriods: railPeriods,
+            expectedBreakdown: expectedBreakdown,
+            shiftHistoryBreakdowns: shiftHistoryBreakdowns,
+            selectedShiftID: selectedShiftID,
+            expandedShiftID: expandedShiftID,
+            totalStoredShiftCount: totalStoredShiftCount,
+            canNavigatePrevious: canNavigatePrevious,
+            canNavigateNext: canNavigateNext
+        )
     }
 }

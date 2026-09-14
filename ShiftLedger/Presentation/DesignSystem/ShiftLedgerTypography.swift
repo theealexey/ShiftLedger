@@ -16,6 +16,11 @@ enum ShiftLedgerTypography {
         return UIFontMetrics(forTextStyle: .title2).scaledFont(for: font)
     }
 
+    static var shiftAmount: UIFont {
+        let font = UIFont.monospacedDigitSystemFont(ofSize: 30, weight: .bold)
+        return UIFontMetrics(forTextStyle: .title1).scaledFont(for: font)
+    }
+
     static var largeTitle: UIFont {
         UIFont.preferredFont(forTextStyle: .largeTitle)
     }

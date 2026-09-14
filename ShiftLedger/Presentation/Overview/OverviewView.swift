@@ -9,18 +9,24 @@ final class OverviewView: UIView, UIScrollViewDelegate {
 
     struct ShiftCard: Equatable {
         let id: UUID
-        let date: String
+        let frontDate: String
         let timeRange: String
+        let endpoints: OverviewFormatting.ShiftEndpoints
         let expectedAmount: String
         let paidDuration: String
         let unpaidBreak: String?
+        let unpaidBreakTimeRange: String?
+        let appliedRate: String
+        let payBasis: String
         let isSelected: Bool
+        let isExpanded: Bool
         let accessibilityLabel: String
     }
 
     var onPreviousPeriodTapped: (() -> Void)?
     var onNextPeriodTapped: (() -> Void)?
     var onPeriodTapped: ((PayCalculationPeriod) -> Void)?
+    var onShiftCardTapped: ((UUID) -> Void)?
     var onCheckPaycheckTapped: (() -> Void)?
     var onAddShiftTapped: (() -> Void)?
     var onRetryTapped: (() -> Void)?
@@ -46,9 +52,8 @@ final class OverviewView: UIView, UIScrollViewDelegate {
     private let shiftCountValueLabel = UILabel()
 
     private let shiftHistoryStack = UIStackView()
-    private let shiftCardsStack = UIStackView()
+    private let shiftStack = OverviewShiftStackView()
     private let shiftHistoryEmptyLabel = UILabel()
-    private var shiftCardViews: [UUID: OverviewShiftCardView] = [:]
 
     private let checkPaycheckButton = UIButton(type: .system)
     private let addShiftButton = UIButton(type: .system)
@@ -121,25 +126,26 @@ final class OverviewView: UIView, UIScrollViewDelegate {
         periodRailContainer.layoutIfNeeded()
         periodRailScrollView.layoutIfNeeded()
         periodRailStack.layoutIfNeeded()
-        guard !periodRailScrollView.isHidden,
-              !periodRailScrollView.isDragging,
-              !periodRailScrollView.isDecelerating,
-              let selected = periodRailStack.arrangedSubviews.first(where: {
-                  $0.accessibilityTraits.contains(.selected)
-              }) as? OverviewPeriodRailItem else { return }
-        let inset = max(0, (periodRailScrollView.bounds.width - selected.bounds.width) / 2)
-        let changed = periodRailScrollView.contentInset.left != inset
-        periodRailScrollView.contentInset = UIEdgeInsets(top: 0, left: inset, bottom: 0, right: inset)
-        if needsPeriodCentering || changed {
-            periodRailScrollView.setContentOffset(
-                CGPoint(x: horizontalOffset(centering: selected), y: 0), animated: false
-            )
-            needsPeriodCentering = false
+        if !periodRailScrollView.isHidden,
+           !periodRailScrollView.isDragging,
+           !periodRailScrollView.isDecelerating,
+           let selected = periodRailStack.arrangedSubviews.first(where: {
+               $0.accessibilityTraits.contains(.selected)
+           }) as? OverviewPeriodRailItem {
+            let inset = max(0, (periodRailScrollView.bounds.width - selected.bounds.width) / 2)
+            let changed = periodRailScrollView.contentInset.left != inset
+            periodRailScrollView.contentInset = UIEdgeInsets(top: 0, left: inset, bottom: 0, right: inset)
+            if needsPeriodCentering || changed {
+                periodRailScrollView.setContentOffset(
+                    CGPoint(x: horizontalOffset(centering: selected), y: 0), animated: false
+                )
+                needsPeriodCentering = false
+            }
         }
     }
 
     func focusShiftCard(with id: UUID) {
-        guard let card = shiftCardViews[id] else {
+        guard let card = shiftStack.cardView(with: id) else {
             return
         }
 
@@ -192,45 +198,48 @@ final class OverviewView: UIView, UIScrollViewDelegate {
         backgroundColor = ShiftLedgerColors.backgroundPrimary
         accessibilityIdentifier = "overview.screen"
         scrollView.alwaysBounceVertical = true
+        scrollView.delegate = self
+        scrollView.accessibilityIdentifier = "overview.pageScroll"
 
         mainStack.axis = .vertical
-        mainStack.spacing = 16
+        mainStack.spacing = 24
 
-        contentCard.backgroundColor = ShiftLedgerColors.accentPrimary
+        contentCard.backgroundColor = ShiftLedgerColors.backgroundSecondary
         contentCard.layer.cornerCurve = .continuous
         contentCard.layer.cornerRadius = 28
+        contentCard.accessibilityIdentifier = "overview.expectedGross.hero"
         configureCard(emptyCard)
         configureCard(errorCard)
 
         contentStack.axis = .vertical
-        contentStack.spacing = 16
+        contentStack.spacing = 8
         expectedGrossLabel.text = OverviewStrings.expectedGross
         configureLabel(
             expectedGrossLabel,
             font: ShiftLedgerTypography.callout,
-            color: ShiftLedgerColors.textOnAccent
+            color: ShiftLedgerColors.textSecondary
         )
         expectedGrossLabel.accessibilityIdentifier = "overview.expectedGross.label"
 
         configureLabel(
             expectedGrossAmountLabel,
             font: ShiftLedgerTypography.expectedGrossDisplay,
-            color: ShiftLedgerColors.textOnAccent
+            color: ShiftLedgerColors.textPrimary
         )
         expectedGrossAmountLabel.accessibilityIdentifier = "overview.expectedGross.amount"
 
         navigationStack.axis = .horizontal
         navigationStack.alignment = .center
-        navigationStack.distribution = .equalSpacing
-        navigationStack.spacing = 8
+        navigationStack.distribution = .fill
+        navigationStack.spacing = 4
         periodRailContainer.axis = .vertical
-        periodRailContainer.spacing = 8
         periodRailScrollView.showsHorizontalScrollIndicator = false
         periodRailScrollView.alwaysBounceHorizontal = true
         periodRailScrollView.delegate = self
         periodRailScrollView.accessibilityIdentifier = "overview.period.rail"
+        periodRailScrollView.setContentHuggingPriority(.defaultLow, for: .horizontal)
         periodRailStack.axis = .horizontal
-        periodRailStack.spacing = 8
+        periodRailStack.spacing = 12
         configureNavigationButton(
             previousButton,
             systemImageName: "chevron.left",
@@ -247,6 +256,7 @@ final class OverviewView: UIView, UIScrollViewDelegate {
         periodLabel.textAlignment = .center
         periodLabel.accessibilityIdentifier = "overview.period.label"
         periodLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        periodLabel.setContentHuggingPriority(.defaultLow, for: .horizontal)
 
         shiftCountStack.axis = .horizontal
         shiftCountStack.alignment = .firstBaseline
@@ -273,8 +283,7 @@ final class OverviewView: UIView, UIScrollViewDelegate {
         shiftHistoryStack.axis = .vertical
         shiftHistoryStack.spacing = 12
 
-        shiftCardsStack.axis = .vertical
-        shiftCardsStack.spacing = 12
+        shiftStack.accessibilityIdentifier = "overview.shiftStack"
         shiftHistoryEmptyLabel.text = OverviewStrings.shiftHistoryEmpty
         configureLabel(
             shiftHistoryEmptyLabel,
@@ -331,7 +340,7 @@ final class OverviewView: UIView, UIScrollViewDelegate {
             periodRailStack,
             contentStack,
             shiftHistoryStack,
-            shiftCardsStack,
+            shiftStack,
             emptyStack,
             errorStack
         ].forEach {
@@ -344,8 +353,10 @@ final class OverviewView: UIView, UIScrollViewDelegate {
         [periodRailContainer, contentCard, shiftHistoryStack, checkPaycheckButton, emptyCard, errorCard, addShiftButton]
             .forEach(mainStack.addArrangedSubview)
 
-        [periodLabel, periodRailScrollView, navigationStack].forEach(periodRailContainer.addArrangedSubview)
+        periodRailContainer.addArrangedSubview(navigationStack)
         navigationStack.addArrangedSubview(previousButton)
+        navigationStack.addArrangedSubview(periodRailScrollView)
+        navigationStack.addArrangedSubview(periodLabel)
         navigationStack.addArrangedSubview(nextButton)
         periodRailScrollView.addSubview(periodRailStack)
 
@@ -354,7 +365,7 @@ final class OverviewView: UIView, UIScrollViewDelegate {
             .forEach(contentStack.addArrangedSubview)
         [shiftCountLabel, shiftCountValueLabel].forEach(shiftCountStack.addArrangedSubview)
 
-        [shiftCountStack, shiftCardsStack, shiftHistoryEmptyLabel]
+        [shiftCountStack, shiftStack, shiftHistoryEmptyLabel]
             .forEach(shiftHistoryStack.addArrangedSubview)
 
         emptyCard.addSubview(emptyStack)
@@ -364,6 +375,10 @@ final class OverviewView: UIView, UIScrollViewDelegate {
         [errorTitleLabel, errorMessageLabel, retryButton].forEach(errorStack.addArrangedSubview)
 
         contentCard.accessibilityElements = [expectedGrossLabel, expectedGrossAmountLabel]
+
+        mainStack.setCustomSpacing(16, after: periodRailContainer)
+        mainStack.setCustomSpacing(24, after: contentCard)
+        mainStack.setCustomSpacing(12, after: checkPaycheckButton)
     }
 
     private func configureLayout() {
@@ -373,21 +388,21 @@ final class OverviewView: UIView, UIScrollViewDelegate {
             scrollView.trailingAnchor.constraint(equalTo: trailingAnchor),
             scrollView.bottomAnchor.constraint(equalTo: bottomAnchor),
 
-            contentView.topAnchor.constraint(equalTo: scrollView.contentLayoutGuide.topAnchor, constant: 24),
+            contentView.topAnchor.constraint(equalTo: scrollView.contentLayoutGuide.topAnchor, constant: 16),
             contentView.leadingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.leadingAnchor),
             contentView.trailingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.trailingAnchor),
-            contentView.bottomAnchor.constraint(equalTo: scrollView.contentLayoutGuide.bottomAnchor, constant: -24),
+            contentView.bottomAnchor.constraint(equalTo: scrollView.contentLayoutGuide.bottomAnchor, constant: -32),
             contentView.widthAnchor.constraint(equalTo: scrollView.frameLayoutGuide.widthAnchor),
 
             mainStack.topAnchor.constraint(equalTo: contentView.topAnchor),
-            mainStack.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 24),
-            mainStack.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -24),
+            mainStack.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 20),
+            mainStack.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -20),
             mainStack.bottomAnchor.constraint(equalTo: contentView.bottomAnchor),
 
-            contentStack.topAnchor.constraint(equalTo: contentCard.topAnchor, constant: 20),
-            contentStack.leadingAnchor.constraint(equalTo: contentCard.leadingAnchor, constant: 20),
-            contentStack.trailingAnchor.constraint(equalTo: contentCard.trailingAnchor, constant: -20),
-            contentStack.bottomAnchor.constraint(equalTo: contentCard.bottomAnchor, constant: -20),
+            contentStack.topAnchor.constraint(equalTo: contentCard.topAnchor, constant: 24),
+            contentStack.leadingAnchor.constraint(equalTo: contentCard.leadingAnchor, constant: 24),
+            contentStack.trailingAnchor.constraint(equalTo: contentCard.trailingAnchor, constant: -24),
+            contentStack.bottomAnchor.constraint(equalTo: contentCard.bottomAnchor, constant: -24),
 
             periodRailScrollView.heightAnchor.constraint(greaterThanOrEqualToConstant: 44),
             periodRailScrollView.heightAnchor.constraint(equalTo: periodRailStack.heightAnchor),
@@ -462,13 +477,14 @@ final class OverviewView: UIView, UIScrollViewDelegate {
     ) {
         var configuration = isPrimary
             ? UIButton.Configuration.filled()
-            : UIButton.Configuration.tinted()
+            : UIButton.Configuration.plain()
         configuration.title = title
         configuration.cornerStyle = .large
         if isPrimary {
             configuration.baseBackgroundColor = ShiftLedgerColors.accentPrimary
         } else {
             configuration.baseForegroundColor = ShiftLedgerColors.accentPrimary
+            configuration.background.backgroundColor = ShiftLedgerColors.backgroundSecondary
         }
         button.configuration = configuration
         button.tintColor = ShiftLedgerColors.accentPrimary
@@ -505,17 +521,7 @@ final class OverviewView: UIView, UIScrollViewDelegate {
     }
 
     private func renderShiftHistory(_ cards: [ShiftCard]) {
-        shiftCardViews.removeAll()
-        shiftCardsStack.arrangedSubviews.forEach { view in
-            shiftCardsStack.removeArrangedSubview(view)
-            view.removeFromSuperview()
-        }
-
-        for card in cards {
-            let cardView = OverviewShiftCardView(card: card)
-            shiftCardsStack.addArrangedSubview(cardView)
-            shiftCardViews[card.id] = cardView
-        }
+        shiftStack.render(cards, onCardTapped: onShiftCardTapped)
 
         shiftHistoryEmptyLabel.isHidden = cards.isEmpty == false
     }
@@ -533,8 +539,9 @@ final class OverviewView: UIView, UIScrollViewDelegate {
                 self?.onPeriodTapped?(item.period)
             }, for: .touchUpInside)
             periodRailStack.addArrangedSubview(itemView)
-            itemView.widthAnchor.constraint(equalTo: periodRailScrollView.frameLayoutGuide.widthAnchor, multiplier: 0.72).isActive = true
+            itemView.widthAnchor.constraint(greaterThanOrEqualToConstant: 96).isActive = true
         }
+        periodRailScrollView.alwaysBounceHorizontal = items.count > 1
         needsPeriodCentering = true
     }
 
@@ -579,8 +586,10 @@ final class OverviewView: UIView, UIScrollViewDelegate {
     }
 
     private func updatePeriodRailForContentSizeCategory() {
-        periodRailScrollView.isHidden = traitCollection.preferredContentSizeCategory.isAccessibilityCategory
-        periodLabel.isHidden = !traitCollection.preferredContentSizeCategory.isAccessibilityCategory
+        let usesAccessibilityLayout = traitCollection.preferredContentSizeCategory.isAccessibilityCategory
+        periodRailScrollView.isHidden = usesAccessibilityLayout
+        periodLabel.isHidden = !usesAccessibilityLayout
+        shiftStack.usesAccessibleListLayout = usesAccessibilityLayout
         needsPeriodCentering = true
         setNeedsLayout()
     }
@@ -592,9 +601,9 @@ private final class OverviewPeriodRailItem: UIControl {
     init(item: OverviewView.PeriodItem) {
         period = item.period
         super.init(frame: .zero)
-        backgroundColor = item.isSelected ? ShiftLedgerColors.backgroundSecondary : ShiftLedgerColors.surfacePrimary
+        backgroundColor = item.isSelected ? ShiftLedgerColors.backgroundSecondary : .clear
         layer.cornerCurve = .continuous
-        layer.cornerRadius = 18
+        layer.cornerRadius = 14
         accessibilityLabel = item.title
         accessibilityTraits = item.isSelected ? [.button, .selected] : .button
 
@@ -602,7 +611,7 @@ private final class OverviewPeriodRailItem: UIControl {
         titleLabel.text = item.title
         titleLabel.font = item.isSelected ? ShiftLedgerTypography.headline : ShiftLedgerTypography.callout
         titleLabel.textColor = item.isSelected ? ShiftLedgerColors.textPrimary : ShiftLedgerColors.textSecondary
-        titleLabel.numberOfLines = 0
+        titleLabel.numberOfLines = 1
         titleLabel.accessibilityIdentifier = "overview.period.item.title"
         titleLabel.textAlignment = .center
         titleLabel.adjustsFontForContentSizeCategory = true
@@ -611,10 +620,10 @@ private final class OverviewPeriodRailItem: UIControl {
 
         NSLayoutConstraint.activate([
             heightAnchor.constraint(greaterThanOrEqualToConstant: 44),
-            titleLabel.topAnchor.constraint(equalTo: topAnchor, constant: 10),
-            titleLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 12),
-            titleLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -12),
-            titleLabel.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -10)
+            titleLabel.topAnchor.constraint(equalTo: topAnchor, constant: 8),
+            titleLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 10),
+            titleLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -10),
+            titleLabel.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -8)
         ])
     }
 
@@ -624,19 +633,167 @@ private final class OverviewPeriodRailItem: UIControl {
     }
 }
 
-private final class OverviewShiftCardView: UIView {
-    private let dateLabel = UILabel()
-    private let selectedIndicator = UIImageView()
+private final class OverviewShiftStackView: UIView {
+    private enum Layout {
+        static let accessibilitySpacing: CGFloat = 8
+        static let collapsedCardReveal: CGFloat = 72
+    }
+
+    var usesAccessibleListLayout = false {
+        didSet {
+            guard usesAccessibleListLayout != oldValue else { return }
+            rebuildLayout()
+        }
+    }
+
+    private var cards: [OverviewView.ShiftCard] = []
+    private var cardViews: [UUID: OverviewShiftCardView] = [:]
+    private var activeLayoutConstraints: [NSLayoutConstraint] = []
+
+    func render(
+        _ cards: [OverviewView.ShiftCard],
+        onCardTapped: ((UUID) -> Void)?
+    ) {
+        let previousIDs = Set(self.cards.map(\.id))
+        self.cards = cards
+        let currentIDs = Set(cards.map(\.id))
+        for id in previousIDs.subtracting(currentIDs) {
+            cardViews.removeValue(forKey: id)?.removeFromSuperview()
+        }
+
+        let surfaceRoles = ShiftLedgerColors.shiftSurfaceRoles(for: cards.map(\.id))
+        for (index, pair) in zip(cards, surfaceRoles).enumerated() {
+            let (card, surfaceRole) = pair
+            let isDeckFront = index == 0
+            if let view = cardViews[card.id] {
+                view.update(with: card, surfaceRole: surfaceRole, isDeckFront: isDeckFront)
+            } else {
+                let view = OverviewShiftCardView(
+                    card: card,
+                    surfaceRole: surfaceRole,
+                    isDeckFront: isDeckFront
+                )
+                view.addAction(UIAction { _ in onCardTapped?(card.id) }, for: .touchUpInside)
+                view.translatesAutoresizingMaskIntoConstraints = false
+                addSubview(view)
+                cardViews[card.id] = view
+            }
+        }
+
+        rebuildLayout(animated: UIAccessibility.isReduceMotionEnabled == false)
+    }
+
+    func cardView(with id: UUID) -> UIView? {
+        cardViews[id]
+    }
+
+    private func rebuildLayout(animated: Bool = false) {
+        NSLayoutConstraint.deactivate(activeLayoutConstraints)
+        activeLayoutConstraints.removeAll()
+
+        guard cards.isEmpty == false else { return }
+        let views = cards.compactMap { cardViews[$0.id] }
+        guard views.count == cards.count else { return }
+        let visualViews = usesAccessibleListLayout ? views : Array(views.reversed())
+
+        for (index, view) in visualViews.enumerated() {
+            activeLayoutConstraints += [
+                view.leadingAnchor.constraint(equalTo: leadingAnchor),
+                view.trailingAnchor.constraint(equalTo: trailingAnchor)
+            ]
+
+            if index == 0 {
+                activeLayoutConstraints.append(view.topAnchor.constraint(equalTo: topAnchor))
+            } else if usesAccessibleListLayout {
+                activeLayoutConstraints.append(
+                    view.topAnchor.constraint(
+                        equalTo: visualViews[index - 1].bottomAnchor,
+                        constant: Layout.accessibilitySpacing
+                    )
+                )
+            } else {
+                activeLayoutConstraints.append(
+                    view.topAnchor.constraint(
+                        equalTo: visualViews[index - 1].topAnchor,
+                        constant: Layout.collapsedCardReveal
+                    )
+                )
+            }
+
+            activeLayoutConstraints.append(bottomAnchor.constraint(greaterThanOrEqualTo: view.bottomAnchor))
+        }
+
+        if let front = visualViews.last {
+            let frontBottom = front.bottomAnchor.constraint(equalTo: bottomAnchor)
+            frontBottom.priority = .defaultHigh
+            activeLayoutConstraints.append(frontBottom)
+        }
+
+        visualViews.forEach(bringSubviewToFront)
+        accessibilityElements = views
+        NSLayoutConstraint.activate(activeLayoutConstraints)
+
+        guard animated, window != nil else { return }
+        UIView.animate(
+            withDuration: 0.24,
+            delay: 0,
+            options: [.beginFromCurrentState, .curveEaseInOut, .allowUserInteraction]
+        ) { [weak self] in
+            self?.superview?.layoutIfNeeded()
+        }
+    }
+
+}
+
+private final class OverviewShiftCardView: UIControl {
+    private enum Layout {
+        static let horizontalInset: CGFloat = 20
+        static let verticalInset: CGFloat = 12
+        static let headerToMetadataSpacing: CGFloat = 20
+        static let frontContentInset: CGFloat = 12
+        static let frontHeaderSpacing: CGFloat = 12
+        static let frontEndpointsSpacing: CGFloat = 24
+    }
+
+    private let coveredDateLabel = UILabel()
     private let timeRangeLabel = UILabel()
     private let expectedAmountLabel = UILabel()
+    private let frontContentStack = UIStackView()
+    private let frontHeaderRow = UIStackView()
+    private let frontDateLabel = UILabel()
+    private let frontHeaderSpacer = UIView()
+    private let frontExpectedAmountLabel = UILabel()
+    private var endpointsView: OverviewShiftEndpointsView?
     private let paidDurationLabel = UILabel()
     private let unpaidBreakLabel = UILabel()
+    private let contentStack = UIStackView()
+    private let headerStack = UIStackView()
+    private let headerTopRow = UIStackView()
+    private let headerSpacer = UIView()
+    private let metadataStack = UIStackView()
+    private let detailStack = UIStackView()
+    private let paidTimeDetailTitleLabel = UILabel()
+    private let paidTimeDetailLabel = UILabel()
+    private let unpaidBreakDetailTitleLabel = UILabel()
+    private let unpaidBreakDetailLabel = UILabel()
+    private let rateDetailTitleLabel = UILabel()
+    private let rateDetailLabel = UILabel()
+    private let payBasisDetailTitleLabel = UILabel()
+    private let payBasisDetailLabel = UILabel()
+    private let paidTimeDetailGroup = UIStackView()
+    private let unpaidBreakDetailGroup = UIStackView()
+    private let rateDetailGroup = UIStackView()
+    private let payBasisDetailGroup = UIStackView()
 
-    init(card: OverviewView.ShiftCard) {
+    init(
+        card: OverviewView.ShiftCard,
+        surfaceRole: ShiftSurfaceRole,
+        isDeckFront: Bool
+    ) {
         super.init(frame: .zero)
-        configureAppearance(card: card)
         configureHierarchy()
         configureLayout()
+        update(with: card, surfaceRole: surfaceRole, isDeckFront: isDeckFront)
     }
 
     @available(*, unavailable)
@@ -644,76 +801,214 @@ private final class OverviewShiftCardView: UIView {
         nil
     }
 
-    private func configureAppearance(card: OverviewView.ShiftCard) {
-        backgroundColor = ShiftLedgerColors.surfacePrimary
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        updateHeaderAxis()
+    }
+
+    func update(
+        with card: OverviewView.ShiftCard,
+        surfaceRole: ShiftSurfaceRole,
+        isDeckFront: Bool
+    ) {
+        backgroundColor = ShiftLedgerColors.shiftSurface(for: surfaceRole)
         layer.cornerCurve = .continuous
-        layer.cornerRadius = 20
-        layer.borderWidth = card.isSelected ? 2 : 0
-        layer.borderColor = ShiftLedgerColors.accentPrimary.cgColor
+        layer.cornerRadius = 28
         accessibilityIdentifier = "overview.shift.\(card.id.uuidString)"
         isAccessibilityElement = true
-        accessibilityLabel = card.accessibilityLabel
-        accessibilityTraits = card.isSelected ? .selected : []
+        let expandedDetails = card.isExpanded
+            ? [
+                "\(PaycheckResultStrings.paidTime): \(card.paidDuration)",
+                card.unpaidBreak.map { duration in
+                    let interval = card.unpaidBreakTimeRange.map { "\($0) · " } ?? ""
+                    return "\(AddShiftStrings.unpaidBreak): \(interval)\(duration)"
+                },
+                "\(PaycheckResultStrings.rate): \(card.appliedRate)",
+                "\(OverviewStrings.payBasis): \(card.payBasis)"
+            ].compactMap { $0 }
+            : []
+        accessibilityLabel = ([card.accessibilityLabel] + expandedDetails).joined(separator: ", ")
+        accessibilityHint = card.isExpanded ? OverviewStrings.collapseShift : OverviewStrings.expandShift
+        accessibilityTraits = card.isSelected ? [.button, .selected] : .button
+        accessibilityValue = card.isExpanded ? OverviewStrings.expanded : OverviewStrings.collapsed
 
-        dateLabel.text = card.date
-        configureLabel(dateLabel, font: ShiftLedgerTypography.headline, color: ShiftLedgerColors.textPrimary)
-        dateLabel.accessibilityIdentifier = "overview.shift.\(card.id.uuidString).date"
+        let foreground = ShiftLedgerColors.shiftForeground(for: surfaceRole)
+        let secondaryForeground = foreground.withAlphaComponent(0.78)
+        let tertiaryForeground = foreground.withAlphaComponent(0.68)
 
-        selectedIndicator.image = UIImage(systemName: "checkmark.circle.fill")
-        selectedIndicator.tintColor = ShiftLedgerColors.accentPrimary
-        selectedIndicator.isHidden = card.isSelected == false
-        selectedIndicator.isAccessibilityElement = false
-        selectedIndicator.setContentHuggingPriority(.required, for: .horizontal)
-        selectedIndicator.setContentCompressionResistancePriority(.required, for: .horizontal)
+        headerStack.accessibilityIdentifier = "overview.shift.\(card.id.uuidString).header"
+        headerStack.isHidden = isDeckFront
+        frontContentStack.accessibilityIdentifier = "overview.shift.\(card.id.uuidString).frontContent"
+        frontContentStack.isHidden = isDeckFront == false
+
+        coveredDateLabel.text = card.frontDate
+        configureLabel(coveredDateLabel, font: ShiftLedgerTypography.headline, color: secondaryForeground)
+        coveredDateLabel.accessibilityIdentifier = "overview.shift.\(card.id.uuidString).date"
+        coveredDateLabel.isAccessibilityElement = false
+        coveredDateLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
 
         timeRangeLabel.text = card.timeRange
-        configureLabel(timeRangeLabel, font: ShiftLedgerTypography.body, color: ShiftLedgerColors.textSecondary)
+        configureLabel(timeRangeLabel, font: ShiftLedgerTypography.caption, color: secondaryForeground)
         timeRangeLabel.accessibilityIdentifier = "overview.shift.\(card.id.uuidString).time"
+        timeRangeLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
 
         expectedAmountLabel.text = card.expectedAmount
-        configureLabel(expectedAmountLabel, font: ShiftLedgerTypography.basePayAmount, color: ShiftLedgerColors.textPrimary)
+        configureLabel(expectedAmountLabel, font: ShiftLedgerTypography.basePayAmount, color: foreground)
         expectedAmountLabel.accessibilityIdentifier = "overview.shift.\(card.id.uuidString).expected"
+        expectedAmountLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
 
-        paidDurationLabel.text = card.paidDuration
-        configureLabel(paidDurationLabel, font: ShiftLedgerTypography.callout, color: ShiftLedgerColors.textSecondary)
+        frontDateLabel.text = card.frontDate
+        configureLabel(frontDateLabel, font: ShiftLedgerTypography.headline, color: secondaryForeground)
+        frontDateLabel.accessibilityIdentifier = "overview.shift.\(card.id.uuidString).frontDate"
+        frontDateLabel.isAccessibilityElement = false
+        frontDateLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+
+        frontExpectedAmountLabel.text = card.expectedAmount
+        configureLabel(frontExpectedAmountLabel, font: ShiftLedgerTypography.basePayAmount, color: foreground)
+        frontExpectedAmountLabel.accessibilityIdentifier = "overview.shift.\(card.id.uuidString).frontExpected"
+        frontExpectedAmountLabel.isAccessibilityElement = false
+        frontExpectedAmountLabel.textAlignment = .right
+        frontExpectedAmountLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
+
+        if isDeckFront {
+            let view = endpointsView ?? OverviewShiftEndpointsView()
+            if endpointsView == nil {
+                frontContentStack.addArrangedSubview(view)
+                endpointsView = view
+            }
+            view.update(
+                endpoints: card.endpoints,
+                foreground: foreground,
+                identifierPrefix: "overview.shift.\(card.id.uuidString).endpoints"
+            )
+        } else if let view = endpointsView {
+            frontContentStack.removeArrangedSubview(view)
+            view.removeFromSuperview()
+            endpointsView = nil
+        }
+
+        paidDurationLabel.text = isDeckFront ? OverviewStrings.paidDuration(card.paidDuration) : card.paidDuration
+        configureLabel(paidDurationLabel, font: ShiftLedgerTypography.callout, color: secondaryForeground)
         paidDurationLabel.accessibilityIdentifier = "overview.shift.\(card.id.uuidString).duration"
 
         unpaidBreakLabel.text = card.unpaidBreak.map { "\(AddShiftStrings.unpaidBreak): \($0)" }
-        configureLabel(unpaidBreakLabel, font: ShiftLedgerTypography.callout, color: ShiftLedgerColors.textSecondary)
+        configureLabel(unpaidBreakLabel, font: ShiftLedgerTypography.caption, color: tertiaryForeground)
         unpaidBreakLabel.accessibilityIdentifier = "overview.shift.\(card.id.uuidString).break"
         unpaidBreakLabel.isHidden = card.unpaidBreak == nil
+        metadataStack.isHidden = card.isExpanded
+        paidDurationLabel.textAlignment = isDeckFront ? .center : .natural
+        unpaidBreakLabel.textAlignment = isDeckFront ? .center : .natural
+        metadataStack.isLayoutMarginsRelativeArrangement = isDeckFront
+        metadataStack.directionalLayoutMargins = NSDirectionalEdgeInsets(
+            top: 0, leading: 0, bottom: isDeckFront ? 4 : 0, trailing: 0
+        )
+
+        paidTimeDetailTitleLabel.text = PaycheckResultStrings.paidTime
+        paidTimeDetailLabel.text = card.paidDuration
+        unpaidBreakDetailTitleLabel.text = AddShiftStrings.unpaidBreak
+        unpaidBreakDetailLabel.text = card.unpaidBreak.map { duration in
+            let interval = card.unpaidBreakTimeRange.map { "\($0) · " } ?? ""
+            return "\(interval)\(duration)"
+        }
+        rateDetailTitleLabel.text = PaycheckResultStrings.rate
+        rateDetailLabel.text = card.appliedRate
+        payBasisDetailTitleLabel.text = OverviewStrings.payBasis
+        payBasisDetailLabel.text = card.payBasis
+        [
+            paidTimeDetailTitleLabel,
+            unpaidBreakDetailTitleLabel,
+            rateDetailTitleLabel,
+            payBasisDetailTitleLabel
+        ].forEach {
+            configureLabel($0, font: ShiftLedgerTypography.caption, color: tertiaryForeground)
+        }
+        [paidTimeDetailLabel, unpaidBreakDetailLabel, rateDetailLabel, payBasisDetailLabel].forEach {
+            configureLabel($0, font: ShiftLedgerTypography.callout, color: secondaryForeground)
+        }
+        paidTimeDetailLabel.accessibilityIdentifier = "overview.shift.\(card.id.uuidString).detail.paidTime"
+        unpaidBreakDetailLabel.accessibilityIdentifier = "overview.shift.\(card.id.uuidString).detail.break"
+        rateDetailLabel.accessibilityIdentifier = "overview.shift.\(card.id.uuidString).detail.rate"
+        payBasisDetailLabel.accessibilityIdentifier = "overview.shift.\(card.id.uuidString).detail.payBasis"
+        unpaidBreakDetailGroup.isHidden = card.unpaidBreak == nil
+        detailStack.isHidden = card.isExpanded == false
     }
 
     private func configureHierarchy() {
-        let stack = UIStackView()
-        stack.axis = .vertical
-        stack.spacing = 8
-        stack.translatesAutoresizingMaskIntoConstraints = false
+        contentStack.axis = .vertical
+        contentStack.spacing = 12
+        contentStack.translatesAutoresizingMaskIntoConstraints = false
 
-        let header = UIStackView(arrangedSubviews: [dateLabel, selectedIndicator])
-        header.axis = .horizontal
-        header.alignment = .firstBaseline
-        header.spacing = 8
-        dateLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        headerTopRow.axis = .horizontal
+        headerTopRow.alignment = .firstBaseline
+        headerTopRow.spacing = 12
+        headerSpacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        headerSpacer.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        [coveredDateLabel, headerSpacer, expectedAmountLabel].forEach(headerTopRow.addArrangedSubview)
 
-        addSubview(stack)
-        [header, timeRangeLabel, expectedAmountLabel, paidDurationLabel, unpaidBreakLabel]
-            .forEach(stack.addArrangedSubview)
+        headerStack.axis = .vertical
+        headerStack.alignment = .fill
+        headerStack.spacing = 4
+        headerStack.isLayoutMarginsRelativeArrangement = true
+        headerStack.directionalLayoutMargins = NSDirectionalEdgeInsets(
+            top: 2,
+            leading: 4,
+            bottom: 0,
+            trailing: 4
+        )
+        [headerTopRow, timeRangeLabel].forEach(headerStack.addArrangedSubview)
+
+        frontHeaderRow.axis = .horizontal
+        frontHeaderRow.alignment = .firstBaseline
+        frontHeaderRow.spacing = Layout.frontHeaderSpacing
+        frontHeaderSpacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        frontHeaderSpacer.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        [frontDateLabel, frontHeaderSpacer, frontExpectedAmountLabel]
+            .forEach(frontHeaderRow.addArrangedSubview)
+
+        frontContentStack.axis = .vertical
+        frontContentStack.spacing = Layout.frontEndpointsSpacing
+        frontContentStack.isLayoutMarginsRelativeArrangement = true
+        frontContentStack.directionalLayoutMargins = NSDirectionalEdgeInsets(
+            top: Layout.frontContentInset,
+            leading: 4,
+            bottom: 4,
+            trailing: 4
+        )
+        frontContentStack.addArrangedSubview(frontHeaderRow)
+
+        metadataStack.axis = .vertical
+        metadataStack.spacing = 4
+        [paidDurationLabel, unpaidBreakLabel].forEach(metadataStack.addArrangedSubview)
+
+        detailStack.axis = .vertical
+        detailStack.spacing = 14
+        configureDetailGroup(paidTimeDetailGroup, title: paidTimeDetailTitleLabel, value: paidTimeDetailLabel)
+        configureDetailGroup(unpaidBreakDetailGroup, title: unpaidBreakDetailTitleLabel, value: unpaidBreakDetailLabel)
+        configureDetailGroup(rateDetailGroup, title: rateDetailTitleLabel, value: rateDetailLabel)
+        configureDetailGroup(payBasisDetailGroup, title: payBasisDetailTitleLabel, value: payBasisDetailLabel)
+        [paidTimeDetailGroup, unpaidBreakDetailGroup, rateDetailGroup, payBasisDetailGroup]
+            .forEach(detailStack.addArrangedSubview)
+
+        addSubview(contentStack)
+        [headerStack, frontContentStack, metadataStack, detailStack].forEach(contentStack.addArrangedSubview)
+        contentStack.setCustomSpacing(Layout.headerToMetadataSpacing, after: headerStack)
+        contentStack.setCustomSpacing(Layout.headerToMetadataSpacing, after: frontContentStack)
+        contentStack.setCustomSpacing(18, after: metadataStack)
     }
 
     private func configureLayout() {
-        guard let stack = subviews.first else {
-            return
-        }
-
         NSLayoutConstraint.activate([
-            stack.topAnchor.constraint(equalTo: topAnchor, constant: 16),
-            stack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 16),
-            stack.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -16),
-            stack.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -16),
-            selectedIndicator.widthAnchor.constraint(equalToConstant: 20),
-            selectedIndicator.heightAnchor.constraint(equalToConstant: 20)
+            contentStack.topAnchor.constraint(equalTo: topAnchor, constant: Layout.verticalInset),
+            contentStack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: Layout.horizontalInset),
+            contentStack.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -Layout.horizontalInset),
+            contentStack.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -Layout.horizontalInset)
         ])
+    }
+
+    private func configureDetailGroup(_ group: UIStackView, title: UILabel, value: UILabel) {
+        group.axis = .vertical
+        group.spacing = 2
+        [title, value].forEach(group.addArrangedSubview)
     }
 
     private func configureLabel(_ label: UILabel, font: UIFont, color: UIColor) {
@@ -721,5 +1016,137 @@ private final class OverviewShiftCardView: UIView {
         label.textColor = color
         label.numberOfLines = 0
         label.adjustsFontForContentSizeCategory = true
+    }
+
+    private func updateHeaderAxis() {
+        let availableWidth = bounds.width - (Layout.horizontalInset * 2)
+        let headerTopRowWidth = coveredDateLabel.intrinsicContentSize.width
+            + expectedAmountLabel.intrinsicContentSize.width
+            + headerTopRow.spacing * 2
+        let usesVerticalTopRow = traitCollection.preferredContentSizeCategory.isAccessibilityCategory
+            || headerTopRowWidth > availableWidth
+        let topRowAxis: NSLayoutConstraint.Axis = usesVerticalTopRow ? .vertical : .horizontal
+        if headerTopRow.axis != topRowAxis {
+            headerTopRow.axis = topRowAxis
+            headerTopRow.alignment = usesVerticalTopRow ? .leading : .firstBaseline
+            headerTopRow.spacing = usesVerticalTopRow ? 4 : 12
+        }
+        headerSpacer.isHidden = usesVerticalTopRow
+
+        let frontHeaderWidth = frontDateLabel.intrinsicContentSize.width
+            + frontExpectedAmountLabel.intrinsicContentSize.width
+            + (Layout.frontHeaderSpacing * 2)
+        let usesVerticalFrontHeader = traitCollection.preferredContentSizeCategory.isAccessibilityCategory
+            || frontHeaderWidth > availableWidth
+        let frontHeaderAxis: NSLayoutConstraint.Axis = usesVerticalFrontHeader ? .vertical : .horizontal
+        if frontHeaderRow.axis != frontHeaderAxis {
+            frontHeaderRow.axis = frontHeaderAxis
+            frontHeaderRow.alignment = usesVerticalFrontHeader ? .leading : .firstBaseline
+            frontHeaderRow.spacing = usesVerticalFrontHeader ? 4 : Layout.frontHeaderSpacing
+        }
+        frontHeaderSpacer.isHidden = usesVerticalFrontHeader
+    }
+}
+
+private final class OverviewShiftEndpointsView: UIView {
+    private let startCaption = UILabel()
+    private let startTime = UILabel()
+    private let startDate = UILabel()
+    private let endCaption = UILabel()
+    private let endTime = UILabel()
+    private let endDate = UILabel()
+    private let startGroup = UIStackView()
+    private let endGroup = UIStackView()
+    private let columns = UIStackView()
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        isAccessibilityElement = false
+        accessibilityElementsHidden = true
+
+        startCaption.text = AddShiftStrings.start
+        endCaption.text = AddShiftStrings.end
+        for (group, labels) in [
+            (startGroup, [startCaption, startTime, startDate]),
+            (endGroup, [endCaption, endTime, endDate])
+        ] {
+            group.axis = .vertical
+            group.spacing = 6
+            labels.forEach {
+                $0.numberOfLines = 0
+                $0.adjustsFontForContentSizeCategory = true
+                $0.isAccessibilityElement = false
+                group.addArrangedSubview($0)
+            }
+        }
+        columns.spacing = 24
+        columns.translatesAutoresizingMaskIntoConstraints = false
+        [startGroup, endGroup].forEach(columns.addArrangedSubview)
+        addSubview(columns)
+        NSLayoutConstraint.activate([
+            columns.topAnchor.constraint(equalTo: topAnchor),
+            columns.leadingAnchor.constraint(equalTo: leadingAnchor),
+            columns.trailingAnchor.constraint(equalTo: trailingAnchor),
+            columns.bottomAnchor.constraint(equalTo: bottomAnchor)
+        ])
+        registerForTraitChanges([UITraitPreferredContentSizeCategory.self]) {
+            (view: OverviewShiftEndpointsView, _: UITraitCollection) in
+            view.updateLayout()
+        }
+        updateLayout()
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        nil
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        updateLayout()
+    }
+
+    func update(
+        endpoints: OverviewFormatting.ShiftEndpoints,
+        foreground: UIColor,
+        identifierPrefix: String
+    ) {
+        accessibilityIdentifier = identifierPrefix
+        for (label, text, suffix) in [
+            (startTime, Optional(endpoints.startTime), "start"),
+            (endTime, Optional(endpoints.endTime), "end"),
+            (startDate, endpoints.startDate, "startDate"),
+            (endDate, endpoints.endDate, "endDate")
+        ] {
+            label.text = text
+            label.isHidden = text == nil
+            label.accessibilityIdentifier = "\(identifierPrefix).\(suffix)"
+        }
+        [startTime, endTime].forEach { $0.textColor = foreground }
+        [startCaption, endCaption, startDate, endDate].forEach {
+            $0.textColor = foreground.withAlphaComponent(0.78)
+        }
+        updateLayout()
+    }
+
+    private func updateLayout() {
+        let font = UIFont.monospacedDigitSystemFont(ofSize: 22, weight: .semibold)
+        [startTime, endTime].forEach {
+            $0.font = UIFontMetrics(forTextStyle: .title2).scaledFont(for: font, compatibleWith: traitCollection)
+        }
+        [startCaption, endCaption, startDate, endDate].forEach {
+            $0.font = UIFont.preferredFont(forTextStyle: .caption1, compatibleWith: traitCollection)
+        }
+        let requiredColumnWidth = max(
+            startGroup.arrangedSubviews.map { $0.intrinsicContentSize.width }.max() ?? 0,
+            endGroup.arrangedSubviews.map { $0.intrinsicContentSize.width }.max() ?? 0
+        )
+        let vertical = traitCollection.preferredContentSizeCategory.isAccessibilityCategory
+            || (bounds.width > 0 && requiredColumnWidth * 2 + columns.spacing > bounds.width)
+        columns.axis = vertical ? .vertical : .horizontal
+        columns.distribution = vertical ? .fill : .fillEqually
+        startGroup.alignment = .leading
+        endGroup.alignment = vertical ? .leading : .trailing
+        [endCaption, endTime, endDate].forEach { $0.textAlignment = vertical ? .left : .right }
     }
 }

@@ -62,6 +62,10 @@ final class OverviewViewController: UIViewController {
             self?.viewModel.selectPeriod(period)
             self?.render()
         }
+        overviewView.onShiftCardTapped = { [weak self] id in
+            self?.viewModel.toggleShiftExpansion(with: id)
+            self?.render()
+        }
         overviewView.onAddShiftTapped = { [weak self] in
             self?.onAddShift?()
         }
@@ -98,8 +102,9 @@ final class OverviewViewController: UIViewController {
             let cards: [OverviewView.ShiftCard]
             do {
                 cards = try shiftCards(
-                    from: breakdown,
-                    selectedShiftID: content.selectedShiftID
+                    from: content.shiftHistoryBreakdowns,
+                    selectedShiftID: content.selectedShiftID,
+                    expandedShiftID: content.expandedShiftID
                 )
             } catch {
                 renderFailure(.calculation)
@@ -115,7 +120,7 @@ final class OverviewViewController: UIViewController {
                 expectedGrossContext: OverviewStrings.expectedGrossContext(currencyCode: currencyCode),
                 period: periodText,
                 periodItems: railItems(from: content.railPeriods, selectedPeriod: period),
-                shiftCount: breakdown.shiftBreakdowns.count,
+                shiftCount: content.shiftHistoryBreakdowns.count,
                 shiftCards: cards,
                 canNavigatePrevious: content.canNavigatePrevious,
                 canNavigateNext: content.canNavigateNext,
@@ -226,18 +231,34 @@ final class OverviewViewController: UIViewController {
     }
 
     private func shiftCards(
-        from breakdown: ExpectedGrossBreakdown,
-        selectedShiftID: UUID?
+        from shiftBreakdowns: [ShiftPayBreakdown],
+        selectedShiftID: UUID?,
+        expandedShiftID: UUID? = nil
     ) throws -> [OverviewView.ShiftCard] {
-        try breakdown.shiftBreakdowns.reversed().map { shiftBreakdown in
+        try shiftBreakdowns.reversed().map { shiftBreakdown in
             let shift = shiftBreakdown.shift
             guard
-                let date = OverviewFormatting.shiftDate(
+                let frontDate = OverviewFormatting.frontShiftDate(
                     shift,
                     timeZoneIdentifier: timeZoneIdentifier,
                     locale: displayLocale
                 ),
-                let timeRange = OverviewFormatting.shiftTimeRange(
+                let endpoints = OverviewFormatting.shiftEndpoints(
+                    shift,
+                    timeZoneIdentifier: timeZoneIdentifier,
+                    locale: displayLocale
+                ),
+                let compactTimeRange = OverviewFormatting.compactShiftTimeRange(
+                    shift,
+                    timeZoneIdentifier: timeZoneIdentifier,
+                    locale: displayLocale
+                ),
+                let accessibilityDate = OverviewFormatting.shiftDate(
+                    shift,
+                    timeZoneIdentifier: timeZoneIdentifier,
+                    locale: displayLocale
+                ),
+                let accessibilityTimeRange = OverviewFormatting.shiftTimeRange(
                     shift,
                     timeZoneIdentifier: timeZoneIdentifier,
                     locale: displayLocale
@@ -255,9 +276,23 @@ final class OverviewViewController: UIViewController {
             let unpaidBreak = shift.unpaidBreak.map {
                 OverviewFormatting.duration($0.end.timeIntervalSince($0.start))
             }
+            let unpaidBreakTimeRange = shift.unpaidBreak.flatMap {
+                OverviewFormatting.unpaidBreakTimeRange(
+                    $0,
+                    timeZoneIdentifier: timeZoneIdentifier,
+                    locale: displayLocale
+                )
+            }
+            let payBasis: String
+            switch shiftBreakdown.basePayBasis {
+            case .hourly:
+                payBasis = JobSetupStrings.hourlyBasis
+            case .fixedPerShift:
+                payBasis = JobSetupStrings.fixedPerShiftBasis
+            }
             let accessibilityLabel = [
-                date,
-                timeRange,
+                accessibilityDate,
+                accessibilityTimeRange,
                 "\(PaycheckResultStrings.shiftExpected): \(expectedAmount)",
                 "\(PaycheckResultStrings.paidTime): \(paidDuration)",
                 unpaidBreak.map { "\(AddShiftStrings.unpaidBreak): \($0)" }
@@ -267,12 +302,22 @@ final class OverviewViewController: UIViewController {
 
             return OverviewView.ShiftCard(
                 id: shift.id,
-                date: date,
-                timeRange: timeRange,
+                frontDate: frontDate,
+                timeRange: compactTimeRange,
+                endpoints: endpoints,
                 expectedAmount: expectedAmount,
                 paidDuration: paidDuration,
                 unpaidBreak: unpaidBreak,
+                unpaidBreakTimeRange: unpaidBreakTimeRange,
+                appliedRate: OverviewFormatting.rate(
+                    amount: shiftBreakdown.appliedPayRate.amount,
+                    basis: shiftBreakdown.basePayBasis,
+                    currencyCode: currencyCode,
+                    locale: displayLocale
+                ),
+                payBasis: payBasis,
                 isSelected: shift.id == selectedShiftID,
+                isExpanded: shift.id == expandedShiftID,
                 accessibilityLabel: accessibilityLabel
             )
         }
