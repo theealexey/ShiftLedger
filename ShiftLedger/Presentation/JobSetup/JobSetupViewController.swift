@@ -27,16 +27,6 @@ final class JobSetupViewController: UIViewController {
         render()
     }
 
-    override func viewWillAppear(_ animated: Bool) {
-        super.viewWillAppear(animated)
-        navigationController?.setNavigationBarHidden(true, animated: animated)
-    }
-
-    override func viewWillDisappear(_ animated: Bool) {
-        super.viewWillDisappear(animated)
-        navigationController?.setNavigationBarHidden(false, animated: animated)
-    }
-
     private func bindView() {
         jobSetupView.onBasePayAmountChanged = { [weak self] text in
             guard let self else {
@@ -86,8 +76,10 @@ final class JobSetupViewController: UIViewController {
             navigationController.pushViewController(selectionViewController, animated: true)
         } else {
             let navigationController = UINavigationController(rootViewController: selectionViewController)
+            navigationController.setNavigationBarHidden(true, animated: false)
             navigationController.modalPresentationStyle = .fullScreen
             present(navigationController, animated: true)
         }
     }
+
 }

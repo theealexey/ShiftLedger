@@ -19,6 +19,7 @@ struct OnboardingCoordinatorTests {
 
         coordinator.start()
 
+        #expect(navigationController.isNavigationBarHidden)
         #expect(navigationController.viewControllers.count == 1)
         #expect(navigationController.topViewController === start)
 
