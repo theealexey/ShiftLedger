@@ -9,15 +9,15 @@ final class AppCoordinator {
     }
 
     private let window: UIWindow
-    private let loadCoreDataStack: @MainActor () async throws -> CoreDataStack
+    private let resolveLaunch: @MainActor () async throws -> AppLaunchResolution
     private let makeNavigationController: @MainActor () -> UINavigationController
     private var initialFlowResolutionTask: Task<Void, Never>?
     private var activeFlow: ActiveFlow?
 
     init(window: UIWindow) {
         self.window = window
-        loadCoreDataStack = {
-            try await CoreDataStack.load()
+        resolveLaunch = {
+            try await AppLaunchResolver().resolve()
         }
         makeNavigationController = {
             UINavigationController()
@@ -26,13 +26,13 @@ final class AppCoordinator {
 
     init(
         window: UIWindow,
-        loadCoreDataStack: @escaping @MainActor () async throws -> CoreDataStack,
+        resolveLaunch: @escaping @MainActor () async throws -> AppLaunchResolution,
         makeNavigationController: @escaping @MainActor () -> UINavigationController = {
             UINavigationController()
         }
     ) {
         self.window = window
-        self.loadCoreDataStack = loadCoreDataStack
+        self.resolveLaunch = resolveLaunch
         self.makeNavigationController = makeNavigationController
     }
 
@@ -58,18 +58,21 @@ final class AppCoordinator {
             }
 
             do {
-                try prepareLaunchStateForUITesting()
+                let resolution = try await resolveLaunch()
 
-                let stack = try await loadCoreDataStack()
                 try Task.checkCancellation()
 
-                let job = try loadInitialJob(from: stack)
-
-                if let job {
-                    installMainFlow(job: job, stack: stack)
+                if let job = resolution.job {
+                    installMainFlow(
+                        job: job,
+                        stack: resolution.stack
+                    )
                 } else {
-                    installOnboardingFlow(stack: stack)
+                    installOnboardingFlow(
+                        stack: resolution.stack
+                    )
                 }
+
             } catch is CancellationError {
                 return
             } catch {
@@ -88,35 +91,6 @@ final class AppCoordinator {
     private func cancelInitialFlowResolution() {
         initialFlowResolutionTask?.cancel()
         initialFlowResolutionTask = nil
-    }
-
-    private func prepareLaunchStateForUITesting() throws {
-#if DEBUG
-        if ProcessInfo.processInfo.arguments.contains("-ui-testing-reset-store") {
-            try CoreDataStack.resetPersistentStoreForUITesting()
-        }
-#endif
-    }
-
-    private func loadInitialJob(from stack: CoreDataStack) throws -> Job? {
-        let jobStorage = JobStorage(stack: stack)
-
-#if DEBUG
-        if ProcessInfo.processInfo.arguments.contains("-ui-testing-seed-job"),
-           try jobStorage.load() == nil {
-            let job = try Job(
-                currencyCode: "SEK",
-                timeZoneIdentifier: "Europe/Stockholm",
-                basePayBasis: .hourly,
-                payCalculationCycle: .perShift,
-                payRates: [try PayRate(amount: 100, effectiveFrom: nil)],
-                createdAt: Date(timeIntervalSinceReferenceDate: 0)
-            )
-            try jobStorage.save(job)
-        }
-#endif
-
-        return try jobStorage.load()
     }
 
     private func installOnboardingFlow(stack: CoreDataStack) {

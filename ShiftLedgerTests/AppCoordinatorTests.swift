@@ -8,12 +8,15 @@ struct AppCoordinatorTests {
     @Test("Startup failure presents a localized retry alert")
     func startupFailurePresentsLocalizedError() async throws {
         var loaderCallCount = 0
-        let loader: @MainActor () async throws -> CoreDataStack = {
+        let resolveLaunch: @MainActor () async throws -> AppLaunchResolution = {
             loaderCallCount += 1
             throw AppCoordinatorTestError.loadFailed
         }
         let window = makeWindow()
-        let coordinator = AppCoordinator(window: window, loadCoreDataStack: loader)
+        let coordinator = AppCoordinator(
+            window: window,
+            resolveLaunch: resolveLaunch
+        )
         defer { tearDown(window, coordinator: coordinator) }
 
         coordinator.start()
@@ -49,15 +52,23 @@ struct AppCoordinatorTests {
         defer { removeTemporaryStoreDirectory(for: storeURL, stack: stack) }
 
         var loaderCallCount = 0
-        let loader: @MainActor () async throws -> CoreDataStack = {
+        let resolveLaunch: @MainActor () async throws -> AppLaunchResolution = {
             loaderCallCount += 1
+
             if loaderCallCount == 1 {
                 throw AppCoordinatorTestError.loadFailed
             }
-            return stack
+
+            return AppLaunchResolution(
+                stack: stack,
+                job: nil
+            )
         }
         let window = makeWindow()
-        let coordinator = AppCoordinator(window: window, loadCoreDataStack: loader)
+        let coordinator = AppCoordinator(
+            window: window,
+            resolveLaunch: resolveLaunch
+        )
         defer { tearDown(window, coordinator: coordinator) }
 
         coordinator.start()
@@ -87,7 +98,7 @@ struct AppCoordinatorTests {
     func cancellingSuspendedResolutionDoesNotInstallRootOrError() async throws {
         var enteredContinuation: CheckedContinuation<Void, Never>?
         var cancellationObserved = false
-        let loader: @MainActor () async throws -> CoreDataStack = {
+        let resolveLaunch: @MainActor () async throws -> AppLaunchResolution = {
             enteredContinuation?.resume()
             enteredContinuation = nil
 
@@ -100,7 +111,10 @@ struct AppCoordinatorTests {
             }
         }
         let window = makeWindow()
-        let coordinator = AppCoordinator(window: window, loadCoreDataStack: loader)
+        let coordinator = AppCoordinator(
+            window: window,
+            resolveLaunch: resolveLaunch
+        )
         defer { tearDown(window, coordinator: coordinator) }
 
         coordinator.start()
@@ -126,20 +140,28 @@ struct AppCoordinatorTests {
         var loadCallCount = 0
         var firstLoadStarted: CheckedContinuation<Void, Never>?
         var secondLoadStarted: CheckedContinuation<Void, Never>?
-        let loader: @MainActor () async throws -> CoreDataStack = {
+        let resolveLaunch: @MainActor () async throws -> AppLaunchResolution = {
             loadCallCount += 1
 
             if loadCallCount == 1 {
                 firstLoadStarted?.resume()
+
                 try await Task.sleep(for: .seconds(60))
                 throw AppCoordinatorTestError.unexpectedLoaderReturn
             }
 
             secondLoadStarted?.resume()
-            return stack
+
+            return AppLaunchResolution(
+                stack: stack,
+                job: nil
+            )
         }
         let window = makeWindow()
-        let coordinator = AppCoordinator(window: window, loadCoreDataStack: loader)
+        let coordinator = AppCoordinator(
+            window: window,
+            resolveLaunch: resolveLaunch
+        )
         defer { tearDown(window, coordinator: coordinator) }
 
         coordinator.start()
@@ -167,9 +189,13 @@ struct AppCoordinatorTests {
         let window = makeWindow()
         let coordinator = AppCoordinator(
             window: window,
-            loadCoreDataStack: {
+            resolveLaunch: {
                 loadCallCount += 1
-                return stack
+
+                return AppLaunchResolution(
+                    stack: stack,
+                    job: nil
+                )
             }
         )
         defer { tearDown(window, coordinator: coordinator) }
@@ -193,12 +219,19 @@ struct AppCoordinatorTests {
         try JobStorage(stack: stack).save(job)
 
         var loaderCallCount = 0
-        let loader: @MainActor () async throws -> CoreDataStack = {
+        let resolveLaunch: @MainActor () async throws -> AppLaunchResolution = {
             loaderCallCount += 1
-            return stack
+
+            return AppLaunchResolution(
+                stack: stack,
+                job: job
+            )
         }
         let window = makeWindow()
-        let coordinator = AppCoordinator(window: window, loadCoreDataStack: loader)
+        let coordinator = AppCoordinator(
+            window: window,
+            resolveLaunch: resolveLaunch
+        )
         defer { tearDown(window, coordinator: coordinator) }
 
         coordinator.start()
@@ -223,7 +256,12 @@ struct AppCoordinatorTests {
         let window = makeWindow(isKeyAndVisible: false)
         let coordinator = AppCoordinator(
             window: window,
-            loadCoreDataStack: { stack },
+            resolveLaunch: {
+                AppLaunchResolution(
+                    stack: stack,
+                    job: nil
+                )
+            },
             makeNavigationController: {
                 NonAnimatingNavigationController()
             }
@@ -468,7 +506,12 @@ struct AppCoordinatorTests {
         let window = makeWindow()
         let coordinator = AppCoordinator(
             window: window,
-            loadCoreDataStack: { stack },
+            resolveLaunch: {
+                AppLaunchResolution(
+                    stack: stack,
+                    job: job
+                )
+            },
             makeNavigationController: { NonAnimatingNavigationController() }
         )
         defer { tearDown(window, coordinator: coordinator) }
