@@ -42,32 +42,25 @@ final class TimeZoneValidationHandler: JobValidationHandler {
 
 final class PayRatesValidationHandler: JobValidationHandler {
     override func validateCurrent(_ context: JobValidationContext) throws(JobValidationError) {
-        guard context.payRates.isEmpty == false else {
-            throw JobValidationError.missingPayRates
-        }
+        _ = try Self.makePayRateHistory(from: context.payRates)
+    }
 
-        let initialPayRateCount = context.payRates.count { $0.effectiveFrom == nil }
-        guard initialPayRateCount > 0 else {
-            throw JobValidationError.missingInitialPayRate
-        }
-        guard initialPayRateCount == 1 else {
-            throw JobValidationError.multipleInitialPayRates
-        }
-
-        var datedEffectiveFroms = Set<LocalDate>()
-        for payRate in context.payRates {
-            guard let effectiveFrom = payRate.effectiveFrom else {
-                continue
-            }
-
-            guard datedEffectiveFroms.insert(effectiveFrom).inserted else {
+    static func makePayRateHistory(
+        from payRates: [PayRate]
+    ) throws(JobValidationError) -> PayRateHistory {
+        do {
+            return try PayRateHistory(payRates: payRates)
+        } catch {
+            switch error {
+            case .missingPayRates:
+                throw JobValidationError.missingPayRates
+            case .missingInitialPayRate:
+                throw JobValidationError.missingInitialPayRate
+            case .multipleInitialPayRates:
+                throw JobValidationError.multipleInitialPayRates
+            case .duplicatePayRateEffectiveFrom:
                 throw JobValidationError.duplicatePayRateEffectiveFrom
-            }
-        }
-
-        var payRateIDs = Set<UUID>()
-        for payRate in context.payRates {
-            guard payRateIDs.insert(payRate.id).inserted else {
+            case .duplicatePayRateID:
                 throw JobValidationError.duplicatePayRateID
             }
         }

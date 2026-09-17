@@ -27,8 +27,13 @@ struct Job: Equatable {
     let timeZoneIdentifier: String
     let basePayBasis: BasePayBasis
     let payCalculationCycle: PayCalculationCycle
-    let payRates: [PayRate]
     let createdAt: Date
+
+    private let payRateHistory: PayRateHistory
+
+    var payRates: [PayRate] {
+        payRateHistory.payRates
+    }
 
     init(
         id: UUID = UUID(),
@@ -52,7 +57,7 @@ struct Job: Equatable {
         self.timeZoneIdentifier = timeZoneIdentifier
         self.basePayBasis = basePayBasis
         self.payCalculationCycle = payCalculationCycle
-        self.payRates = payRates.sorted(by: PayRate.isOrderedBefore)
+        self.payRateHistory = try PayRatesValidationHandler.makePayRateHistory(from: payRates)
         self.createdAt = createdAt
     }
 
@@ -68,17 +73,7 @@ struct Job: Equatable {
             throw PayRateResolutionError.localDateConversionFailed(error)
         }
 
-        for payRate in payRates.reversed() {
-            if let effectiveFrom = payRate.effectiveFrom {
-                if effectiveFrom <= localStartDate {
-                    return payRate
-                }
-            } else {
-                return payRate
-            }
-        }
-
-        throw PayRateResolutionError.missingInitialPayRate
+        return payRateHistory.applicablePayRate(on: localStartDate)
     }
 
     func basePay(for shift: Shift) throws(PayRateResolutionError) -> Decimal {
