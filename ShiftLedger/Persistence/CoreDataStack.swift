@@ -3,6 +3,7 @@ import CoreData
 
 enum CoreDataStackError: Error {
     case persistentStoreLoadFailed(underlying: Error)
+    case legacyWorkTypeBackfillFailed(underlying: LegacyWorkTypeBackfillError)
 }
 
 @MainActor
@@ -33,6 +34,12 @@ final class CoreDataStack {
                     continuation.resume(returning: ())
                 }
             }
+        }
+
+        do {
+            try LegacyWorkTypeBackfill.run(in: persistentContainer.viewContext)
+        } catch {
+            throw CoreDataStackError.legacyWorkTypeBackfillFailed(underlying: error)
         }
 
         return CoreDataStack(persistentContainer: persistentContainer)

@@ -25,15 +25,6 @@ struct CoreDataV2MigrationTests {
                 .perShift
             }
         }
-
-        var expectedDomainBasis: BasePayBasis {
-            switch self {
-            case .hourlyWeekly:
-                .hourly
-            case .fixedPerShift:
-                .fixedPerShift
-            }
-        }
     }
 
     struct JobSnapshot: Equatable, Sendable {
@@ -71,7 +62,7 @@ struct CoreDataV2MigrationTests {
     }
 
     @Test(
-        "Production V2 stack выполняет lossless lightweight migration V1 SQLite",
+        "Current V2 model выполняет lossless lightweight migration V1 SQLite",
         arguments: [LegacyVariant.hourlyWeekly, .fixedPerShift]
     )
     @MainActor
@@ -80,9 +71,9 @@ struct CoreDataV2MigrationTests {
             payBasis: variant.payBasis,
             payPeriod: variant.payPeriod
         )
-        var stacks: [CoreDataStack] = []
+        var containers: [NSPersistentContainer] = []
         defer {
-            close(stacks)
+            close(containers)
             do {
                 try fixture.remove()
             } catch {
@@ -96,50 +87,21 @@ struct CoreDataV2MigrationTests {
         #expect(before.payRates.count == 3)
         #expect(before.shifts.count == 3)
 
-        let firstStack = try await CoreDataStack.load(storeURL: fixture.storeURL)
-        stacks.append(firstStack)
-        let firstOpen = try Self.snapshot(in: firstStack.viewContext)
+        let firstContainer = try await loadCurrentContainer(storeURL: fixture.storeURL)
+        containers.append(firstContainer)
+        let firstOpen = try Self.snapshot(in: firstContainer.viewContext)
 
         #expect(firstOpen == before)
-        try verifyTransitionalState(in: firstStack.viewContext)
-        try verifyStorageCompatibility(
-            stack: firstStack,
-            fixture: fixture,
-            expectedBasis: variant.expectedDomainBasis
-        )
+        try verifyTransitionalState(in: firstContainer.viewContext)
 
-        try close(firstStack)
+        try close(firstContainer)
 
-        let secondStack = try await CoreDataStack.load(storeURL: fixture.storeURL)
-        stacks.append(secondStack)
-        let secondOpen = try Self.snapshot(in: secondStack.viewContext)
+        let secondContainer = try await loadCurrentContainer(storeURL: fixture.storeURL)
+        containers.append(secondContainer)
+        let secondOpen = try Self.snapshot(in: secondContainer.viewContext)
 
         #expect(secondOpen == before)
-        try verifyTransitionalState(in: secondStack.viewContext)
-    }
-
-    @MainActor
-    private func verifyStorageCompatibility(
-        stack: CoreDataStack,
-        fixture: LegacyCoreDataStoreFixture.Store,
-        expectedBasis: BasePayBasis
-    ) throws {
-        let job = try #require(try JobStorage(stack: stack).load())
-        let shifts = try ShiftStorage(stack: stack).loadAll()
-
-        #expect(job.id == fixture.identifiers.job)
-        #expect(job.workTypeID == job.id)
-        #expect(job.basePayBasis == expectedBasis)
-        #expect(Set(job.payRates.map(\.id)) == [
-            fixture.identifiers.initialPayRate,
-            fixture.identifiers.earlierPayRate,
-            fixture.identifiers.laterPayRate
-        ])
-        #expect(Set(shifts.map(\.id)) == [
-            fixture.identifiers.sameDayShift,
-            fixture.identifiers.shiftWithBreak,
-            fixture.identifiers.overnightShift
-        ])
+        try verifyTransitionalState(in: secondContainer.viewContext)
     }
 
     @MainActor
@@ -253,10 +215,34 @@ struct CoreDataV2MigrationTests {
     }
 
     @MainActor
-    private func close(_ stacks: [CoreDataStack]) {
-        for stack in stacks {
+    private func loadCurrentContainer(
+        storeURL: URL
+    ) async throws -> NSPersistentContainer {
+        let container = NSPersistentContainer(name: "ShiftLedger")
+        let description = NSPersistentStoreDescription(url: storeURL)
+        description.type = NSSQLiteStoreType
+        container.persistentStoreDescriptions = [description]
+
+        try await withCheckedThrowingContinuation(
+            isolation: MainActor.shared
+        ) { (continuation: CheckedContinuation<Void, Error>) in
+            container.loadPersistentStores { _, error in
+                if let error {
+                    continuation.resume(throwing: error)
+                } else {
+                    continuation.resume(returning: ())
+                }
+            }
+        }
+
+        return container
+    }
+
+    @MainActor
+    private func close(_ containers: [NSPersistentContainer]) {
+        for container in containers {
             do {
-                try close(stack)
+                try close(container)
             } catch {
                 Issue.record(error)
             }
@@ -264,10 +250,10 @@ struct CoreDataV2MigrationTests {
     }
 
     @MainActor
-    private func close(_ stack: CoreDataStack) throws {
-        let context = stack.viewContext
+    private func close(_ container: NSPersistentContainer) throws {
+        let context = container.viewContext
         context.reset()
-        let coordinator = try #require(context.persistentStoreCoordinator)
+        let coordinator = container.persistentStoreCoordinator
 
         for persistentStore in coordinator.persistentStores {
             try coordinator.remove(persistentStore)

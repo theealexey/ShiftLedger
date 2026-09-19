@@ -38,11 +38,6 @@ final class JobStorage {
         case perShift
     }
 
-    private enum StoredBasePayKind: String {
-        case hourly
-        case fixedPerShift
-    }
-
     private let context: NSManagedObjectContext
 
     init(stack: CoreDataStack) {
