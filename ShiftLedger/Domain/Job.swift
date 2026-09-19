@@ -25,14 +25,17 @@ struct Job: Equatable {
     let id: UUID
     let currencyCode: String
     let timeZoneIdentifier: String
-    let basePayBasis: BasePayBasis
     let payCalculationCycle: PayCalculationCycle
     let createdAt: Date
 
-    private let payRateHistory: PayRateHistory
+    private let workType: WorkType
+
+    var basePayBasis: BasePayBasis {
+        workType.basePayBasis
+    }
 
     var payRates: [PayRate] {
-        payRateHistory.payRates
+        workType.payRates
     }
 
     init(
@@ -55,30 +58,22 @@ struct Job: Equatable {
         self.id = id
         self.currencyCode = validationContext.currencyCode
         self.timeZoneIdentifier = timeZoneIdentifier
-        self.basePayBasis = basePayBasis
         self.payCalculationCycle = payCalculationCycle
-        self.payRateHistory = try PayRatesValidationHandler.makePayRateHistory(from: payRates)
+        self.workType = WorkType(
+            basePayBasis: basePayBasis,
+            payRateHistory: try PayRatesValidationHandler.makePayRateHistory(from: payRates)
+        )
         self.createdAt = createdAt
     }
 
     func applicablePayRate(for shift: Shift) throws(PayRateResolutionError) -> PayRate {
-        guard let timeZone = TimeZone(identifier: timeZoneIdentifier) else {
-            throw PayRateResolutionError.invalidJobTimeZoneIdentifier
-        }
-
-        let localStartDate: LocalDate
-        do {
-            localStartDate = try LocalDate(date: shift.start, in: timeZone)
-        } catch {
-            throw PayRateResolutionError.localDateConversionFailed(error)
-        }
-
-        return payRateHistory.applicablePayRate(on: localStartDate)
+        let localStartDate = try localStartDate(for: shift)
+        return workType.applicablePayRate(on: localStartDate)
     }
 
     func basePay(for shift: Shift) throws(PayRateResolutionError) -> Decimal {
-        let payRate = try applicablePayRate(for: shift)
-        return basePayAmount(for: shift, using: payRate)
+        let localStartDate = try localStartDate(for: shift)
+        return workType.basePay(for: shift, on: localStartDate)
     }
 
     func payCalculationPeriod(
@@ -180,19 +175,9 @@ struct Job: Equatable {
         return PaycheckComparison(expected: expected, actualGross: actualGross)
     }
 
-    private func basePayAmount(for shift: Shift, using payRate: PayRate) -> Decimal {
-        switch basePayBasis {
-        case .hourly:
-            let paidHours = Decimal(shift.paidDuration) / Decimal(3_600)
-            return payRate.amount * paidHours
-        case .fixedPerShift:
-            return payRate.amount
-        }
-    }
-
     private func shiftPayBreakdown(for shift: Shift) throws(PayRateResolutionError) -> ShiftPayBreakdown {
         let payRate = try applicablePayRate(for: shift)
-        let amount = basePayAmount(for: shift, using: payRate)
+        let amount = workType.basePay(for: shift, using: payRate)
 
         return ShiftPayBreakdown(
             shift: shift,
@@ -201,6 +186,18 @@ struct Job: Equatable {
             paidDuration: shift.paidDuration,
             basePay: amount
         )
+    }
+
+    private func localStartDate(for shift: Shift) throws(PayRateResolutionError) -> LocalDate {
+        guard let timeZone = TimeZone(identifier: timeZoneIdentifier) else {
+            throw PayRateResolutionError.invalidJobTimeZoneIdentifier
+        }
+
+        do {
+            return try LocalDate(date: shift.start, in: timeZone)
+        } catch {
+            throw PayRateResolutionError.localDateConversionFailed(error)
+        }
     }
 
     private func scheduledPayPeriod(
