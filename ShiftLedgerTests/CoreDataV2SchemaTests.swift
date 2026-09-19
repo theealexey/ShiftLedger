@@ -3,12 +3,11 @@ import Foundation
 import Testing
 
 struct CoreDataV2SchemaTests {
-    @Test("Model bundle сохраняет явные V1 и V2, а current указывает на V2")
+    @Test("Model bundle сохраняет явные V1 и V2")
     func modelBundleContainsExplicitVersions() throws {
         let packageURL = try modelPackageURL()
         let legacyModel = try loadModel(named: "ShiftLedger", from: packageURL)
         let v2Model = try loadModel(named: "ShiftLedgerV2", from: packageURL)
-        let currentModel = try #require(NSManagedObjectModel(contentsOf: packageURL))
 
         #expect(Set(legacyModel.entitiesByName.keys) == [
             "JobEntity",
@@ -22,7 +21,8 @@ struct CoreDataV2SchemaTests {
             "ShiftEntity",
             "WorkTypeEntity"
         ])
-        #expect(currentModel.entitiesByName["WorkTypeEntity"] != nil)
+        #expect(v2Model.entitiesByName["ShiftEntity"]?.relationshipsByName["workType"] == nil)
+        #expect(v2Model.entitiesByName["WorkTypeEntity"]?.relationshipsByName["shifts"] == nil)
     }
 
     @Test("V2 содержит минимальную WorkType schema без uniqueness constraint")

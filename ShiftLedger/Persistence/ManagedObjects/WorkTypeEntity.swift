@@ -7,4 +7,5 @@ class WorkTypeEntity: NSManagedObject {
     @NSManaged var basePayKind: String
     @NSManaged var job: JobEntity
     @NSManaged var payRates: NSSet?
+    @NSManaged var shifts: NSSet?
 }

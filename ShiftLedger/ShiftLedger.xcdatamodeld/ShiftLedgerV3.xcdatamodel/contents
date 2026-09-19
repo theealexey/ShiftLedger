@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<model type="com.apple.IDECoreDataModeler.DataModel" documentVersion="1.0" lastSavedToolsVersion="1" systemVersion="11A491" minimumToolsVersion="Automatic" sourceLanguage="Swift" usedWithCloudKit="false" userDefinedModelVersionIdentifier="">
+    <entity name="JobEntity" representedClassName="JobEntity" customModuleProvider="target" codeGenerationType="none">
+        <attribute name="id" optional="NO" attributeType="UUID"/>
+        <attribute name="currencyCode" optional="NO" attributeType="String"/>
+        <attribute name="timeZoneIdentifier" optional="NO" attributeType="String"/>
+        <attribute name="basePayKind" optional="YES" attributeType="String"/>
+        <attribute name="payPeriodKind" optional="NO" attributeType="String"/>
+        <attribute name="payPeriodAnchorDate" optional="YES" attributeType="Date"/>
+        <attribute name="createdAt" optional="NO" attributeType="Date"/>
+        <relationship name="payRates" optional="NO" minCount="1" toMany="YES" deletionRule="Cascade" destinationEntity="PayRateEntity" inverseName="job" inverseEntity="PayRateEntity"/>
+        <relationship name="shifts" optional="YES" minCount="0" toMany="YES" deletionRule="Cascade" destinationEntity="ShiftEntity" inverseName="job" inverseEntity="ShiftEntity"/>
+        <relationship name="workTypes" optional="YES" minCount="0" toMany="YES" deletionRule="Cascade" destinationEntity="WorkTypeEntity" inverseName="job" inverseEntity="WorkTypeEntity"/>
+    </entity>
+    <entity name="PayRateEntity" representedClassName="PayRateEntity" customModuleProvider="target" codeGenerationType="none">
+        <attribute name="id" optional="NO" attributeType="UUID"/>
+        <attribute name="amount" optional="NO" attributeType="Decimal"/>
+        <attribute name="effectiveFrom" optional="YES" attributeType="Date"/>
+        <relationship name="job" optional="NO" maxCount="1" deletionRule="Nullify" destinationEntity="JobEntity" inverseName="payRates" inverseEntity="JobEntity"/>
+        <relationship name="workType" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="WorkTypeEntity" inverseName="payRates" inverseEntity="WorkTypeEntity"/>
+    </entity>
+    <entity name="ShiftEntity" representedClassName="ShiftEntity" customModuleProvider="target" codeGenerationType="none">
+        <attribute name="id" optional="NO" attributeType="UUID"/>
+        <attribute name="start" optional="NO" attributeType="Date"/>
+        <attribute name="end" optional="NO" attributeType="Date"/>
+        <attribute name="unpaidBreakStart" optional="YES" attributeType="Date"/>
+        <attribute name="unpaidBreakEnd" optional="YES" attributeType="Date"/>
+        <relationship name="job" optional="NO" maxCount="1" deletionRule="Nullify" destinationEntity="JobEntity" inverseName="shifts" inverseEntity="JobEntity"/>
+        <relationship name="workType" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="WorkTypeEntity" inverseName="shifts" inverseEntity="WorkTypeEntity"/>
+    </entity>
+    <entity name="WorkTypeEntity" representedClassName="WorkTypeEntity" customModuleProvider="target" codeGenerationType="none">
+        <attribute name="id" optional="NO" attributeType="UUID"/>
+        <attribute name="basePayKind" optional="NO" attributeType="String"/>
+        <relationship name="job" optional="NO" maxCount="1" deletionRule="Nullify" destinationEntity="JobEntity" inverseName="workTypes" inverseEntity="JobEntity"/>
+        <relationship name="payRates" optional="YES" minCount="0" toMany="YES" deletionRule="Cascade" destinationEntity="PayRateEntity" inverseName="workType" inverseEntity="PayRateEntity"/>
+        <relationship name="shifts" optional="YES" minCount="0" toMany="YES" deletionRule="Cascade" destinationEntity="ShiftEntity" inverseName="workType" inverseEntity="ShiftEntity"/>
+    </entity>
+    <elements>
+        <element name="JobEntity" positionX="-63" positionY="-18" width="128" height="225"/>
+        <element name="PayRateEntity" positionX="135" positionY="-18" width="128" height="165"/>
+        <element name="ShiftEntity" positionX="330" positionY="-18" width="128" height="165"/>
+        <element name="WorkTypeEntity" positionX="135" positionY="180" width="128" height="120"/>
+    </elements>
+</model>
