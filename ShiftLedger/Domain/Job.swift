@@ -34,6 +34,10 @@ struct Job: Equatable {
         workType.basePayBasis
     }
 
+    var workTypeID: UUID {
+        workType.id
+    }
+
     var payRates: [PayRate] {
         workType.payRates
     }
@@ -60,6 +64,7 @@ struct Job: Equatable {
         self.timeZoneIdentifier = timeZoneIdentifier
         self.payCalculationCycle = payCalculationCycle
         self.workType = WorkType(
+            id: id,
             basePayBasis: basePayBasis,
             payRateHistory: try PayRatesValidationHandler.makePayRateHistory(from: payRates)
         )
