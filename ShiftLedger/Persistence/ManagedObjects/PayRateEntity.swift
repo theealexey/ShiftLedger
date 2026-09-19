@@ -7,4 +7,5 @@ class PayRateEntity: NSManagedObject {
     @NSManaged var amount: NSDecimalNumber
     @NSManaged var effectiveFrom: Date?
     @NSManaged var job: JobEntity
+    @NSManaged var workType: WorkTypeEntity?
 }
