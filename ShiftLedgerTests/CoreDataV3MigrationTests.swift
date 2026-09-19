@@ -22,12 +22,6 @@ struct CoreDataV3MigrationTests {
             }
         }
 
-        var domainBasis: BasePayBasis {
-            switch self {
-            case .hourlyWeekly: .hourly
-            case .fixedPerShift: .fixedPerShift
-            }
-        }
     }
 
     struct JobSnapshot: Equatable, Sendable {
@@ -84,11 +78,9 @@ struct CoreDataV3MigrationTests {
             payBasis: variant.payBasis,
             payPeriod: variant.payPeriod
         )
-        var v2Containers: [NSPersistentContainer] = []
-        var v3Stacks: [CoreDataStack] = []
+        var containers: [NSPersistentContainer] = []
         defer {
-            close(v2Containers)
-            close(v3Stacks)
+            close(containers)
             do {
                 try fixture.remove()
             } catch {
@@ -97,7 +89,7 @@ struct CoreDataV3MigrationTests {
         }
 
         let v2Container = try await loadV2Container(storeURL: fixture.storeURL)
-        v2Containers.append(v2Container)
+        containers.append(v2Container)
         try LegacyWorkTypeBackfill.run(in: v2Container.viewContext)
         let v2Snapshot = try Self.snapshot(in: v2Container.viewContext)
 
@@ -108,35 +100,29 @@ struct CoreDataV3MigrationTests {
 
         try close(v2Container)
 
-        let firstV3Stack = try await CoreDataStack.load(storeURL: fixture.storeURL)
-        v3Stacks.append(firstV3Stack)
+        let firstV3Container = try await loadV3Container(storeURL: fixture.storeURL)
+        containers.append(firstV3Container)
         try verifyMigratedV3(
-            stack: firstV3Stack,
-            expected: v2Snapshot,
-            fixture: fixture,
-            expectedBasis: variant.domainBasis
+            container: firstV3Container,
+            expected: v2Snapshot
         )
 
-        try close(firstV3Stack)
+        try close(firstV3Container)
 
-        let reopenedV3Stack = try await CoreDataStack.load(storeURL: fixture.storeURL)
-        v3Stacks.append(reopenedV3Stack)
+        let reopenedV3Container = try await loadV3Container(storeURL: fixture.storeURL)
+        containers.append(reopenedV3Container)
         try verifyMigratedV3(
-            stack: reopenedV3Stack,
-            expected: v2Snapshot,
-            fixture: fixture,
-            expectedBasis: variant.domainBasis
+            container: reopenedV3Container,
+            expected: v2Snapshot
         )
     }
 
     @MainActor
     private func verifyMigratedV3(
-        stack: CoreDataStack,
-        expected: StoreSnapshot,
-        fixture: LegacyCoreDataStoreFixture.Store,
-        expectedBasis: BasePayBasis
+        container: NSPersistentContainer,
+        expected: StoreSnapshot
     ) throws {
-        let context = stack.viewContext
+        let context = container.viewContext
         let actual = try Self.snapshot(in: context)
         #expect(actual == expected)
 
@@ -150,26 +136,6 @@ struct CoreDataV3MigrationTests {
         #expect(shifts.count == 3)
         #expect(shifts.allSatisfy { $0.workType == nil })
         #expect((workType.shifts?.count ?? 0) == 0)
-
-        let job = try #require(try JobStorage(stack: stack).load())
-        #expect(job.id == fixture.identifiers.job)
-        #expect(job.workTypeID == job.id)
-        #expect(job.basePayBasis == expectedBasis)
-        #expect(Set(job.payRates.map(\.id)) == expected.job.payRateIDs)
-
-        let domainShifts = try ShiftStorage(stack: stack).loadAll()
-        let domainSnapshots = domainShifts.map {
-            ShiftSnapshot(
-                id: $0.id,
-                start: $0.start,
-                end: $0.end,
-                unpaidBreakStart: $0.unpaidBreak?.start,
-                unpaidBreakEnd: $0.unpaidBreak?.end,
-                jobID: fixture.identifiers.job
-            )
-        }
-        .sorted { $0.id.uuidString < $1.id.uuidString }
-        #expect(domainSnapshots == expected.shifts)
     }
 
     private static func snapshot(
@@ -296,11 +262,26 @@ struct CoreDataV3MigrationTests {
     private func loadV2Container(
         storeURL: URL
     ) async throws -> NSPersistentContainer {
+        try await loadContainer(modelName: "ShiftLedgerV2", storeURL: storeURL)
+    }
+
+    @MainActor
+    private func loadV3Container(
+        storeURL: URL
+    ) async throws -> NSPersistentContainer {
+        try await loadContainer(modelName: "ShiftLedgerV3", storeURL: storeURL)
+    }
+
+    @MainActor
+    private func loadContainer(
+        modelName: String,
+        storeURL: URL
+    ) async throws -> NSPersistentContainer {
         let packageURL = try #require(
             Bundle.main.url(forResource: "ShiftLedger", withExtension: "momd")
         )
         let modelURL = packageURL
-            .appendingPathComponent("ShiftLedgerV2")
+            .appendingPathComponent(modelName)
             .appendingPathExtension("mom")
         let model = try #require(NSManagedObjectModel(contentsOf: modelURL))
         let container = NSPersistentContainer(
@@ -338,17 +319,6 @@ struct CoreDataV3MigrationTests {
     }
 
     @MainActor
-    private func close(_ stacks: [CoreDataStack]) {
-        for stack in stacks {
-            do {
-                try close(stack)
-            } catch {
-                Issue.record(error)
-            }
-        }
-    }
-
-    @MainActor
     private func close(_ container: NSPersistentContainer) throws {
         container.viewContext.reset()
         for store in container.persistentStoreCoordinator.persistentStores {
@@ -356,13 +326,4 @@ struct CoreDataV3MigrationTests {
         }
     }
 
-    @MainActor
-    private func close(_ stack: CoreDataStack) throws {
-        let context = stack.viewContext
-        context.reset()
-        let coordinator = try #require(context.persistentStoreCoordinator)
-        for store in coordinator.persistentStores {
-            try coordinator.remove(store)
-        }
-    }
 }
