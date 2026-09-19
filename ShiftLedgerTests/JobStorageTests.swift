@@ -25,6 +25,14 @@ struct JobStorageTests {
         let stackA = try await CoreDataStack.load(storeURL: storeURL)
         stacks.append(stackA)
         try JobStorage(stack: stackA).save(job)
+        let savedWorkTypes = try stackA.viewContext.fetch(
+            NSFetchRequest<WorkTypeEntity>(entityName: "WorkTypeEntity")
+        )
+        #expect(savedWorkTypes.count == 1)
+        #expect(savedWorkTypes.first?.id == job.workTypeID)
+        #expect(savedWorkTypes.first?.basePayKind == "fixedPerShift")
+
+        try close(stackA)
 
         let stackB = try await CoreDataStack.load(storeURL: storeURL)
         stacks.append(stackB)
@@ -32,6 +40,11 @@ struct JobStorageTests {
 
         #expect(restoredJob == job)
         #expect(restoredJob.basePayBasis == .fixedPerShift)
+        #expect(
+            try stackB.viewContext.fetch(
+                NSFetchRequest<WorkTypeEntity>(entityName: "WorkTypeEntity")
+            ).count == 1
+        )
     }
 
     @Test("Неизвестная база оплаты в SQLite отклоняется")
@@ -49,7 +62,7 @@ struct JobStorageTests {
             id: try #require(UUID(uuidString: "2A6D58B5-6B9D-4D60-9EAE-9B9A0B7F2D6A")),
             payRateID: try #require(UUID(uuidString: "4B5A3AF5-1E65-459B-A7D0-2AC5B5E77B26")),
             payRateEffectiveFrom: nil,
-            basePayKind: "unknown",
+            workTypeBasePayKind: "unknown",
             payPeriodAnchorDate: try effectiveFrom.startOfDay(in: timeZone),
             in: stack.viewContext
         )
@@ -61,6 +74,93 @@ struct JobStorageTests {
         } catch JobStorageError.corruptedData(.unknownBasePayKind("unknown")) {
         } catch {
             Issue.record("Неизвестная база оплаты вернула неверную ошибку")
+        }
+    }
+
+    @Test("Job без canonical WorkType отклоняется")
+    func rejectsMissingWorkType() async throws {
+        let storeURL = try makeTemporaryStoreURL()
+        var stacks: [CoreDataStack] = []
+        defer { removeTemporaryStoreDirectory(for: storeURL, stacks: stacks) }
+
+        let stack = try await CoreDataStack.load(storeURL: storeURL)
+        stacks.append(stack)
+        try insertPersistedJob(
+            id: try #require(UUID(uuidString: "7A000000-0000-0000-0000-000000000001")),
+            payRateID: try #require(UUID(uuidString: "7A000000-0000-0000-0000-000000000002")),
+            payRateEffectiveFrom: nil,
+            includeWorkType: false,
+            payPeriodAnchorDate: nil,
+            in: stack.viewContext
+        )
+        try stack.viewContext.save()
+
+        do {
+            _ = try JobStorage(stack: stack).load()
+            Issue.record("Job без WorkType была принята")
+        } catch JobStorageError.corruptedData(.missingWorkType) {
+        } catch {
+            Issue.record("Job без WorkType вернула неверную ошибку: \(error)")
+        }
+    }
+
+    @Test("Job с несколькими WorkType отклоняется")
+    func rejectsMultipleWorkTypes() async throws {
+        let storeURL = try makeTemporaryStoreURL()
+        var stacks: [CoreDataStack] = []
+        defer { removeTemporaryStoreDirectory(for: storeURL, stacks: stacks) }
+
+        let stack = try await CoreDataStack.load(storeURL: storeURL)
+        stacks.append(stack)
+        try insertPersistedJob(
+            id: try #require(UUID(uuidString: "7B000000-0000-0000-0000-000000000001")),
+            payRateID: try #require(UUID(uuidString: "7B000000-0000-0000-0000-000000000002")),
+            payRateEffectiveFrom: nil,
+            additionalWorkTypeID: UUID(
+                uuidString: "7B000000-0000-0000-0000-000000000003"
+            ),
+            payPeriodAnchorDate: nil,
+            in: stack.viewContext
+        )
+        try stack.viewContext.save()
+
+        do {
+            _ = try JobStorage(stack: stack).load()
+            Issue.record("Job с несколькими WorkType была принята")
+        } catch JobStorageError.corruptedData(.multipleWorkTypesFound) {
+        } catch {
+            Issue.record("Job с несколькими WorkType вернула неверную ошибку: \(error)")
+        }
+    }
+
+    @Test("WorkType с identity, отличным от Job, отклоняется")
+    func rejectsUnexpectedWorkTypeIdentity() async throws {
+        let storeURL = try makeTemporaryStoreURL()
+        var stacks: [CoreDataStack] = []
+        defer { removeTemporaryStoreDirectory(for: storeURL, stacks: stacks) }
+
+        let jobID = try #require(UUID(uuidString: "7C000000-0000-0000-0000-000000000001"))
+        let workTypeID = try #require(UUID(uuidString: "7C000000-0000-0000-0000-000000000002"))
+        let stack = try await CoreDataStack.load(storeURL: storeURL)
+        stacks.append(stack)
+        try insertPersistedJob(
+            id: jobID,
+            payRateID: try #require(UUID(uuidString: "7C000000-0000-0000-0000-000000000003")),
+            payRateEffectiveFrom: nil,
+            workTypeID: workTypeID,
+            payPeriodAnchorDate: nil,
+            in: stack.viewContext
+        )
+        try stack.viewContext.save()
+
+        do {
+            _ = try JobStorage(stack: stack).load()
+            Issue.record("WorkType с неверной identity была принята")
+        } catch JobStorageError.corruptedData(
+            .unexpectedWorkTypeIdentity(expected: jobID, actual: workTypeID)
+        ) {
+        } catch {
+            Issue.record("WorkType с неверной identity вернула неверную ошибку: \(error)")
         }
     }
 
@@ -95,8 +195,8 @@ struct JobStorageTests {
         }
     }
 
-    @Test("Отсутствующий basePayKind восстанавливается как hourly для совместимости")
-    func restoresNilBasePayKindAsLegacyHourly() async throws {
+    @Test("Canonical WorkType определяет basis независимо от legacy Job mirror")
+    func readsBasePayKindFromCanonicalWorkType() async throws {
         let storeURL = try makeTemporaryStoreURL()
         var stacks: [CoreDataStack] = []
         defer { removeTemporaryStoreDirectory(for: storeURL, stacks: stacks) }
@@ -110,7 +210,8 @@ struct JobStorageTests {
             id: try #require(UUID(uuidString: "35C4A6F8-0B32-4E5D-9C71-8A6B5C4D3E2F")),
             payRateID: try #require(UUID(uuidString: "46D5B7A9-1C43-5F6E-8D82-9B7C6D5E4F30")),
             payRateEffectiveFrom: nil,
-            basePayKind: nil,
+            workTypeBasePayKind: "fixedPerShift",
+            legacyBasePayKind: nil,
             payPeriodAnchorDate: try anchorDate.startOfDay(in: timeZone),
             in: stack.viewContext
         )
@@ -118,7 +219,7 @@ struct JobStorageTests {
 
         let restoredJob = try #require(try JobStorage(stack: stack).load())
 
-        #expect(restoredJob.basePayBasis == .hourly)
+        #expect(restoredJob.basePayBasis == .fixedPerShift)
     }
 
     @Test("Job сохраняется в SQLite и восстанавливается новым Core Data stack")
@@ -170,6 +271,60 @@ struct JobStorageTests {
         let storageA = JobStorage(stack: stackA)
         try storageA.save(job)
 
+        let persistedJobs = try stackA.viewContext.fetch(
+            NSFetchRequest<JobEntity>(entityName: "JobEntity")
+        )
+        let persistedWorkTypes = try stackA.viewContext.fetch(
+            NSFetchRequest<WorkTypeEntity>(entityName: "WorkTypeEntity")
+        )
+        let persistedPayRates = try stackA.viewContext.fetch(
+            NSFetchRequest<PayRateEntity>(entityName: "PayRateEntity")
+        )
+        let persistedJob = try #require(persistedJobs.first)
+        let persistedWorkType = try #require(persistedWorkTypes.first)
+        let persistedInitialRate = try #require(
+            persistedPayRates.first { $0.id == initialPayRateID }
+        )
+        let persistedEarlierRate = try #require(
+            persistedPayRates.first { $0.id == earlierPayRateID }
+        )
+        let persistedLaterRate = try #require(
+            persistedPayRates.first { $0.id == laterPayRateID }
+        )
+        let timeZone = try #require(TimeZone(identifier: job.timeZoneIdentifier))
+        let persistedEarlierEffectiveFrom = try anchorDate.startOfDay(in: timeZone)
+        let persistedLaterEffectiveFrom = try laterEffectiveFrom.startOfDay(in: timeZone)
+
+        #expect(persistedJobs.count == 1)
+        #expect(persistedWorkTypes.count == 1)
+        #expect(persistedWorkType.id == job.workTypeID)
+        #expect(persistedWorkType.id == persistedJob.id)
+        #expect(persistedWorkType.basePayKind == "hourly")
+        #expect(persistedWorkType.job.objectID == persistedJob.objectID)
+        #expect(persistedJob.basePayKind == "hourly")
+        #expect(
+            Set(persistedWorkType.payRates?.compactMap { ($0 as? PayRateEntity)?.id } ?? [])
+                == Set(job.payRates.map(\.id))
+        )
+        #expect(
+            persistedPayRates.allSatisfy {
+                $0.workType?.objectID == persistedWorkType.objectID
+            }
+        )
+        #expect(
+            persistedPayRates.allSatisfy {
+                $0.job.objectID == persistedJob.objectID
+            }
+        )
+        #expect(persistedInitialRate.amount.decimalValue == 100)
+        #expect(persistedInitialRate.effectiveFrom == nil)
+        #expect(persistedEarlierRate.amount.decimalValue == earlierAmount)
+        #expect(persistedEarlierRate.effectiveFrom == persistedEarlierEffectiveFrom)
+        #expect(persistedLaterRate.amount.decimalValue == laterAmount)
+        #expect(persistedLaterRate.effectiveFrom == persistedLaterEffectiveFrom)
+
+        try close(stackA)
+
         let stackB = try await CoreDataStack.load(storeURL: storeURL)
         stacks.append(stackB)
         let storageB = JobStorage(stack: stackB)
@@ -182,6 +337,11 @@ struct JobStorageTests {
         #expect(restoredJob.createdAt == createdAt)
         #expect(restoredJob.payRates.count == 3)
         #expect(restoredJob.payRates == [initialPayRate, earlierPayRate, laterPayRate])
+        #expect(
+            try stackB.viewContext.fetch(
+                NSFetchRequest<WorkTypeEntity>(entityName: "WorkTypeEntity")
+            ).count == 1
+        )
     }
 
     @Test("Пустой SQLite store не содержит Job")
@@ -394,6 +554,9 @@ struct JobStorageTests {
         let jobEntity = try #require(
             try stack.viewContext.fetch(NSFetchRequest<JobEntity>(entityName: "JobEntity")).first
         )
+        let workTypeEntity = try #require(
+            jobEntity.workTypes?.anyObject() as? WorkTypeEntity
+        )
         let payRateEntityDescription = try #require(
             NSEntityDescription.entity(forEntityName: "PayRateEntity", in: stack.viewContext)
         )
@@ -402,6 +565,7 @@ struct JobStorageTests {
         duplicatePayRateEntity.amount = NSDecimalNumber(decimal: 130)
         duplicatePayRateEntity.effectiveFrom = try secondEffectiveFrom.startOfDay(in: timeZone)
         duplicatePayRateEntity.job = jobEntity
+        duplicatePayRateEntity.workType = workTypeEntity
         try stack.viewContext.save()
 
         do {
@@ -524,6 +688,17 @@ struct JobStorageTests {
         }
     }
 
+    private func close(_ stack: CoreDataStack) throws {
+        let context = stack.viewContext
+        context.reset()
+        guard let coordinator = context.persistentStoreCoordinator else {
+            return
+        }
+        for persistentStore in coordinator.persistentStores {
+            try coordinator.remove(persistentStore)
+        }
+    }
+
     private func makeJob(
         id: UUID,
         payRates: [PayRate],
@@ -544,6 +719,7 @@ struct JobStorageTests {
         )
     }
 
+    @discardableResult
     private func insertPersistedJob(
         id: UUID,
         payRateID: UUID,
@@ -551,14 +727,21 @@ struct JobStorageTests {
         payRateAmount: Decimal = 120,
         includeInitialPayRate: Bool = true,
         additionalInitialPayRate: Bool = false,
-        basePayKind: String? = nil,
+        workTypeBasePayKind: String = "hourly",
+        legacyBasePayKind: String? = "hourly",
+        workTypeID: UUID? = nil,
+        includeWorkType: Bool = true,
+        additionalWorkTypeID: UUID? = nil,
         timeZoneIdentifier: String = "Europe/Stockholm",
         payPeriodKind: String = "weekly",
         payPeriodAnchorDate: Date?,
         in context: NSManagedObjectContext
-    ) throws {
+    ) throws -> (job: JobEntity, workType: WorkTypeEntity?, payRates: [PayRateEntity]) {
         let jobEntityDescription = try #require(
             NSEntityDescription.entity(forEntityName: "JobEntity", in: context)
+        )
+        let workTypeEntityDescription = try #require(
+            NSEntityDescription.entity(forEntityName: "WorkTypeEntity", in: context)
         )
         let payRateEntityDescription = try #require(
             NSEntityDescription.entity(forEntityName: "PayRateEntity", in: context)
@@ -568,16 +751,42 @@ struct JobStorageTests {
         jobEntity.id = id
         jobEntity.currencyCode = "EUR"
         jobEntity.timeZoneIdentifier = timeZoneIdentifier
-        jobEntity.basePayKind = basePayKind
+        jobEntity.basePayKind = legacyBasePayKind
         jobEntity.payPeriodKind = payPeriodKind
         jobEntity.payPeriodAnchorDate = payPeriodAnchorDate
         jobEntity.createdAt = Date(timeIntervalSinceReferenceDate: 900_000)
+
+        let workTypeEntity: WorkTypeEntity?
+        if includeWorkType {
+            let entity = WorkTypeEntity(
+                entity: workTypeEntityDescription,
+                insertInto: context
+            )
+            entity.id = workTypeID ?? id
+            entity.basePayKind = workTypeBasePayKind
+            entity.job = jobEntity
+            workTypeEntity = entity
+        } else {
+            workTypeEntity = nil
+        }
+
+        if let additionalWorkTypeID {
+            let additionalWorkType = WorkTypeEntity(
+                entity: workTypeEntityDescription,
+                insertInto: context
+            )
+            additionalWorkType.id = additionalWorkTypeID
+            additionalWorkType.basePayKind = workTypeBasePayKind
+            additionalWorkType.job = jobEntity
+        }
 
         let payRateEntity = PayRateEntity(entity: payRateEntityDescription, insertInto: context)
         payRateEntity.id = payRateID
         payRateEntity.amount = NSDecimalNumber(decimal: payRateAmount)
         payRateEntity.effectiveFrom = payRateEffectiveFrom
         payRateEntity.job = jobEntity
+        payRateEntity.workType = workTypeEntity
+        var payRateEntities = [payRateEntity]
 
         if includeInitialPayRate && payRateEffectiveFrom != nil {
             let initialPayRateEntity = PayRateEntity(entity: payRateEntityDescription, insertInto: context)
@@ -585,6 +794,8 @@ struct JobStorageTests {
             initialPayRateEntity.amount = NSDecimalNumber(decimal: 121)
             initialPayRateEntity.effectiveFrom = nil
             initialPayRateEntity.job = jobEntity
+            initialPayRateEntity.workType = workTypeEntity
+            payRateEntities.append(initialPayRateEntity)
         }
 
         if additionalInitialPayRate {
@@ -593,6 +804,10 @@ struct JobStorageTests {
             initialPayRateEntity.amount = NSDecimalNumber(decimal: 121)
             initialPayRateEntity.effectiveFrom = nil
             initialPayRateEntity.job = jobEntity
+            initialPayRateEntity.workType = workTypeEntity
+            payRateEntities.append(initialPayRateEntity)
         }
+
+        return (jobEntity, workTypeEntity, payRateEntities)
     }
 }

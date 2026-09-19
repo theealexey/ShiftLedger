@@ -10,7 +10,21 @@ enum JobStorageError: Error {
         case unexpectedPayPeriodAnchorDate(payPeriodKind: String)
         case invalidPayPeriodAnchorDate(payPeriodKind: String, underlying: LocalDateConversionError)
         case nonCanonicalPayPeriodAnchorDate(payPeriodKind: String)
-        case invalidPayRatesRelationship
+        case invalidWorkTypesRelationship
+        case missingWorkType
+        case multipleWorkTypesFound
+        case unexpectedWorkTypeIdentity(expected: UUID, actual: UUID)
+        case workTypeBelongsToDifferentJob(
+            workTypeID: UUID,
+            expectedJobID: UUID,
+            actualJobID: UUID
+        )
+        case invalidWorkTypePayRatesRelationship
+        case payRateBelongsToDifferentJob(
+            payRateID: UUID,
+            expectedJobID: UUID,
+            actualJobID: UUID
+        )
         case invalidPayRateEffectiveFrom(underlying: LocalDateConversionError)
         case invalidPayRate(underlying: PayRateValidationError)
         case nonCanonicalPayRateEffectiveFrom
@@ -26,6 +40,7 @@ enum JobStorageError: Error {
 
 private enum ManagedObjectCreationError: Error {
     case missingJobEntityDescription
+    case missingWorkTypeEntityDescription
     case missingPayRateEntityDescription
 }
 
@@ -79,15 +94,33 @@ final class JobStorage {
                 underlying: ManagedObjectCreationError.missingPayRateEntityDescription
             )
         }
+        guard let workTypeEntityDescription = NSEntityDescription.entity(
+            forEntityName: "WorkTypeEntity",
+            in: context
+        ) else {
+            throw JobStorageError.saveFailed(
+                underlying: ManagedObjectCreationError.missingWorkTypeEntityDescription
+            )
+        }
+
+        let storedBasePayKind = encodeBasePayBasis(job.basePayBasis)
 
         let jobEntity = JobEntity(entity: jobEntityDescription, insertInto: context)
         jobEntity.id = job.id
         jobEntity.currencyCode = job.currencyCode
         jobEntity.timeZoneIdentifier = job.timeZoneIdentifier
-        jobEntity.basePayKind = encodeBasePayBasis(job.basePayBasis).rawValue
+        jobEntity.basePayKind = storedBasePayKind.rawValue
         jobEntity.createdAt = job.createdAt
         jobEntity.payPeriodKind = storedPayPeriod.kind.rawValue
         jobEntity.payPeriodAnchorDate = storedPayPeriod.anchorDate
+
+        let workTypeEntity = WorkTypeEntity(
+            entity: workTypeEntityDescription,
+            insertInto: context
+        )
+        workTypeEntity.id = job.workTypeID
+        workTypeEntity.basePayKind = storedBasePayKind.rawValue
+        workTypeEntity.job = jobEntity
 
         for storedPayRate in storedPayRates {
             let payRate = storedPayRate.payRate
@@ -96,6 +129,7 @@ final class JobStorage {
             payRateEntity.amount = NSDecimalNumber(decimal: payRate.amount)
             payRateEntity.effectiveFrom = storedPayRate.effectiveFrom
             payRateEntity.job = jobEntity
+            payRateEntity.workType = workTypeEntity
         }
 
         do {
@@ -132,13 +166,23 @@ final class JobStorage {
 
     private func makeJob(from jobEntity: JobEntity) throws -> Job {
         let timeZone = try makeTimeZone(from: jobEntity.timeZoneIdentifier)
-        let basePayBasis = try makeBasePayBasis(from: jobEntity)
+        let workTypeEntity = try canonicalWorkType(for: jobEntity)
+        let basePayBasis = try makeBasePayBasis(from: workTypeEntity)
         let payCalculationCycle = try makePayCalculationCycle(from: jobEntity, timeZone: timeZone)
         var payRates: [PayRate] = []
 
-        for object in jobEntity.payRates {
+        for object in workTypeEntity.payRates ?? NSSet() {
             guard let payRateEntity = object as? PayRateEntity else {
-                throw JobStorageError.corruptedData(.invalidPayRatesRelationship)
+                throw JobStorageError.corruptedData(.invalidWorkTypePayRatesRelationship)
+            }
+            guard payRateEntity.job.objectID == jobEntity.objectID else {
+                throw JobStorageError.corruptedData(
+                    .payRateBelongsToDifferentJob(
+                        payRateID: payRateEntity.id,
+                        expectedJobID: jobEntity.id,
+                        actualJobID: payRateEntity.job.id
+                    )
+                )
             }
 
             payRates.append(try makePayRate(from: payRateEntity, timeZone: timeZone))
@@ -168,13 +212,47 @@ final class JobStorage {
         }
     }
 
-    private func makeBasePayBasis(from jobEntity: JobEntity) throws -> BasePayBasis {
-        guard let rawValue = jobEntity.basePayKind else {
-            return .hourly
+    private func canonicalWorkType(for jobEntity: JobEntity) throws -> WorkTypeEntity {
+        var workTypes: [WorkTypeEntity] = []
+        for object in jobEntity.workTypes ?? NSSet() {
+            guard let workTypeEntity = object as? WorkTypeEntity else {
+                throw JobStorageError.corruptedData(.invalidWorkTypesRelationship)
+            }
+            workTypes.append(workTypeEntity)
         }
 
-        guard let storedKind = StoredBasePayKind(rawValue: rawValue) else {
-            throw JobStorageError.corruptedData(.unknownBasePayKind(rawValue))
+        guard let workTypeEntity = workTypes.first else {
+            throw JobStorageError.corruptedData(.missingWorkType)
+        }
+        guard workTypes.count == 1 else {
+            throw JobStorageError.corruptedData(.multipleWorkTypesFound)
+        }
+        guard workTypeEntity.id == jobEntity.id else {
+            throw JobStorageError.corruptedData(
+                .unexpectedWorkTypeIdentity(
+                    expected: jobEntity.id,
+                    actual: workTypeEntity.id
+                )
+            )
+        }
+        guard workTypeEntity.job.objectID == jobEntity.objectID else {
+            throw JobStorageError.corruptedData(
+                .workTypeBelongsToDifferentJob(
+                    workTypeID: workTypeEntity.id,
+                    expectedJobID: jobEntity.id,
+                    actualJobID: workTypeEntity.job.id
+                )
+            )
+        }
+
+        return workTypeEntity
+    }
+
+    private func makeBasePayBasis(from workTypeEntity: WorkTypeEntity) throws -> BasePayBasis {
+        guard let storedKind = StoredBasePayKind(rawValue: workTypeEntity.basePayKind) else {
+            throw JobStorageError.corruptedData(
+                .unknownBasePayKind(workTypeEntity.basePayKind)
+            )
         }
 
         switch storedKind {
