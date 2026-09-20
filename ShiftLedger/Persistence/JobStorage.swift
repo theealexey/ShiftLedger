@@ -12,8 +12,6 @@ enum JobStorageError: Error {
         case nonCanonicalPayPeriodAnchorDate(payPeriodKind: String)
         case invalidWorkTypesRelationship
         case missingWorkType
-        case multipleWorkTypesFound
-        case unexpectedWorkTypeIdentity(expected: UUID, actual: UUID)
         case workTypeBelongsToDifferentJob(
             workTypeID: UUID,
             expectedJobID: UUID,
@@ -32,8 +30,6 @@ enum JobStorageError: Error {
     }
 
     case jobAlreadyExists
-    case multipleWorkTypesNotSupported
-    case unsupportedWorkTypeIdentity(expected: UUID, actual: UUID)
     case multipleJobsFound
     case fetchFailed(underlying: Error)
     case saveFailed(underlying: Error)
@@ -48,6 +44,17 @@ private enum ManagedObjectCreationError: Error {
 
 @MainActor
 final class JobStorage {
+    private struct StoredPayRate {
+        let payRate: PayRate
+        let effectiveFrom: Date?
+    }
+
+    private struct StoredWorkType {
+        let workType: WorkType
+        let basePayKind: StoredBasePayKind
+        let payRates: [StoredPayRate]
+    }
+
     private enum StoredPayPeriodKind: String {
         case weekly
         case biweekly
@@ -71,24 +78,9 @@ final class JobStorage {
             throw JobStorageError.multipleJobsFound
         }
 
-        guard let workType = job.soleWorkType else {
-            throw JobStorageError.multipleWorkTypesNotSupported
-        }
-        guard workType.id == job.id else {
-            throw JobStorageError.unsupportedWorkTypeIdentity(
-                expected: job.id,
-                actual: workType.id
-            )
-        }
-
         let timeZone = try makeTimeZone(from: job.timeZoneIdentifier)
         let storedPayPeriod = try encodePayCalculationCycle(job.payCalculationCycle, timeZone: timeZone)
-        let storedPayRates = try workType.payRates.map { payRate in
-            (
-                payRate: payRate,
-                effectiveFrom: try payRate.effectiveFrom.map { try $0.startOfDay(in: timeZone) }
-            )
-        }
+        let storedWorkTypes = try prepareStoredWorkTypes(job.workTypes, timeZone: timeZone)
 
         guard let jobEntityDescription = NSEntityDescription.entity(
             forEntityName: "JobEntity",
@@ -115,33 +107,35 @@ final class JobStorage {
             )
         }
 
-        let storedBasePayKind = encodeBasePayBasis(workType.basePayBasis)
-
         let jobEntity = JobEntity(entity: jobEntityDescription, insertInto: context)
         jobEntity.id = job.id
         jobEntity.currencyCode = job.currencyCode
         jobEntity.timeZoneIdentifier = job.timeZoneIdentifier
-        jobEntity.basePayKind = storedBasePayKind.rawValue
+        jobEntity.basePayKind = storedWorkTypes.count == 1
+            ? storedWorkTypes[0].basePayKind.rawValue
+            : nil
         jobEntity.createdAt = job.createdAt
         jobEntity.payPeriodKind = storedPayPeriod.kind.rawValue
         jobEntity.payPeriodAnchorDate = storedPayPeriod.anchorDate
 
-        let workTypeEntity = WorkTypeEntity(
-            entity: workTypeEntityDescription,
-            insertInto: context
-        )
-        workTypeEntity.id = workType.id
-        workTypeEntity.basePayKind = storedBasePayKind.rawValue
-        workTypeEntity.job = jobEntity
+        for storedWorkType in storedWorkTypes {
+            let workTypeEntity = WorkTypeEntity(
+                entity: workTypeEntityDescription,
+                insertInto: context
+            )
+            workTypeEntity.id = storedWorkType.workType.id
+            workTypeEntity.basePayKind = storedWorkType.basePayKind.rawValue
+            workTypeEntity.job = jobEntity
 
-        for storedPayRate in storedPayRates {
-            let payRate = storedPayRate.payRate
-            let payRateEntity = PayRateEntity(entity: payRateEntityDescription, insertInto: context)
-            payRateEntity.id = payRate.id
-            payRateEntity.amount = NSDecimalNumber(decimal: payRate.amount)
-            payRateEntity.effectiveFrom = storedPayRate.effectiveFrom
-            payRateEntity.job = jobEntity
-            payRateEntity.workType = workTypeEntity
+            for storedPayRate in storedWorkType.payRates {
+                let payRate = storedPayRate.payRate
+                let payRateEntity = PayRateEntity(entity: payRateEntityDescription, insertInto: context)
+                payRateEntity.id = payRate.id
+                payRateEntity.amount = NSDecimalNumber(decimal: payRate.amount)
+                payRateEntity.effectiveFrom = storedPayRate.effectiveFrom
+                payRateEntity.job = jobEntity
+                payRateEntity.workType = workTypeEntity
+            }
         }
 
         do {
@@ -178,15 +172,93 @@ final class JobStorage {
 
     private func makeJob(from jobEntity: JobEntity) throws -> Job {
         let timeZone = try makeTimeZone(from: jobEntity.timeZoneIdentifier)
-        let workTypeEntity = try canonicalWorkType(for: jobEntity)
-        let basePayBasis = try makeBasePayBasis(from: workTypeEntity)
+        let workTypeEntities = try workTypeEntities(for: jobEntity)
+        let workTypes = try workTypeEntities.map {
+            try makeWorkType(from: $0, jobEntity: jobEntity, timeZone: timeZone)
+        }
         let payCalculationCycle = try makePayCalculationCycle(from: jobEntity, timeZone: timeZone)
+
+        do {
+            return try Job(
+                id: jobEntity.id,
+                currencyCode: jobEntity.currencyCode,
+                timeZoneIdentifier: jobEntity.timeZoneIdentifier,
+                payCalculationCycle: payCalculationCycle,
+                workTypes: workTypes,
+                createdAt: jobEntity.createdAt
+            )
+        } catch {
+            throw JobStorageError.corruptedData(.invalidJob(underlying: error))
+        }
+    }
+
+    private func prepareStoredWorkTypes(
+        _ workTypes: [WorkType],
+        timeZone: TimeZone
+    ) throws -> [StoredWorkType] {
+        try workTypes.sorted { $0.id.uuidString < $1.id.uuidString }.map { workType in
+            let payRates = try workType.payRates.map { payRate in
+                StoredPayRate(
+                    payRate: payRate,
+                    effectiveFrom: try payRate.effectiveFrom.map {
+                        try $0.startOfDay(in: timeZone)
+                    }
+                )
+            }
+
+            return StoredWorkType(
+                workType: workType,
+                basePayKind: encodeBasePayBasis(workType.basePayBasis),
+                payRates: payRates
+            )
+        }
+    }
+
+    private func encodeBasePayBasis(_ basis: BasePayBasis) -> StoredBasePayKind {
+        switch basis {
+        case .hourly:
+            .hourly
+        case .fixedPerShift:
+            .fixedPerShift
+        }
+    }
+
+    private func workTypeEntities(for jobEntity: JobEntity) throws -> [WorkTypeEntity] {
+        var workTypes: [WorkTypeEntity] = []
+        for object in jobEntity.workTypes ?? NSSet() {
+            guard let workTypeEntity = object as? WorkTypeEntity else {
+                throw JobStorageError.corruptedData(.invalidWorkTypesRelationship)
+            }
+            workTypes.append(workTypeEntity)
+        }
+
+        guard workTypes.isEmpty == false else {
+            throw JobStorageError.corruptedData(.missingWorkType)
+        }
+
+        return workTypes.sorted(by: isWorkTypeEntityOrderedBefore)
+    }
+
+    private func makeWorkType(
+        from workTypeEntity: WorkTypeEntity,
+        jobEntity: JobEntity,
+        timeZone: TimeZone
+    ) throws -> WorkType {
+        guard workTypeEntity.job.objectID == jobEntity.objectID else {
+            throw JobStorageError.corruptedData(
+                .workTypeBelongsToDifferentJob(
+                    workTypeID: workTypeEntity.id,
+                    expectedJobID: jobEntity.id,
+                    actualJobID: workTypeEntity.job.id
+                )
+            )
+        }
+
+        let basePayBasis = try makeBasePayBasis(from: workTypeEntity)
+        let payRateEntities = try payRateEntities(for: workTypeEntity)
         var payRates: [PayRate] = []
 
-        for object in workTypeEntity.payRates ?? NSSet() {
-            guard let payRateEntity = object as? PayRateEntity else {
-                throw JobStorageError.corruptedData(.invalidWorkTypePayRatesRelationship)
-            }
+        for payRateEntity in payRateEntities {
             guard payRateEntity.job.objectID == jobEntity.objectID else {
                 throw JobStorageError.corruptedData(
                     .payRateBelongsToDifferentJob(
@@ -200,64 +272,71 @@ final class JobStorage {
             payRates.append(try makePayRate(from: payRateEntity, timeZone: timeZone))
         }
 
+        let payRateHistory: PayRateHistory
         do {
-            return try Job(
-                id: jobEntity.id,
-                currencyCode: jobEntity.currencyCode,
-                timeZoneIdentifier: jobEntity.timeZoneIdentifier,
-                basePayBasis: basePayBasis,
-                payCalculationCycle: payCalculationCycle,
-                payRates: payRates,
-                createdAt: jobEntity.createdAt
-            )
+            payRateHistory = try PayRateHistory(payRates: payRates)
         } catch {
-            throw JobStorageError.corruptedData(.invalidJob(underlying: error))
+            throw JobStorageError.corruptedData(
+                .invalidJob(underlying: mapPayRateHistoryValidationError(error))
+            )
         }
+
+        return WorkType(
+            id: workTypeEntity.id,
+            basePayBasis: basePayBasis,
+            payRateHistory: payRateHistory
+        )
     }
 
-    private func encodeBasePayBasis(_ basis: BasePayBasis) -> StoredBasePayKind {
-        switch basis {
-        case .hourly:
-            .hourly
-        case .fixedPerShift:
-            .fixedPerShift
-        }
-    }
-
-    private func canonicalWorkType(for jobEntity: JobEntity) throws -> WorkTypeEntity {
-        var workTypes: [WorkTypeEntity] = []
-        for object in jobEntity.workTypes ?? NSSet() {
-            guard let workTypeEntity = object as? WorkTypeEntity else {
-                throw JobStorageError.corruptedData(.invalidWorkTypesRelationship)
+    private func payRateEntities(for workTypeEntity: WorkTypeEntity) throws -> [PayRateEntity] {
+        var payRates: [PayRateEntity] = []
+        for object in workTypeEntity.payRates ?? NSSet() {
+            guard let payRateEntity = object as? PayRateEntity else {
+                throw JobStorageError.corruptedData(.invalidWorkTypePayRatesRelationship)
             }
-            workTypes.append(workTypeEntity)
+            payRates.append(payRateEntity)
         }
 
-        guard let workTypeEntity = workTypes.first else {
-            throw JobStorageError.corruptedData(.missingWorkType)
-        }
-        guard workTypes.count == 1 else {
-            throw JobStorageError.corruptedData(.multipleWorkTypesFound)
-        }
-        guard workTypeEntity.id == jobEntity.id else {
-            throw JobStorageError.corruptedData(
-                .unexpectedWorkTypeIdentity(
-                    expected: jobEntity.id,
-                    actual: workTypeEntity.id
-                )
-            )
-        }
-        guard workTypeEntity.job.objectID == jobEntity.objectID else {
-            throw JobStorageError.corruptedData(
-                .workTypeBelongsToDifferentJob(
-                    workTypeID: workTypeEntity.id,
-                    expectedJobID: jobEntity.id,
-                    actualJobID: workTypeEntity.job.id
-                )
-            )
-        }
+        return payRates.sorted(by: isPayRateEntityOrderedBefore)
+    }
 
-        return workTypeEntity
+    private func isWorkTypeEntityOrderedBefore(
+        _ lhs: WorkTypeEntity,
+        _ rhs: WorkTypeEntity
+    ) -> Bool {
+        if lhs.id != rhs.id {
+            return lhs.id.uuidString < rhs.id.uuidString
+        }
+        return lhs.objectID.uriRepresentation().absoluteString
+            < rhs.objectID.uriRepresentation().absoluteString
+    }
+
+    private func isPayRateEntityOrderedBefore(
+        _ lhs: PayRateEntity,
+        _ rhs: PayRateEntity
+    ) -> Bool {
+        if lhs.id != rhs.id {
+            return lhs.id.uuidString < rhs.id.uuidString
+        }
+        return lhs.objectID.uriRepresentation().absoluteString
+            < rhs.objectID.uriRepresentation().absoluteString
+    }
+
+    private func mapPayRateHistoryValidationError(
+        _ error: PayRateHistoryValidationError
+    ) -> JobValidationError {
+        switch error {
+        case .missingPayRates:
+            .missingPayRates
+        case .missingInitialPayRate:
+            .missingInitialPayRate
+        case .multipleInitialPayRates:
+            .multipleInitialPayRates
+        case .duplicatePayRateEffectiveFrom:
+            .duplicatePayRateEffectiveFrom
+        case .duplicatePayRateID:
+            .duplicatePayRateID
+        }
     }
 
     private func makeBasePayBasis(from workTypeEntity: WorkTypeEntity) throws -> BasePayBasis {

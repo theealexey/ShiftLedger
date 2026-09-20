@@ -47,51 +47,125 @@ struct JobStorageTests {
         )
     }
 
-    @Test("JobStorage явно отклоняет multi-WorkType Domain Job")
-    func rejectsMultiWorkTypeSave() async throws {
+    @Test("Multi-WorkType Job сохраняет независимые истории и восстанавливается новым stack")
+    func persistsMultiWorkTypeJobAcrossNewCoreDataStack() async throws {
         let storeURL = try makeTemporaryStoreURL()
         var stacks: [CoreDataStack] = []
         defer { removeTemporaryStoreDirectory(for: storeURL, stacks: stacks) }
 
+        let jobID = try #require(UUID(uuidString: "01000000-0000-0000-0000-000000000001"))
+        let firstWorkTypeID = try #require(UUID(uuidString: "01000000-0000-0000-0000-000000000002"))
+        let secondWorkTypeID = try #require(UUID(uuidString: "01000000-0000-0000-0000-000000000003"))
+        let firstInitialRateID = try #require(UUID(uuidString: "01000000-0000-0000-0000-000000000004"))
+        let firstDatedRateID = try #require(UUID(uuidString: "01000000-0000-0000-0000-000000000005"))
+        let secondInitialRateID = try #require(UUID(uuidString: "01000000-0000-0000-0000-000000000006"))
+        let secondDatedRateID = try #require(UUID(uuidString: "01000000-0000-0000-0000-000000000007"))
+        let firstEffectiveFrom = try LocalDate(year: 2026, month: 2, day: 1)
+        let secondEffectiveFrom = try LocalDate(year: 2026, month: 3, day: 1)
         let first = WorkType(
-            id: try #require(UUID(uuidString: "01000000-0000-0000-0000-000000000001")),
+            id: firstWorkTypeID,
             basePayBasis: .hourly,
             payRateHistory: try PayRateHistory(
-                payRates: [try PayRate(amount: 100, effectiveFrom: nil)]
+                payRates: [
+                    try PayRate(id: firstInitialRateID, amount: 100, effectiveFrom: nil),
+                    try PayRate(
+                        id: firstDatedRateID,
+                        amount: 125,
+                        effectiveFrom: firstEffectiveFrom
+                    )
+                ]
             )
         )
         let second = WorkType(
-            id: try #require(UUID(uuidString: "02000000-0000-0000-0000-000000000002")),
+            id: secondWorkTypeID,
             basePayBasis: .fixedPerShift,
             payRateHistory: try PayRateHistory(
-                payRates: [try PayRate(amount: 500, effectiveFrom: nil)]
+                payRates: [
+                    try PayRate(id: secondInitialRateID, amount: 500, effectiveFrom: nil),
+                    try PayRate(
+                        id: secondDatedRateID,
+                        amount: 650,
+                        effectiveFrom: secondEffectiveFrom
+                    )
+                ]
             )
         )
         let job = try Job(
+            id: jobID,
             currencyCode: "EUR",
             timeZoneIdentifier: "Europe/Stockholm",
             payCalculationCycle: .perShift,
-            workTypes: [first, second]
+            workTypes: [second, first],
+            createdAt: Date(timeIntervalSinceReferenceDate: 100_000)
         )
-        let stack = try await CoreDataStack.load(storeURL: storeURL)
-        stacks.append(stack)
 
-        do {
-            try JobStorage(stack: stack).save(job)
-            Issue.record("Multi-WorkType Job была сохранена single-WorkType storage")
-        } catch JobStorageError.multipleWorkTypesNotSupported {
-        } catch {
-            Issue.record("Multi-WorkType Job вернула неверную ошибку")
-        }
+        let stackA = try await CoreDataStack.load(storeURL: storeURL)
+        stacks.append(stackA)
+        try JobStorage(stack: stackA).save(job)
+
+        let persistedJobs = try stackA.viewContext.fetch(
+            NSFetchRequest<JobEntity>(entityName: "JobEntity")
+        )
+        let persistedWorkTypes = try stackA.viewContext.fetch(
+            NSFetchRequest<WorkTypeEntity>(entityName: "WorkTypeEntity")
+        )
+        let persistedPayRates = try stackA.viewContext.fetch(
+            NSFetchRequest<PayRateEntity>(entityName: "PayRateEntity")
+        )
+        let persistedJob = try #require(persistedJobs.first)
+        let persistedFirst = try #require(
+            persistedWorkTypes.first { $0.id == firstWorkTypeID }
+        )
+        let persistedSecond = try #require(
+            persistedWorkTypes.first { $0.id == secondWorkTypeID }
+        )
+
+        #expect(persistedJobs.count == 1)
+        #expect(persistedWorkTypes.count == 2)
+        #expect(persistedPayRates.count == 4)
+        #expect(persistedJob.basePayKind == nil)
+        #expect(persistedFirst.basePayKind == "hourly")
+        #expect(persistedSecond.basePayKind == "fixedPerShift")
+        #expect(persistedFirst.job.objectID == persistedJob.objectID)
+        #expect(persistedSecond.job.objectID == persistedJob.objectID)
         #expect(
-            try stack.viewContext.fetch(
-                NSFetchRequest<JobEntity>(entityName: "JobEntity")
-            ).isEmpty
+            Set(persistedFirst.payRates?.compactMap { ($0 as? PayRateEntity)?.id } ?? [])
+                == Set([firstInitialRateID, firstDatedRateID])
+        )
+        #expect(
+            Set(persistedSecond.payRates?.compactMap { ($0 as? PayRateEntity)?.id } ?? [])
+                == Set([secondInitialRateID, secondDatedRateID])
+        )
+        #expect(persistedPayRates.allSatisfy { $0.job.objectID == persistedJob.objectID })
+        #expect(
+            persistedPayRates
+                .filter { [firstInitialRateID, firstDatedRateID].contains($0.id) }
+                .allSatisfy { $0.workType?.objectID == persistedFirst.objectID }
+        )
+        #expect(
+            persistedPayRates
+                .filter { [secondInitialRateID, secondDatedRateID].contains($0.id) }
+                .allSatisfy { $0.workType?.objectID == persistedSecond.objectID }
+        )
+
+        try close(stackA)
+
+        let stackB = try await CoreDataStack.load(storeURL: storeURL)
+        stacks.append(stackB)
+        let restoredJob = try #require(try JobStorage(stack: stackB).load())
+
+        #expect(restoredJob == job)
+        #expect(restoredJob.workType(id: firstWorkTypeID) == first)
+        #expect(restoredJob.workType(id: secondWorkTypeID) == second)
+        #expect(
+            try stackB.viewContext.fetch(
+                NSFetchRequest<WorkTypeEntity>(entityName: "WorkTypeEntity")
+            ).count == 2
         )
     }
 
-    @Test("JobStorage не сохраняет sole WorkType с неподдерживаемой identity")
-    func rejectsUnsupportedWorkTypeIdentityWithoutPartialWrite() async throws {
+    @Test("Sole WorkType с произвольной identity сохраняется и восстанавливается")
+    func persistsSoleArbitraryWorkTypeIdentityAcrossNewCoreDataStack() async throws {
         let storeURL = try makeTemporaryStoreURL()
         var stacks: [CoreDataStack] = []
         defer { removeTemporaryStoreDirectory(for: storeURL, stacks: stacks) }
@@ -101,7 +175,7 @@ struct JobStorageTests {
         let payRateID = try #require(UUID(uuidString: "03000000-0000-0000-0000-000000000003"))
         let workType = WorkType(
             id: workTypeID,
-            basePayBasis: .hourly,
+            basePayBasis: .fixedPerShift,
             payRateHistory: try PayRateHistory(
                 payRates: [try PayRate(id: payRateID, amount: 100, effectiveFrom: nil)]
             )
@@ -114,24 +188,32 @@ struct JobStorageTests {
             workTypes: [workType],
             createdAt: Date(timeIntervalSinceReferenceDate: 0)
         )
-        let stack = try await CoreDataStack.load(storeURL: storeURL)
-        stacks.append(stack)
+        let stackA = try await CoreDataStack.load(storeURL: storeURL)
+        stacks.append(stackA)
+        try JobStorage(stack: stackA).save(job)
 
-        do {
-            try JobStorage(stack: stack).save(job)
-            Issue.record("Job с неподдерживаемой WorkType identity была сохранена")
-        } catch JobStorageError.unsupportedWorkTypeIdentity(let expected, let actual) {
-            #expect(expected == jobID)
-            #expect(actual == workTypeID)
-        } catch {
-            Issue.record("Job с неподдерживаемой WorkType identity вернула неверную ошибку")
-        }
+        let persistedJob = try #require(
+            try stackA.viewContext.fetch(
+                NSFetchRequest<JobEntity>(entityName: "JobEntity")
+            ).first
+        )
+        let persistedWorkType = try #require(
+            try stackA.viewContext.fetch(
+                NSFetchRequest<WorkTypeEntity>(entityName: "WorkTypeEntity")
+            ).first
+        )
+        #expect(persistedWorkType.id == workTypeID)
+        #expect(persistedWorkType.id != persistedJob.id)
+        #expect(persistedJob.basePayKind == "fixedPerShift")
 
-        let context = stack.viewContext
-        #expect(try context.fetch(NSFetchRequest<JobEntity>(entityName: "JobEntity")).isEmpty)
-        #expect(try context.fetch(NSFetchRequest<WorkTypeEntity>(entityName: "WorkTypeEntity")).isEmpty)
-        #expect(try context.fetch(NSFetchRequest<PayRateEntity>(entityName: "PayRateEntity")).isEmpty)
-        #expect(context.hasChanges == false)
+        try close(stackA)
+
+        let stackB = try await CoreDataStack.load(storeURL: storeURL)
+        stacks.append(stackB)
+        let restoredJob = try #require(try JobStorage(stack: stackB).load())
+
+        #expect(restoredJob == job)
+        #expect(restoredJob.soleWorkType?.id == workTypeID)
     }
 
     @Test("Неизвестная база оплаты в SQLite отклоняется")
@@ -191,63 +273,60 @@ struct JobStorageTests {
         }
     }
 
-    @Test("Job с несколькими WorkType отклоняется")
-    func rejectsMultipleWorkTypes() async throws {
+    @Test("Повторяющиеся WorkType ID в SQLite отклоняются Domain validation")
+    func rejectsPersistedJobWithDuplicateWorkTypeIDs() async throws {
         let storeURL = try makeTemporaryStoreURL()
         var stacks: [CoreDataStack] = []
         defer { removeTemporaryStoreDirectory(for: storeURL, stacks: stacks) }
 
-        let stack = try await CoreDataStack.load(storeURL: storeURL)
-        stacks.append(stack)
-        try insertPersistedJob(
-            id: try #require(UUID(uuidString: "7B000000-0000-0000-0000-000000000001")),
-            payRateID: try #require(UUID(uuidString: "7B000000-0000-0000-0000-000000000002")),
-            payRateEffectiveFrom: nil,
-            additionalWorkTypeID: UUID(
-                uuidString: "7B000000-0000-0000-0000-000000000003"
-            ),
-            payPeriodAnchorDate: nil,
-            in: stack.viewContext
+        let jobID = try #require(UUID(uuidString: "7B000000-0000-0000-0000-000000000001"))
+        let duplicateWorkTypeID = try #require(
+            UUID(uuidString: "7B000000-0000-0000-0000-000000000002")
         )
-        try stack.viewContext.save()
-
-        do {
-            _ = try JobStorage(stack: stack).load()
-            Issue.record("Job с несколькими WorkType была принята")
-        } catch JobStorageError.corruptedData(.multipleWorkTypesFound) {
-        } catch {
-            Issue.record("Job с несколькими WorkType вернула неверную ошибку: \(error)")
-        }
-    }
-
-    @Test("WorkType с identity, отличным от Job, отклоняется")
-    func rejectsUnexpectedWorkTypeIdentity() async throws {
-        let storeURL = try makeTemporaryStoreURL()
-        var stacks: [CoreDataStack] = []
-        defer { removeTemporaryStoreDirectory(for: storeURL, stacks: stacks) }
-
-        let jobID = try #require(UUID(uuidString: "7C000000-0000-0000-0000-000000000001"))
-        let workTypeID = try #require(UUID(uuidString: "7C000000-0000-0000-0000-000000000002"))
         let stack = try await CoreDataStack.load(storeURL: storeURL)
         stacks.append(stack)
-        try insertPersistedJob(
+        let persisted = try insertPersistedJob(
             id: jobID,
-            payRateID: try #require(UUID(uuidString: "7C000000-0000-0000-0000-000000000003")),
+            payRateID: try #require(UUID(uuidString: "7B000000-0000-0000-0000-000000000003")),
             payRateEffectiveFrom: nil,
-            workTypeID: workTypeID,
+            workTypeID: duplicateWorkTypeID,
+            payPeriodKind: "perShift",
             payPeriodAnchorDate: nil,
             in: stack.viewContext
         )
+        let workTypeEntityDescription = try #require(
+            NSEntityDescription.entity(forEntityName: "WorkTypeEntity", in: stack.viewContext)
+        )
+        let payRateEntityDescription = try #require(
+            NSEntityDescription.entity(forEntityName: "PayRateEntity", in: stack.viewContext)
+        )
+        let duplicateWorkType = WorkTypeEntity(
+            entity: workTypeEntityDescription,
+            insertInto: stack.viewContext
+        )
+        duplicateWorkType.id = duplicateWorkTypeID
+        duplicateWorkType.basePayKind = "fixedPerShift"
+        duplicateWorkType.job = persisted.job
+
+        let duplicateWorkTypeRate = PayRateEntity(
+            entity: payRateEntityDescription,
+            insertInto: stack.viewContext
+        )
+        duplicateWorkTypeRate.id = try #require(
+            UUID(uuidString: "7B000000-0000-0000-0000-000000000004")
+        )
+        duplicateWorkTypeRate.amount = NSDecimalNumber(decimal: 500)
+        duplicateWorkTypeRate.effectiveFrom = nil
+        duplicateWorkTypeRate.job = persisted.job
+        duplicateWorkTypeRate.workType = duplicateWorkType
         try stack.viewContext.save()
 
         do {
             _ = try JobStorage(stack: stack).load()
-            Issue.record("WorkType с неверной identity была принята")
-        } catch JobStorageError.corruptedData(
-            .unexpectedWorkTypeIdentity(expected: jobID, actual: workTypeID)
-        ) {
+            Issue.record("Job с повторяющимся WorkType ID была принята")
+        } catch JobStorageError.corruptedData(.invalidJob(underlying: .duplicateWorkTypeID)) {
         } catch {
-            Issue.record("WorkType с неверной identity вернула неверную ошибку: \(error)")
+            Issue.record("Job с повторяющимся WorkType ID вернула неверную ошибку: \(error)")
         }
     }
 
@@ -818,7 +897,6 @@ struct JobStorageTests {
         legacyBasePayKind: String? = "hourly",
         workTypeID: UUID? = nil,
         includeWorkType: Bool = true,
-        additionalWorkTypeID: UUID? = nil,
         timeZoneIdentifier: String = "Europe/Stockholm",
         payPeriodKind: String = "weekly",
         payPeriodAnchorDate: Date?,
@@ -855,16 +933,6 @@ struct JobStorageTests {
             workTypeEntity = entity
         } else {
             workTypeEntity = nil
-        }
-
-        if let additionalWorkTypeID {
-            let additionalWorkType = WorkTypeEntity(
-                entity: workTypeEntityDescription,
-                insertInto: context
-            )
-            additionalWorkType.id = additionalWorkTypeID
-            additionalWorkType.basePayKind = workTypeBasePayKind
-            additionalWorkType.job = jobEntity
         }
 
         let payRateEntity = PayRateEntity(entity: payRateEntityDescription, insertInto: context)
