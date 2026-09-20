@@ -33,6 +33,7 @@ enum JobStorageError: Error {
 
     case jobAlreadyExists
     case multipleWorkTypesNotSupported
+    case unsupportedWorkTypeIdentity(expected: UUID, actual: UUID)
     case multipleJobsFound
     case fetchFailed(underlying: Error)
     case saveFailed(underlying: Error)
@@ -72,6 +73,12 @@ final class JobStorage {
 
         guard let workType = job.soleWorkType else {
             throw JobStorageError.multipleWorkTypesNotSupported
+        }
+        guard workType.id == job.id else {
+            throw JobStorageError.unsupportedWorkTypeIdentity(
+                expected: job.id,
+                actual: workType.id
+            )
         }
 
         let timeZone = try makeTimeZone(from: job.timeZoneIdentifier)

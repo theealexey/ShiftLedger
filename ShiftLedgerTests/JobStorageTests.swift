@@ -90,6 +90,50 @@ struct JobStorageTests {
         )
     }
 
+    @Test("JobStorage не сохраняет sole WorkType с неподдерживаемой identity")
+    func rejectsUnsupportedWorkTypeIdentityWithoutPartialWrite() async throws {
+        let storeURL = try makeTemporaryStoreURL()
+        var stacks: [CoreDataStack] = []
+        defer { removeTemporaryStoreDirectory(for: storeURL, stacks: stacks) }
+
+        let jobID = try #require(UUID(uuidString: "03000000-0000-0000-0000-000000000001"))
+        let workTypeID = try #require(UUID(uuidString: "03000000-0000-0000-0000-000000000002"))
+        let payRateID = try #require(UUID(uuidString: "03000000-0000-0000-0000-000000000003"))
+        let workType = WorkType(
+            id: workTypeID,
+            basePayBasis: .hourly,
+            payRateHistory: try PayRateHistory(
+                payRates: [try PayRate(id: payRateID, amount: 100, effectiveFrom: nil)]
+            )
+        )
+        let job = try Job(
+            id: jobID,
+            currencyCode: "EUR",
+            timeZoneIdentifier: "Europe/Stockholm",
+            payCalculationCycle: .perShift,
+            workTypes: [workType],
+            createdAt: Date(timeIntervalSinceReferenceDate: 0)
+        )
+        let stack = try await CoreDataStack.load(storeURL: storeURL)
+        stacks.append(stack)
+
+        do {
+            try JobStorage(stack: stack).save(job)
+            Issue.record("Job с неподдерживаемой WorkType identity была сохранена")
+        } catch JobStorageError.unsupportedWorkTypeIdentity(let expected, let actual) {
+            #expect(expected == jobID)
+            #expect(actual == workTypeID)
+        } catch {
+            Issue.record("Job с неподдерживаемой WorkType identity вернула неверную ошибку")
+        }
+
+        let context = stack.viewContext
+        #expect(try context.fetch(NSFetchRequest<JobEntity>(entityName: "JobEntity")).isEmpty)
+        #expect(try context.fetch(NSFetchRequest<WorkTypeEntity>(entityName: "WorkTypeEntity")).isEmpty)
+        #expect(try context.fetch(NSFetchRequest<PayRateEntity>(entityName: "PayRateEntity")).isEmpty)
+        #expect(context.hasChanges == false)
+    }
+
     @Test("Неизвестная база оплаты в SQLite отклоняется")
     func rejectsUnknownBasePayKind() async throws {
         let storeURL = try makeTemporaryStoreURL()
