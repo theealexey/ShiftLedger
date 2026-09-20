@@ -2,6 +2,7 @@ import Foundation
 
 struct WorkType: Equatable {
     let id: UUID
+    let name: String?
     let basePayBasis: BasePayBasis
 
     private let payRateHistory: PayRateHistory
@@ -12,10 +13,12 @@ struct WorkType: Equatable {
 
     init(
         id: UUID,
+        name: String? = nil,
         basePayBasis: BasePayBasis,
         payRateHistory: PayRateHistory
     ) {
         self.id = id
+        self.name = name
         self.basePayBasis = basePayBasis
         self.payRateHistory = payRateHistory
     }

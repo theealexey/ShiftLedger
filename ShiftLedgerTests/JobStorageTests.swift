@@ -64,6 +64,7 @@ struct JobStorageTests {
         let secondEffectiveFrom = try LocalDate(year: 2026, month: 3, day: 1)
         let first = WorkType(
             id: firstWorkTypeID,
+            name: "Lectures",
             basePayBasis: .hourly,
             payRateHistory: try PayRateHistory(
                 payRates: [
@@ -78,6 +79,7 @@ struct JobStorageTests {
         )
         let second = WorkType(
             id: secondWorkTypeID,
+            name: "Exams",
             basePayBasis: .fixedPerShift,
             payRateHistory: try PayRateHistory(
                 payRates: [
@@ -124,6 +126,8 @@ struct JobStorageTests {
         #expect(persistedWorkTypes.count == 2)
         #expect(persistedPayRates.count == 4)
         #expect(persistedJob.basePayKind == nil)
+        #expect(persistedFirst.name == "Lectures")
+        #expect(persistedSecond.name == "Exams")
         #expect(persistedFirst.basePayKind == "hourly")
         #expect(persistedSecond.basePayKind == "fixedPerShift")
         #expect(persistedFirst.job.objectID == persistedJob.objectID)
@@ -157,6 +161,8 @@ struct JobStorageTests {
         #expect(restoredJob == job)
         #expect(restoredJob.workType(id: firstWorkTypeID) == first)
         #expect(restoredJob.workType(id: secondWorkTypeID) == second)
+        #expect(restoredJob.workType(id: firstWorkTypeID)?.name == "Lectures")
+        #expect(restoredJob.workType(id: secondWorkTypeID)?.name == "Exams")
         #expect(
             try stackB.viewContext.fetch(
                 NSFetchRequest<WorkTypeEntity>(entityName: "WorkTypeEntity")
@@ -204,6 +210,7 @@ struct JobStorageTests {
         )
         #expect(persistedWorkType.id == workTypeID)
         #expect(persistedWorkType.id != persistedJob.id)
+        #expect(persistedWorkType.name == nil)
         #expect(persistedJob.basePayKind == "fixedPerShift")
 
         try close(stackA)
@@ -214,6 +221,7 @@ struct JobStorageTests {
 
         #expect(restoredJob == job)
         #expect(restoredJob.soleWorkType?.id == workTypeID)
+        #expect(restoredJob.soleWorkType?.name == nil)
     }
 
     @Test("Неизвестная база оплаты в SQLite отклоняется")

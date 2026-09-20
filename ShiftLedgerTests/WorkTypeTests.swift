@@ -19,6 +19,51 @@ struct WorkTypeTests {
         #expect(workType.id == primaryWorkTypeID)
     }
 
+    @Test("WorkType preserves an explicitly supplied name")
+    func preservesExplicitName() throws {
+        let workType = WorkType(
+            id: primaryWorkTypeID,
+            name: "Lectures",
+            basePayBasis: .hourly,
+            payRateHistory: try PayRateHistory(
+                payRates: [try PayRate(id: payRateID, amount: 100, effectiveFrom: nil)]
+            )
+        )
+
+        #expect(workType.name == "Lectures")
+    }
+
+    @Test("WorkType name defaults to nil")
+    func defaultsNameToNil() throws {
+        let workType = try makeWorkType(
+            id: primaryWorkTypeID,
+            basePayBasis: .hourly
+        )
+
+        #expect(workType.name == nil)
+    }
+
+    @Test("WorkType name participates in value equality")
+    func nameParticipatesInEquality() throws {
+        let payRateHistory = try PayRateHistory(
+            payRates: [try PayRate(id: payRateID, amount: 100, effectiveFrom: nil)]
+        )
+        let first = WorkType(
+            id: primaryWorkTypeID,
+            name: "Lectures",
+            basePayBasis: .hourly,
+            payRateHistory: payRateHistory
+        )
+        let second = WorkType(
+            id: primaryWorkTypeID,
+            name: "Exams",
+            basePayBasis: .hourly,
+            payRateHistory: payRateHistory
+        )
+
+        #expect(first != second)
+    }
+
     @Test("WorkType identity participates in value equality")
     func identityParticipatesInEquality() throws {
         let payRate = try PayRate(
@@ -48,6 +93,25 @@ struct WorkTypeTests {
 
         #expect(workType.id == jobID)
         #expect(workType.id == job.id)
+        #expect(workType.name == nil)
+    }
+
+    @Test("Legacy Job initializer supplies its sole WorkType name")
+    func legacyJobSuppliesSoleWorkTypeName() throws {
+        let job = try Job(
+            id: jobID,
+            currencyCode: "EUR",
+            timeZoneIdentifier: "Europe/Stockholm",
+            basePayBasis: .hourly,
+            workTypeName: "Lectures",
+            payCalculationCycle: .perShift,
+            payRates: [try PayRate(id: payRateID, amount: 100, effectiveFrom: nil)],
+            createdAt: Date(timeIntervalSinceReferenceDate: 0)
+        )
+        let workType = try #require(job.soleWorkType)
+
+        #expect(workType.id == job.id)
+        #expect(workType.name == "Lectures")
     }
 
     @Test("Job default initializer keeps WorkType identity aligned")

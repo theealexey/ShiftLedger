@@ -4,6 +4,7 @@ import Foundation
 @objc(WorkTypeEntity)
 class WorkTypeEntity: NSManagedObject {
     @NSManaged var id: UUID
+    @NSManaged var name: String?
     @NSManaged var basePayKind: String
     @NSManaged var job: JobEntity
     @NSManaged var payRates: NSSet?

@@ -124,6 +124,7 @@ final class JobStorage {
                 insertInto: context
             )
             workTypeEntity.id = storedWorkType.workType.id
+            workTypeEntity.name = storedWorkType.workType.name
             workTypeEntity.basePayKind = storedWorkType.basePayKind.rawValue
             workTypeEntity.job = jobEntity
 
@@ -283,6 +284,7 @@ final class JobStorage {
 
         return WorkType(
             id: workTypeEntity.id,
+            name: workTypeEntity.name,
             basePayBasis: basePayBasis,
             payRateHistory: payRateHistory
         )

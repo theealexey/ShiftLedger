@@ -49,6 +49,7 @@ struct Job: Equatable {
         currencyCode: String,
         timeZoneIdentifier: String,
         basePayBasis: BasePayBasis,
+        workTypeName: String? = nil,
         payCalculationCycle: PayCalculationCycle,
         payRates: [PayRate],
         createdAt: Date = Date()
@@ -60,6 +61,7 @@ struct Job: Equatable {
         let payRateHistory = try Self.makePayRateHistory(from: payRates)
         let workType = WorkType(
             id: id,
+            name: workTypeName,
             basePayBasis: basePayBasis,
             payRateHistory: payRateHistory
         )
