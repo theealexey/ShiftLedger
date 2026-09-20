@@ -28,6 +28,14 @@ final class JobSetupViewController: UIViewController {
     }
 
     private func bindView() {
+        jobSetupView.onWorkTypeNameChanged = { [weak self] text in
+            guard let self else {
+                return
+            }
+
+            viewModel.updateWorkTypeNameText(text)
+            jobSetupView.setContinueEnabled(viewModel.canContinue)
+        }
         jobSetupView.onBasePayAmountChanged = { [weak self] text in
             guard let self else {
                 return
@@ -55,6 +63,7 @@ final class JobSetupViewController: UIViewController {
 
     private func render() {
         let draft = viewModel.draft
+        jobSetupView.workTypeNameText = draft.workTypeNameText
         jobSetupView.basePayAmountText = draft.basePayAmountText
         jobSetupView.setBasePayBasis(draft.basePayBasis)
         jobSetupView.setCurrencyCode(draft.currencyCode)

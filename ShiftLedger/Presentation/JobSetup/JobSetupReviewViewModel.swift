@@ -45,6 +45,10 @@ final class JobSetupReviewViewModel {
         }
     }
 
+    var workTypeName: String? {
+        JobSetupViewModel.normalizeWorkTypeName(draft.workTypeNameText)
+    }
+
     var amount: Decimal? {
         JobSetupViewModel.parseDecimal(draft.basePayAmountText, locale: decimalInputLocale)
     }
@@ -74,6 +78,7 @@ final class JobSetupReviewViewModel {
 
     var canFinish: Bool {
         guard
+            workTypeName != nil,
             draft.basePayBasis != nil,
             let amount,
             amount > .zero,
@@ -129,6 +134,7 @@ final class JobSetupReviewViewModel {
             currencyCode: draft.currencyCode,
             timeZoneIdentifier: draft.timeZoneIdentifier,
             basePayBasis: basePayBasis,
+            workTypeName: workTypeName,
             payCalculationCycle: payCalculationCycle,
             payRates: [initialPayRate],
             createdAt: createdAt

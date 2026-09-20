@@ -22,7 +22,13 @@ final class JobSetupViewModel {
     }
 
     var canContinue: Bool {
-        basePayBasis != nil && (basePayAmount.map { $0 > .zero } ?? false)
+        normalizedWorkTypeName != nil
+            && basePayBasis != nil
+            && (basePayAmount.map { $0 > .zero } ?? false)
+    }
+
+    var normalizedWorkTypeName: String? {
+        Self.normalizeWorkTypeName(draft.workTypeNameText)
     }
 
     var basePayBasis: BasePayBasis? {
@@ -48,6 +54,15 @@ final class JobSetupViewModel {
         }
 
         return amount
+    }
+
+    static func normalizeWorkTypeName(_ text: String) -> String? {
+        let normalized = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        return normalized.isEmpty ? nil : normalized
+    }
+
+    func updateWorkTypeNameText(_ value: String) {
+        draft.workTypeNameText = value
     }
 
     func updateBasePayAmountText(_ value: String) {

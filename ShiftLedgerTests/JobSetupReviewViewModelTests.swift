@@ -74,6 +74,7 @@ struct JobSetupReviewViewModelTests {
         #expect(viewModel.draft.basePayAmountText == draft.basePayAmountText)
         #expect(viewModel.draft.currencyCode == draft.currencyCode)
         #expect(viewModel.draft.payCalculationCycleKind == draft.payCalculationCycleKind)
+        #expect(viewModel.draft.workTypeNameText == draft.workTypeNameText)
     }
 
     @Test("Неполный draft нельзя завершить")
@@ -99,6 +100,7 @@ struct JobSetupReviewViewModelTests {
         let job = try viewModel.makeJob(createdAt: createdAt)
         let workType = try #require(job.soleWorkType)
 
+        #expect(workType.name == "Lectures")
         #expect(workType.basePayBasis == .hourly)
         #expect(job.currencyCode == "RUB")
         #expect(job.timeZoneIdentifier == "Europe/Stockholm")
@@ -216,6 +218,44 @@ struct JobSetupReviewViewModelTests {
         #expect(saveCalls == 0)
     }
 
+    @Test("Название вида работы нормализуется для review")
+    func normalizesWorkTypeNameForReview() {
+        var draft = makeDraft()
+        draft.workTypeNameText = "  Lectures  "
+
+        let viewModel = makeViewModel(draft: draft)
+
+        #expect(viewModel.workTypeName == "Lectures")
+    }
+
+    @Test("Пустое после нормализации название запрещает завершение")
+    func blankWorkTypeNamePreventsFinish() {
+        var draft = makeDraft()
+        draft.workTypeNameText = "   "
+        draft.basePayBasis = .hourly
+        draft.basePayAmountText = "500"
+        draft.payCalculationCycleKind = .perShift
+        let viewModel = makeViewModel(draft: draft)
+
+        #expect(viewModel.canFinish == false)
+        #expect(throws: JobSetupReviewError.incompleteDraft) {
+            try viewModel.makeJob()
+        }
+    }
+
+    @Test("Созданный Job получает нормализованное название вида работы")
+    func createdJobReceivesNormalizedWorkTypeName() throws {
+        var draft = makeDraft()
+        draft.workTypeNameText = "  Лекции  "
+        draft.basePayBasis = .hourly
+        draft.basePayAmountText = "500"
+        draft.payCalculationCycleKind = .perShift
+
+        let job = try makeViewModel(draft: draft).makeJob()
+
+        #expect(job.soleWorkType?.name == "Лекции")
+    }
+
     private func makeDraft() -> JobSetupDraft {
         JobSetupDraft(
             basePayAmountText: "",
@@ -223,7 +263,8 @@ struct JobSetupReviewViewModelTests {
             timeZoneIdentifier: "Europe/Stockholm",
             basePayBasis: nil,
             payCalculationCycleKind: nil,
-            payPeriodAnchorDate: nil
+            payPeriodAnchorDate: nil,
+            workTypeNameText: "Lectures"
         )
     }
 

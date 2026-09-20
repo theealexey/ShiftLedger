@@ -24,6 +24,7 @@ final class JobSetupReviewView: UIView {
     private let questionLabel = UILabel()
     private let subtitleLabel = UILabel()
     private let rowsStack = UIStackView()
+    private let workTypeNameRow = JobSetupReviewRow()
     private let payRow = JobSetupReviewRow()
     private let amountRow = JobSetupReviewRow()
     private let currencyRow = JobSetupReviewRow()
@@ -46,6 +47,7 @@ final class JobSetupReviewView: UIView {
     }
 
     func render(
+        workTypeName: String?,
         basePayLabel: String?,
         amountText: String?,
         currencyCode: String,
@@ -55,6 +57,7 @@ final class JobSetupReviewView: UIView {
         showsPeriodStart: Bool,
         canFinish: Bool
     ) {
+        workTypeNameRow.render(label: JobSetupReviewStrings.workTypeNameLabel, value: workTypeName ?? "")
         payRow.render(label: JobSetupReviewStrings.payLabel, value: basePayLabel ?? "")
         amountRow.render(label: JobSetupReviewStrings.amountLabel, value: amountText ?? "")
         currencyRow.render(label: JobSetupReviewStrings.currencyLabel, value: currencyCode)
@@ -85,7 +88,7 @@ final class JobSetupReviewView: UIView {
 
         rowsStack.axis = .vertical
         rowsStack.spacing = 0
-        [payRow, amountRow, currencyRow, payPeriodRow, periodStartRow, timeZoneRow]
+        [workTypeNameRow, payRow, amountRow, currencyRow, payPeriodRow, periodStartRow, timeZoneRow]
             .forEach(rowsStack.addArrangedSubview)
     }
 

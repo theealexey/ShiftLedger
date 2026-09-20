@@ -5,7 +5,11 @@ final class JobSetupView: UIView {
         static let contentInset: CGFloat = 24
         static let progressToQuestion: CGFloat = 32
         static let questionToSupporting: CGFloat = 12
-        static let supportingToBasis: CGFloat = 28
+        static let supportingToWorkTypeName: CGFloat = 24
+        static let workTypeNameTitleToField: CGFloat = 6
+        static let workTypeNameFieldToUnderline: CGFloat = 8
+        static let workTypeNameUnderlineToPayBasis: CGFloat = 28
+        static let payBasisTitleToOptions: CGFloat = 12
         static let basisRowGap: CGFloat = 12
         static let basisToAmount: CGFloat = 24
         static let basisToCurrency: CGFloat = 28
@@ -14,10 +18,16 @@ final class JobSetupView: UIView {
         static let dividerToCurrency: CGFloat = 18
     }
 
+    var onWorkTypeNameChanged: ((String) -> Void)?
     var onBasePayAmountChanged: ((String) -> Void)?
     var onBasePayBasisSelected: ((BasePayBasis) -> Void)?
     var onCurrencyTapped: (() -> Void)?
     var onContinueTapped: (() -> Void)?
+
+    var workTypeNameText: String {
+        get { workTypeNameTextField.text ?? "" }
+        set { workTypeNameTextField.text = newValue }
+    }
 
     var basePayAmountText: String {
         get { basePayAmountTextField.text ?? "" }
@@ -32,6 +42,10 @@ final class JobSetupView: UIView {
     )
     private let questionLabel = UILabel()
     private let supportingTextLabel = UILabel()
+    private let workTypeNameTitleLabel = UILabel()
+    private let workTypeNameTextField = UITextField()
+    private let workTypeNameUnderline = UIView()
+    private let payBasisTitleLabel = UILabel()
     private let basisOptionsStack = UIStackView()
     private let hourlyBasisControl = BasePayBasisOptionControl(title: JobSetupStrings.hourlyBasis)
     private let fixedPerShiftBasisControl = BasePayBasisOptionControl(title: JobSetupStrings.fixedPerShiftBasis)
@@ -94,13 +108,46 @@ final class JobSetupView: UIView {
         questionLabel.numberOfLines = 0
         questionLabel.adjustsFontForContentSizeCategory = true
         questionLabel.accessibilityTraits = .header
-        questionLabel.accessibilityIdentifier = "jobSetup.payBasis.title"
+        questionLabel.accessibilityIdentifier = "jobSetup.step1.title"
 
         supportingTextLabel.text = JobSetupStrings.step1Subtitle
         supportingTextLabel.font = ShiftLedgerTypography.body
         supportingTextLabel.textColor = ShiftLedgerColors.textSecondary
         supportingTextLabel.numberOfLines = 0
         supportingTextLabel.adjustsFontForContentSizeCategory = true
+
+        workTypeNameTitleLabel.text = JobSetupStrings.workTypeNameTitle
+        workTypeNameTitleLabel.font = ShiftLedgerTypography.headline
+        workTypeNameTitleLabel.textColor = ShiftLedgerColors.textPrimary
+        workTypeNameTitleLabel.numberOfLines = 0
+        workTypeNameTitleLabel.adjustsFontForContentSizeCategory = true
+
+        workTypeNameTextField.font = ShiftLedgerTypography.body
+        workTypeNameTextField.textColor = ShiftLedgerColors.textPrimary
+        workTypeNameTextField.backgroundColor = .clear
+        workTypeNameTextField.borderStyle = .none
+        workTypeNameTextField.clearButtonMode = .whileEditing
+        workTypeNameTextField.keyboardType = .default
+        workTypeNameTextField.autocapitalizationType = .sentences
+        workTypeNameTextField.autocorrectionType = .default
+        workTypeNameTextField.returnKeyType = .done
+        workTypeNameTextField.adjustsFontForContentSizeCategory = true
+        workTypeNameTextField.placeholder = JobSetupStrings.workTypeNamePlaceholder
+        workTypeNameTextField.delegate = self
+        workTypeNameTextField.accessibilityLabel = JobSetupStrings.workTypeNameTitle
+        workTypeNameTextField.accessibilityHint = JobSetupStrings.workTypeNameAccessibilityHint
+        workTypeNameTextField.accessibilityIdentifier = "jobSetup.workTypeName"
+
+        workTypeNameUnderline.backgroundColor = ShiftLedgerColors.separator
+        workTypeNameUnderline.isAccessibilityElement = false
+
+        payBasisTitleLabel.text = JobSetupStrings.payBasisTitle
+        payBasisTitleLabel.font = ShiftLedgerTypography.headline
+        payBasisTitleLabel.textColor = ShiftLedgerColors.textPrimary
+        payBasisTitleLabel.numberOfLines = 0
+        payBasisTitleLabel.adjustsFontForContentSizeCategory = true
+        payBasisTitleLabel.accessibilityTraits = .header
+        payBasisTitleLabel.accessibilityIdentifier = "jobSetup.payBasis.title"
 
         basisOptionsStack.axis = .vertical
         basisOptionsStack.spacing = Layout.basisRowGap
@@ -159,6 +206,10 @@ final class JobSetupView: UIView {
             scaffold,
             questionLabel,
             supportingTextLabel,
+            workTypeNameTitleLabel,
+            workTypeNameTextField,
+            workTypeNameUnderline,
+            payBasisTitleLabel,
             basisOptionsStack,
             amountSection,
             amountTitleLabel,
@@ -177,7 +228,18 @@ final class JobSetupView: UIView {
         heroMoneyStack.addArrangedSubview(basePayAmountTextField)
 
         addSubview(scaffold)
-        [questionLabel, supportingTextLabel, basisOptionsStack, amountSection, currencyRow, currencySeparator]
+        [
+            questionLabel,
+            supportingTextLabel,
+            workTypeNameTitleLabel,
+            workTypeNameTextField,
+            workTypeNameUnderline,
+            payBasisTitleLabel,
+            basisOptionsStack,
+            amountSection,
+            currencyRow,
+            currencySeparator
+        ]
             .forEach(scaffold.contentView.addSubview)
         [currencyTitleLabel, currencyValueLabel, currencyChevron].forEach(currencyRow.addSubview)
 
@@ -213,7 +275,40 @@ final class JobSetupView: UIView {
             supportingTextLabel.leadingAnchor.constraint(equalTo: questionLabel.leadingAnchor),
             supportingTextLabel.trailingAnchor.constraint(equalTo: questionLabel.trailingAnchor),
 
-            basisOptionsStack.topAnchor.constraint(equalTo: supportingTextLabel.bottomAnchor, constant: Layout.supportingToBasis),
+            workTypeNameTitleLabel.topAnchor.constraint(
+                equalTo: supportingTextLabel.bottomAnchor,
+                constant: Layout.supportingToWorkTypeName
+            ),
+            workTypeNameTitleLabel.leadingAnchor.constraint(equalTo: scaffold.contentView.leadingAnchor, constant: Layout.contentInset),
+            workTypeNameTitleLabel.trailingAnchor.constraint(equalTo: scaffold.contentView.trailingAnchor, constant: -Layout.contentInset),
+
+            workTypeNameTextField.topAnchor.constraint(
+                equalTo: workTypeNameTitleLabel.bottomAnchor,
+                constant: Layout.workTypeNameTitleToField
+            ),
+            workTypeNameTextField.leadingAnchor.constraint(equalTo: scaffold.contentView.leadingAnchor, constant: Layout.contentInset),
+            workTypeNameTextField.trailingAnchor.constraint(equalTo: scaffold.contentView.trailingAnchor, constant: -Layout.contentInset),
+            workTypeNameTextField.heightAnchor.constraint(greaterThanOrEqualToConstant: 44),
+
+            workTypeNameUnderline.topAnchor.constraint(
+                equalTo: workTypeNameTextField.bottomAnchor,
+                constant: Layout.workTypeNameFieldToUnderline
+            ),
+            workTypeNameUnderline.leadingAnchor.constraint(equalTo: scaffold.contentView.leadingAnchor, constant: Layout.contentInset),
+            workTypeNameUnderline.trailingAnchor.constraint(equalTo: scaffold.contentView.trailingAnchor, constant: -Layout.contentInset),
+            workTypeNameUnderline.heightAnchor.constraint(equalToConstant: 1 / traitCollection.displayScale),
+
+            payBasisTitleLabel.topAnchor.constraint(
+                equalTo: workTypeNameUnderline.bottomAnchor,
+                constant: Layout.workTypeNameUnderlineToPayBasis
+            ),
+            payBasisTitleLabel.leadingAnchor.constraint(equalTo: scaffold.contentView.leadingAnchor, constant: Layout.contentInset),
+            payBasisTitleLabel.trailingAnchor.constraint(equalTo: scaffold.contentView.trailingAnchor, constant: -Layout.contentInset),
+
+            basisOptionsStack.topAnchor.constraint(
+                equalTo: payBasisTitleLabel.bottomAnchor,
+                constant: Layout.payBasisTitleToOptions
+            ),
             basisOptionsStack.leadingAnchor.constraint(equalTo: scaffold.contentView.leadingAnchor, constant: Layout.contentInset),
             basisOptionsStack.trailingAnchor.constraint(equalTo: scaffold.contentView.trailingAnchor, constant: -Layout.contentInset),
 
@@ -249,6 +344,9 @@ final class JobSetupView: UIView {
 
     private func configureInteractions() {
         scaffold.onContinueTapped = { [weak self] in self?.onContinueTapped?() }
+        workTypeNameTextField.addTarget(self, action: #selector(workTypeNameTextChanged), for: .editingChanged)
+        workTypeNameTextField.addTarget(self, action: #selector(workTypeNameEditingDidBegin), for: .editingDidBegin)
+        workTypeNameTextField.addTarget(self, action: #selector(workTypeNameEditingDidEnd), for: .editingDidEnd)
         basePayAmountTextField.addTarget(self, action: #selector(basePayAmountTextChanged), for: .editingChanged)
         basePayAmountTextField.addTarget(self, action: #selector(basePayAmountEditingDidBegin), for: .editingDidBegin)
         basePayAmountTextField.addTarget(self, action: #selector(basePayAmountEditingDidEnd), for: .editingDidEnd)
@@ -269,6 +367,18 @@ final class JobSetupView: UIView {
         heroMoneyStack.axis = usesAccessibilityLayout ? .vertical : .horizontal
         heroMoneyStack.alignment = usesAccessibilityLayout ? .leading : .firstBaseline
         heroMoneyStack.spacing = usesAccessibilityLayout ? 4 : 8
+    }
+
+    @objc private func workTypeNameTextChanged() {
+        onWorkTypeNameChanged?(workTypeNameText)
+    }
+
+    @objc private func workTypeNameEditingDidBegin() {
+        workTypeNameUnderline.backgroundColor = ShiftLedgerColors.accentPrimary
+    }
+
+    @objc private func workTypeNameEditingDidEnd() {
+        workTypeNameUnderline.backgroundColor = ShiftLedgerColors.separator
     }
 
     @objc private func basePayAmountTextChanged() {

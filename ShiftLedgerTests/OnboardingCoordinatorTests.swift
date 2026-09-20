@@ -123,7 +123,7 @@ struct OnboardingCoordinatorTests {
     }
 
     private func makeDraft() -> JobSetupDraft {
-        JobSetupDraft(
+        var draft = JobSetupDraft(
             basePayAmountText: "100",
             currencyCode: "USD",
             timeZoneIdentifier: "Europe/Stockholm",
@@ -131,5 +131,7 @@ struct OnboardingCoordinatorTests {
             payCalculationCycleKind: .perShift,
             payPeriodAnchorDate: nil
         )
+        draft.workTypeNameText = "Lectures"
+        return draft
     }
 }

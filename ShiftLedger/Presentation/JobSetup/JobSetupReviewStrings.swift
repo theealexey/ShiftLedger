@@ -7,6 +7,7 @@ enum JobSetupReviewStrings {
     static var stepIndicatorAccessibilityLabel: String { String(localized: "jobSetup.step3.stepIndicator.accessibilityLabel", table: "Localizable") }
     static var title: String { String(localized: "jobSetup.step3.title", table: "Localizable") }
     static var subtitle: String { String(localized: "jobSetup.step3.subtitle", table: "Localizable") }
+    static var workTypeNameLabel: String { String(localized: "jobSetup.review.workTypeName", table: "Localizable") }
     static var payLabel: String { String(localized: "jobSetup.review.pay", table: "Localizable") }
     static var hourlyPay: String { String(localized: "jobSetup.review.pay.hourly", table: "Localizable") }
     static var fixedPerShiftPay: String { String(localized: "jobSetup.review.pay.fixedPerShift", table: "Localizable") }

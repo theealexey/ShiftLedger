@@ -214,19 +214,26 @@
         "ru" : { "stringUnit" : { "state" : "translated", "value" : "Ставка за час" } }
       }
     },
+    "jobSetup.payBasis.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "How are you paid?" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Как оплачивается эта работа?" } }
+      }
+    },
     "jobSetup.step1.subtitle" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "For now, leave out night, weekend, overtime, and other premiums."
+            "value" : "Name the work, then tell us how it’s paid. Leave out night, weekend, overtime, and other premiums for now."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Пока без ночных, выходных, сверхурочных и других доплат."
+            "value" : "Назовите работу и укажите, как она оплачивается. Пока без ночных, выходных, сверхурочных и других доплат."
           }
         }
       }
@@ -237,13 +244,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Are you paid by the hour or by the shift?"
+            "value" : "Set up your first work type"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Вам платят за час или за смену?"
+            "value" : "Настройте первый вид работы"
           }
         }
       }
@@ -401,6 +408,13 @@
         "ru" : { "stringUnit" : { "state" : "translated", "value" : "Оплата" } }
       }
     },
+    "jobSetup.review.workTypeName" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Work type" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Вид работы" } }
+      }
+    },
     "jobSetup.review.pay.hourly" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -490,6 +504,27 @@
       "localizations" : {
         "en" : { "stringUnit" : { "state" : "translated", "value" : "We couldn’t save your setup. Try again." } },
         "ru" : { "stringUnit" : { "state" : "translated", "value" : "Не удалось сохранить настройки. Попробуйте ещё раз." } }
+      }
+    },
+    "jobSetup.workTypeName.accessibilityHint" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Enter a name that identifies this type of work." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Введите название, по которому вы узнаете этот вид работы." } }
+      }
+    },
+    "jobSetup.workTypeName.placeholder" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "For example, Lectures" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Например, Лекции" } }
+      }
+    },
+    "jobSetup.workTypeName.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Work type name" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Название вида работы" } }
       }
     },
     "jobSetup.timeZone.title" : {

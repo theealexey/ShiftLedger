@@ -4,6 +4,24 @@ import Testing
 
 @MainActor
 struct JobSetupViewModelTests {
+    @Test("Начальное название вида работы пустое")
+    func initialWorkTypeNameIsEmpty() {
+        let viewModel = makeViewModel()
+
+        #expect(viewModel.draft.workTypeNameText.isEmpty)
+        #expect(viewModel.normalizedWorkTypeName == nil)
+    }
+
+    @Test("Название вида работы сохраняется без изменения в draft")
+    func preservesEnteredWorkTypeName() {
+        let viewModel = makeViewModel()
+
+        viewModel.updateWorkTypeNameText("Лекции")
+
+        #expect(viewModel.draft.workTypeNameText == "Лекции")
+        #expect(viewModel.normalizedWorkTypeName == "Лекции")
+    }
+
     @Test("Начальный код валюты сохраняется")
     func preservesInitialCurrencyCode() {
         let viewModel = makeViewModel()
@@ -62,6 +80,7 @@ struct JobSetupViewModelTests {
     func parsesEnglishBasePayWithoutRounding() {
         let viewModel = makeViewModel()
 
+        viewModel.updateWorkTypeNameText("Lectures")
         viewModel.selectBasePayBasis(.hourly)
         viewModel.updateBasePayAmountText("24.50")
 
@@ -74,6 +93,7 @@ struct JobSetupViewModelTests {
     func preservesExactHourlyRateWithoutRounding() {
         let viewModel = makeViewModel()
 
+        viewModel.updateWorkTypeNameText("Lectures")
         viewModel.selectBasePayBasis(.hourly)
         viewModel.updateBasePayAmountText("17.125")
 
@@ -114,6 +134,7 @@ struct JobSetupViewModelTests {
             decimalInputLocale: Locale(identifier: "sv_SE")
         )
 
+        viewModel.updateWorkTypeNameText("Lectures")
         viewModel.selectBasePayBasis(.hourly)
         viewModel.updateBasePayAmountText("17,125")
 
@@ -129,6 +150,7 @@ struct JobSetupViewModelTests {
             decimalInputLocale: Locale(identifier: "ru_RU")
         )
 
+        viewModel.updateWorkTypeNameText("Лекции")
         viewModel.selectBasePayBasis(.hourly)
         viewModel.updateBasePayAmountText("24,50")
 
@@ -154,6 +176,7 @@ struct JobSetupViewModelTests {
     @Test("Фиксированная база за смену позволяет продолжить")
     func fixedPerShiftBasePayEnablesContinue() {
         let viewModel = makeViewModel()
+        viewModel.updateWorkTypeNameText("Exams")
         viewModel.selectBasePayBasis(.fixedPerShift)
         viewModel.updateBasePayAmountText("4000")
 
@@ -162,26 +185,59 @@ struct JobSetupViewModelTests {
         #expect(viewModel.canContinue)
     }
 
-    @Test("Переключение базы очищает существующую сумму")
-    func switchingBasePayBasisClearsAmount() {
+    @Test("Переключение базы очищает сумму, но сохраняет название вида работы")
+    func switchingBasePayBasisClearsAmountAndPreservesWorkTypeName() {
         let viewModel = makeViewModel()
+        viewModel.updateWorkTypeNameText("Lectures")
         viewModel.selectBasePayBasis(.hourly)
         viewModel.updateBasePayAmountText("500")
         viewModel.selectBasePayBasis(.fixedPerShift)
 
         #expect(viewModel.basePayAmount == nil)
         #expect(viewModel.draft.basePayAmountText.isEmpty)
+        #expect(viewModel.draft.workTypeNameText == "Lectures")
         #expect(viewModel.canContinue == false)
     }
 
     @Test("Повторный выбор той же базы не очищает сумму")
     func reselectingSameBasePayBasisPreservesAmount() {
         let viewModel = makeViewModel()
+        viewModel.updateWorkTypeNameText("Exams")
         viewModel.selectBasePayBasis(.fixedPerShift)
         viewModel.updateBasePayAmountText("4000")
         viewModel.selectBasePayBasis(.fixedPerShift)
 
         #expect(viewModel.draft.basePayAmountText == "4000")
+        #expect(viewModel.canContinue)
+    }
+
+    @Test("Пустое название запрещает продолжить при корректной оплате")
+    func missingWorkTypeNameDisablesContinue() {
+        let viewModel = makeViewModel()
+        viewModel.selectBasePayBasis(.hourly)
+        viewModel.updateBasePayAmountText("24.50")
+
+        #expect(viewModel.canContinue == false)
+    }
+
+    @Test("Название только из пробелов запрещает продолжить")
+    func whitespaceOnlyWorkTypeNameDisablesContinue() {
+        let viewModel = makeViewModel()
+        viewModel.updateWorkTypeNameText("   \n ")
+        viewModel.selectBasePayBasis(.hourly)
+        viewModel.updateBasePayAmountText("24.50")
+
+        #expect(viewModel.normalizedWorkTypeName == nil)
+        #expect(viewModel.canContinue == false)
+    }
+
+    @Test("Название и корректная оплата позволяют продолжить")
+    func validWorkTypeNameAndPayEnableContinue() {
+        let viewModel = makeViewModel()
+        viewModel.updateWorkTypeNameText("Lectures")
+        viewModel.selectBasePayBasis(.hourly)
+        viewModel.updateBasePayAmountText("24.50")
+
         #expect(viewModel.canContinue)
     }
 

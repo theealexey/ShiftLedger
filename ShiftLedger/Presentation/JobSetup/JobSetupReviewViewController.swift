@@ -63,6 +63,7 @@ final class JobSetupReviewViewController: UIViewController {
 
     private func render() {
         reviewView.render(
+            workTypeName: viewModel.workTypeName,
             basePayLabel: viewModel.basePayLabel,
             amountText: viewModel.amountText,
             currencyCode: viewModel.draft.currencyCode,

@@ -12,4 +12,5 @@ struct JobSetupDraft: Equatable {
     var basePayBasis: BasePayBasis?
     var payCalculationCycleKind: PayCalculationCycleKind?
     var payPeriodAnchorDate: LocalDate?
+    var workTypeNameText: String = ""
 }

@@ -31,6 +31,7 @@ struct JobSetupReviewViewControllerTests {
         #expect(savedJobs.count == 1)
         #expect(completedJobs.count == 1)
         #expect(completedJobs.first == savedJobs.first)
+        #expect(savedJobs.first?.soleWorkType?.name == "Lectures")
     }
 
     @Test("Ошибка сохранения позволяет повторить попытку")
@@ -74,7 +75,8 @@ struct JobSetupReviewViewControllerTests {
             timeZoneIdentifier: "Europe/Stockholm",
             basePayBasis: nil,
             payCalculationCycleKind: nil,
-            payPeriodAnchorDate: nil
+            payPeriodAnchorDate: nil,
+            workTypeNameText: "Lectures"
         )
     }
 }
