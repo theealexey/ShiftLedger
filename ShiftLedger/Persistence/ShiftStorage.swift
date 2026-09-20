@@ -3,7 +3,27 @@ import Foundation
 
 enum ShiftStorageError: Error {
     enum Corruption: Error {
-        case invalidShiftRelationship
+        case invalidWorkTypesRelationship
+        case missingWorkType
+        case multipleWorkTypesFound
+        case unexpectedWorkTypeIdentity(expected: UUID, actual: UUID)
+        case workTypeBelongsToDifferentJob(
+            workTypeID: UUID,
+            expectedJobID: UUID,
+            actualJobID: UUID
+        )
+        case missingShiftWorkType(shiftID: UUID)
+        case shiftAssignedToUnexpectedWorkType(
+            shiftID: UUID,
+            expectedWorkTypeID: UUID,
+            actualWorkTypeID: UUID
+        )
+        case missingShiftJobRelationship(shiftID: UUID)
+        case shiftJobBelongsToDifferentJob(
+            shiftID: UUID,
+            expectedJobID: UUID,
+            actualJobID: UUID
+        )
         case invalidBreakPair
         case invalidShift(underlying: ShiftValidationError)
     }
@@ -31,16 +51,11 @@ final class ShiftStorage {
 
     func save(_ shift: Shift) throws {
         let job = try singleJob()
+        let workType = try canonicalWorkType(for: job)
         let existingShifts = try fetchShifts()
 
         for entity in existingShifts {
-            guard let entityJob = entity.job else {
-                throw ShiftStorageError.corruptedData(.invalidShiftRelationship)
-            }
-
-            guard entityJob.objectID == job.objectID else {
-                continue
-            }
+            try validateOwnership(of: entity, canonicalWorkType: workType, job: job)
 
             if entity.id == shift.id {
                 throw ShiftStorageError.duplicateShift
@@ -67,6 +82,7 @@ final class ShiftStorage {
         entity.end = shift.end
         entity.unpaidBreakStart = shift.unpaidBreak?.start
         entity.unpaidBreakEnd = shift.unpaidBreak?.end
+        entity.workType = workType
         entity.job = job
 
         do {
@@ -79,13 +95,10 @@ final class ShiftStorage {
 
     func loadAll() throws -> [Shift] {
         let job = try singleJob()
+        let workType = try canonicalWorkType(for: job)
 
         return try fetchShifts().map { entity in
-            guard let entityJob = entity.job,
-                  entityJob.objectID == job.objectID
-            else {
-                throw ShiftStorageError.corruptedData(.invalidShiftRelationship)
-            }
+            try validateOwnership(of: entity, canonicalWorkType: workType, job: job)
 
             return try makeShift(from: entity)
         }
@@ -127,6 +140,74 @@ final class ShiftStorage {
             return try context.fetch(request)
         } catch {
             throw ShiftStorageError.fetchFailed(underlying: error)
+        }
+    }
+
+    private func canonicalWorkType(for job: JobEntity) throws -> WorkTypeEntity {
+        var workTypes: [WorkTypeEntity] = []
+        for object in job.workTypes ?? NSSet() {
+            guard let workType = object as? WorkTypeEntity else {
+                throw ShiftStorageError.corruptedData(.invalidWorkTypesRelationship)
+            }
+            workTypes.append(workType)
+        }
+
+        guard let workType = workTypes.first else {
+            throw ShiftStorageError.corruptedData(.missingWorkType)
+        }
+        guard workTypes.count == 1 else {
+            throw ShiftStorageError.corruptedData(.multipleWorkTypesFound)
+        }
+        guard workType.id == job.id else {
+            throw ShiftStorageError.corruptedData(
+                .unexpectedWorkTypeIdentity(expected: job.id, actual: workType.id)
+            )
+        }
+        guard workType.job.objectID == job.objectID else {
+            throw ShiftStorageError.corruptedData(
+                .workTypeBelongsToDifferentJob(
+                    workTypeID: workType.id,
+                    expectedJobID: job.id,
+                    actualJobID: workType.job.id
+                )
+            )
+        }
+
+        return workType
+    }
+
+    private func validateOwnership(
+        of shift: ShiftEntity,
+        canonicalWorkType: WorkTypeEntity,
+        job: JobEntity
+    ) throws {
+        guard let shiftWorkType = shift.workType else {
+            throw ShiftStorageError.corruptedData(
+                .missingShiftWorkType(shiftID: shift.id)
+            )
+        }
+        guard shiftWorkType.objectID == canonicalWorkType.objectID else {
+            throw ShiftStorageError.corruptedData(
+                .shiftAssignedToUnexpectedWorkType(
+                    shiftID: shift.id,
+                    expectedWorkTypeID: canonicalWorkType.id,
+                    actualWorkTypeID: shiftWorkType.id
+                )
+            )
+        }
+        guard let shiftJob = shift.job else {
+            throw ShiftStorageError.corruptedData(
+                .missingShiftJobRelationship(shiftID: shift.id)
+            )
+        }
+        guard shiftJob.objectID == job.objectID else {
+            throw ShiftStorageError.corruptedData(
+                .shiftJobBelongsToDifferentJob(
+                    shiftID: shift.id,
+                    expectedJobID: job.id,
+                    actualJobID: shiftJob.id
+                )
+            )
         }
     }
 

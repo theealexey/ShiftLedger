@@ -13,13 +13,47 @@ struct ShiftStorageTests {
 
         let shift = try makeShift(id: "8A3B3F10-1F62-4E7D-8D25-8BBD5A37DF11", start: 10 * 60 * 60)
         let stackA = try await makeStack(storeURL: storeURL, stacks: &stacks)
-        try JobStorage(stack: stackA).save(try makeJob())
+        let job = try makeJob()
+        try JobStorage(stack: stackA).save(job)
         try ShiftStorage(stack: stackA).save(shift)
+
+        #expect(try ShiftStorage(stack: stackA).loadAll() == [shift])
+
+        let persistedJobs = try fetchJobs(in: stackA.viewContext)
+        let persistedWorkTypes = try fetchWorkTypes(in: stackA.viewContext)
+        let persistedShifts = try fetchShifts(in: stackA.viewContext)
+        let persistedJob = try #require(persistedJobs.first)
+        let persistedWorkType = try #require(persistedWorkTypes.first)
+        let persistedShift = try #require(persistedShifts.first)
+
+        #expect(persistedJobs.count == 1)
+        #expect(persistedWorkTypes.count == 1)
+        #expect(persistedShifts.count == 1)
+        #expect(persistedWorkType.id == job.workTypeID)
+        #expect(persistedWorkType.id == persistedJob.id)
+        #expect(persistedShift.workType?.objectID == persistedWorkType.objectID)
+        #expect(persistedWorkType.shifts?.contains(persistedShift) == true)
+        #expect(persistedShift.job?.objectID == persistedJob.objectID)
+        #expect(persistedJob.shifts?.contains(persistedShift) == true)
+        #expect(persistedShift.id == shift.id)
+        #expect(persistedShift.start == shift.start)
+        #expect(persistedShift.end == shift.end)
+        #expect(persistedShift.unpaidBreakStart == nil)
+        #expect(persistedShift.unpaidBreakEnd == nil)
+
+        try close(stackA)
 
         let stackB = try await makeStack(storeURL: storeURL, stacks: &stacks)
         let loaded = try #require(try ShiftStorage(stack: stackB).loadAll().first)
         #expect(loaded == shift)
         #expect(loaded.unpaidBreak == nil)
+        #expect(try fetchWorkTypes(in: stackB.viewContext).count == 1)
+        #expect(try fetchShifts(in: stackB.viewContext).count == 1)
+
+        let reopenedShift = try #require(try fetchShifts(in: stackB.viewContext).first)
+        let reopenedWorkType = try #require(try fetchWorkTypes(in: stackB.viewContext).first)
+        #expect(reopenedShift.workType?.objectID == reopenedWorkType.objectID)
+        #expect(reopenedShift.job?.id == job.id)
     }
 
     @Test("Смена с неоплачиваемым перерывом переживает SQLite reopen")
@@ -110,13 +144,14 @@ struct ShiftStorageTests {
         }
     }
 
-    @Test("Shift без связи с Job отклоняется как invalidShiftRelationship")
-    func rejectsShiftWithMissingJobRelationship() async throws {
+    @Test("Legacy Job link не заменяет отсутствующий canonical Shift WorkType")
+    func rejectsShiftWithMissingWorkTypeRelationship() async throws {
         let storeURL = try makeTemporaryStoreURL()
         var stacks: [CoreDataStack] = []
         defer { removeTemporaryStoreDirectory(for: storeURL, stacks: stacks) }
         let stack = try await makeStack(storeURL: storeURL, stacks: &stacks)
         try JobStorage(stack: stack).save(try makeJob())
+        let job = try #require(try fetchOnlyJob(in: stack.viewContext))
 
         let entityDescription = try #require(
             NSEntityDescription.entity(forEntityName: "ShiftEntity", in: stack.viewContext)
@@ -127,12 +162,117 @@ struct ShiftStorageTests {
         entity.end = Date(timeIntervalSinceReferenceDate: 2_000)
         entity.unpaidBreakStart = nil
         entity.unpaidBreakEnd = nil
-        entity.job = nil
+        entity.job = job
+        entity.workType = nil
+        try stack.viewContext.save()
 
         do {
             _ = try ShiftStorage(stack: stack).loadAll()
-            Issue.record("Shift без обязательной связи с Job был принят")
-        } catch ShiftStorageError.corruptedData(.invalidShiftRelationship) {
+            Issue.record("Legacy Shift.job был принят без canonical Shift.workType")
+        } catch ShiftStorageError.corruptedData(
+            .missingShiftWorkType(let shiftID)
+        ) {
+            #expect(shiftID == entity.id)
+        }
+    }
+
+    @Test("Canonical WorkType не отменяет проверку отсутствующего Job mirror")
+    func rejectsShiftWithMissingJobMirror() async throws {
+        let storeURL = try makeTemporaryStoreURL()
+        var stacks: [CoreDataStack] = []
+        defer { removeTemporaryStoreDirectory(for: storeURL, stacks: stacks) }
+        let stack = try await makeStack(storeURL: storeURL, stacks: &stacks)
+        try JobStorage(stack: stack).save(try makeJob())
+        let job = try #require(try fetchOnlyJob(in: stack.viewContext))
+        let workType = try canonicalWorkType(for: job)
+
+        let entity = try insertShiftEntity(
+            id: try #require(UUID(uuidString: "16000000-0000-0000-0000-000000000001")),
+            job: nil,
+            workType: workType,
+            start: Date(timeIntervalSinceReferenceDate: 1_000),
+            end: Date(timeIntervalSinceReferenceDate: 2_000),
+            in: stack.viewContext
+        )
+
+        do {
+            _ = try ShiftStorage(stack: stack).loadAll()
+            Issue.record("Shift без Job compatibility mirror был принят")
+        } catch ShiftStorageError.corruptedData(
+            .missingShiftJobRelationship(let shiftID)
+        ) {
+            #expect(shiftID == entity.id)
+        }
+    }
+
+    @Test("Job без canonical WorkType отклоняется")
+    func rejectsMissingWorkType() async throws {
+        let storeURL = try makeTemporaryStoreURL()
+        var stacks: [CoreDataStack] = []
+        defer { removeTemporaryStoreDirectory(for: storeURL, stacks: stacks) }
+        let stack = try await makeStack(storeURL: storeURL, stacks: &stacks)
+        _ = try insertPersistedJob(
+            id: try #require(UUID(uuidString: "17000000-0000-0000-0000-000000000001")),
+            includeWorkType: false,
+            in: stack.viewContext
+        )
+        try stack.viewContext.save()
+
+        do {
+            _ = try ShiftStorage(stack: stack).loadAll()
+            Issue.record("Job без canonical WorkType была принята")
+        } catch ShiftStorageError.corruptedData(.missingWorkType) {
+        }
+    }
+
+    @Test("Job с несколькими WorkType отклоняется")
+    func rejectsMultipleWorkTypes() async throws {
+        let storeURL = try makeTemporaryStoreURL()
+        var stacks: [CoreDataStack] = []
+        defer { removeTemporaryStoreDirectory(for: storeURL, stacks: stacks) }
+        let stack = try await makeStack(storeURL: storeURL, stacks: &stacks)
+        let additionalWorkTypeID = try #require(
+            UUID(uuidString: "18000000-0000-0000-0000-000000000002")
+        )
+        _ = try insertPersistedJob(
+            id: try #require(UUID(uuidString: "18000000-0000-0000-0000-000000000001")),
+            additionalWorkTypeID: additionalWorkTypeID,
+            in: stack.viewContext
+        )
+        try stack.viewContext.save()
+
+        do {
+            _ = try ShiftStorage(stack: stack).loadAll()
+            Issue.record("Несколько canonical WorkTypes были приняты")
+        } catch ShiftStorageError.corruptedData(.multipleWorkTypesFound) {
+        }
+    }
+
+    @Test("WorkType с identity, отличным от Job, отклоняется")
+    func rejectsUnexpectedWorkTypeIdentity() async throws {
+        let storeURL = try makeTemporaryStoreURL()
+        var stacks: [CoreDataStack] = []
+        defer { removeTemporaryStoreDirectory(for: storeURL, stacks: stacks) }
+        let stack = try await makeStack(storeURL: storeURL, stacks: &stacks)
+        let jobID = try #require(UUID(uuidString: "19000000-0000-0000-0000-000000000001"))
+        let workTypeID = try #require(
+            UUID(uuidString: "19000000-0000-0000-0000-000000000002")
+        )
+        _ = try insertPersistedJob(
+            id: jobID,
+            workTypeID: workTypeID,
+            in: stack.viewContext
+        )
+        try stack.viewContext.save()
+
+        do {
+            _ = try ShiftStorage(stack: stack).loadAll()
+            Issue.record("Неканонический WorkType identity был принят")
+        } catch ShiftStorageError.corruptedData(
+            .unexpectedWorkTypeIdentity(let expected, let actual)
+        ) {
+            #expect(expected == jobID)
+            #expect(actual == workTypeID)
         }
     }
 
@@ -161,6 +301,7 @@ struct ShiftStorageTests {
         let stack = try await makeStack(storeURL: storeURL, stacks: &stacks)
         try JobStorage(stack: stack).save(try makeJob())
         let job = try #require(try fetchOnlyJob(in: stack.viewContext))
+        let workType = try canonicalWorkType(for: job)
         let entityDescription = try #require(NSEntityDescription.entity(forEntityName: "ShiftEntity", in: stack.viewContext))
         let entity = ShiftEntity(entity: entityDescription, insertInto: stack.viewContext)
         entity.id = try #require(UUID(uuidString: "20000000-0000-0000-0000-000000000001"))
@@ -168,6 +309,7 @@ struct ShiftStorageTests {
         entity.end = Date(timeIntervalSinceReferenceDate: 2_000)
         entity.unpaidBreakStart = Date(timeIntervalSinceReferenceDate: 1_200)
         entity.unpaidBreakEnd = nil
+        entity.workType = workType
         entity.job = job
         try stack.viewContext.save()
 
@@ -186,11 +328,13 @@ struct ShiftStorageTests {
         let stack = try await makeStack(storeURL: storeURL, stacks: &stacks)
         try JobStorage(stack: stack).save(try makeJob())
         let job = try #require(try fetchOnlyJob(in: stack.viewContext))
+        let workType = try canonicalWorkType(for: job)
         let entityDescription = try #require(NSEntityDescription.entity(forEntityName: "ShiftEntity", in: stack.viewContext))
         let entity = ShiftEntity(entity: entityDescription, insertInto: stack.viewContext)
         entity.id = try #require(UUID(uuidString: "30000000-0000-0000-0000-000000000001"))
         entity.start = Date(timeIntervalSinceReferenceDate: 2_000)
         entity.end = entity.start
+        entity.workType = workType
         entity.job = job
         try stack.viewContext.save()
 
@@ -258,21 +402,109 @@ struct ShiftStorageTests {
         return try context.fetch(request).first
     }
 
-    private func insertPersistedJob(id: UUID, in context: NSManagedObjectContext) throws {
+    private func fetchJobs(in context: NSManagedObjectContext) throws -> [JobEntity] {
+        try context.fetch(NSFetchRequest<JobEntity>(entityName: "JobEntity"))
+    }
+
+    private func fetchWorkTypes(
+        in context: NSManagedObjectContext
+    ) throws -> [WorkTypeEntity] {
+        try context.fetch(NSFetchRequest<WorkTypeEntity>(entityName: "WorkTypeEntity"))
+    }
+
+    private func fetchShifts(in context: NSManagedObjectContext) throws -> [ShiftEntity] {
+        try context.fetch(NSFetchRequest<ShiftEntity>(entityName: "ShiftEntity"))
+    }
+
+    private func canonicalWorkType(for job: JobEntity) throws -> WorkTypeEntity {
+        let workTypes = try job.workTypes?.map { object in
+            try #require(object as? WorkTypeEntity)
+        } ?? []
+        #expect(workTypes.count == 1)
+        return try #require(workTypes.first)
+    }
+
+    private func insertShiftEntity(
+        id: UUID,
+        job: JobEntity?,
+        workType: WorkTypeEntity?,
+        start: Date,
+        end: Date,
+        in context: NSManagedObjectContext
+    ) throws -> ShiftEntity {
+        let description = try #require(
+            NSEntityDescription.entity(forEntityName: "ShiftEntity", in: context)
+        )
+        let shift = ShiftEntity(entity: description, insertInto: context)
+        shift.id = id
+        shift.start = start
+        shift.end = end
+        shift.unpaidBreakStart = nil
+        shift.unpaidBreakEnd = nil
+        shift.workType = workType
+        shift.job = job
+        return shift
+    }
+
+    @discardableResult
+    private func insertPersistedJob(
+        id: UUID,
+        workTypeID: UUID? = nil,
+        includeWorkType: Bool = true,
+        additionalWorkTypeID: UUID? = nil,
+        in context: NSManagedObjectContext
+    ) throws -> (job: JobEntity, workType: WorkTypeEntity?) {
         let jobDescription = try #require(NSEntityDescription.entity(forEntityName: "JobEntity", in: context))
+        let workTypeDescription = try #require(
+            NSEntityDescription.entity(forEntityName: "WorkTypeEntity", in: context)
+        )
         let payRateDescription = try #require(NSEntityDescription.entity(forEntityName: "PayRateEntity", in: context))
         let job = JobEntity(entity: jobDescription, insertInto: context)
         job.id = id
         job.currencyCode = "EUR"
         job.timeZoneIdentifier = "Europe/Stockholm"
+        job.basePayKind = StoredBasePayKind.hourly.rawValue
         job.payPeriodKind = "perShift"
         job.payPeriodAnchorDate = nil
         job.createdAt = Date(timeIntervalSinceReferenceDate: 10)
+
+        let workType: WorkTypeEntity?
+        if includeWorkType {
+            let entity = WorkTypeEntity(entity: workTypeDescription, insertInto: context)
+            entity.id = workTypeID ?? id
+            entity.basePayKind = StoredBasePayKind.hourly.rawValue
+            entity.job = job
+            workType = entity
+        } else {
+            workType = nil
+        }
+
+        if let additionalWorkTypeID {
+            let additional = WorkTypeEntity(
+                entity: workTypeDescription,
+                insertInto: context
+            )
+            additional.id = additionalWorkTypeID
+            additional.basePayKind = StoredBasePayKind.hourly.rawValue
+            additional.job = job
+        }
 
         let payRate = PayRateEntity(entity: payRateDescription, insertInto: context)
         payRate.id = UUID()
         payRate.amount = NSDecimalNumber(decimal: 100)
         payRate.effectiveFrom = nil
         payRate.job = job
+        payRate.workType = workType
+
+        return (job, workType)
+    }
+
+    private func close(_ stack: CoreDataStack) throws {
+        let context = stack.viewContext
+        context.reset()
+        let coordinator = try #require(context.persistentStoreCoordinator)
+        for store in coordinator.persistentStores {
+            try coordinator.remove(store)
+        }
     }
 }
