@@ -170,6 +170,308 @@ struct JobStorageTests {
         )
     }
 
+    @Test("WorkType добавляется к существующему Job и восстанавливается новым stack")
+    func addsWorkTypeToPersistedJobAcrossNewCoreDataStack() async throws {
+        let storeURL = try makeTemporaryStoreURL()
+        var stacks: [CoreDataStack] = []
+        defer { removeTemporaryStoreDirectory(for: storeURL, stacks: stacks) }
+
+        let jobID = UUID(uuid: (0x71, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1))
+        let lecturesID = UUID(uuid: (0x71, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2))
+        let examsID = UUID(uuid: (0x71, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3))
+        let lecturesInitialRateID = UUID(uuid: (0x71, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4))
+        let lecturesDatedRateID = UUID(uuid: (0x71, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5))
+        let examsInitialRateID = UUID(uuid: (0x71, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 6))
+        let examsDatedRateID = UUID(uuid: (0x71, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 7))
+        let lecturesEffectiveFrom = try LocalDate(year: 2026, month: 2, day: 1)
+        let examsEffectiveFrom = try LocalDate(year: 2026, month: 3, day: 1)
+        let lectures = WorkType(
+            id: lecturesID,
+            name: "Lectures",
+            basePayBasis: .hourly,
+            payRateHistory: try PayRateHistory(
+                payRates: [
+                    try PayRate(id: lecturesInitialRateID, amount: 100, effectiveFrom: nil),
+                    try PayRate(
+                        id: lecturesDatedRateID,
+                        amount: 125,
+                        effectiveFrom: lecturesEffectiveFrom
+                    )
+                ]
+            )
+        )
+        let exams = WorkType(
+            id: examsID,
+            name: "Exams",
+            basePayBasis: .fixedPerShift,
+            payRateHistory: try PayRateHistory(
+                payRates: [
+                    try PayRate(id: examsInitialRateID, amount: 500, effectiveFrom: nil),
+                    try PayRate(
+                        id: examsDatedRateID,
+                        amount: 650,
+                        effectiveFrom: examsEffectiveFrom
+                    )
+                ]
+            )
+        )
+        let originalJob = try Job(
+            id: jobID,
+            currencyCode: "EUR",
+            timeZoneIdentifier: "Europe/Stockholm",
+            payCalculationCycle: .perShift,
+            workTypes: [lectures],
+            createdAt: Date(timeIntervalSinceReferenceDate: 700_000)
+        )
+
+        let stackA = try await CoreDataStack.load(storeURL: storeURL)
+        stacks.append(stackA)
+        let storageA = JobStorage(stack: stackA)
+        try storageA.save(originalJob)
+
+        let originalPersistedWorkType = try #require(
+            try stackA.viewContext.fetch(
+                NSFetchRequest<WorkTypeEntity>(entityName: "WorkTypeEntity")
+            ).first
+        )
+        let originalPersistedPayRates = try stackA.viewContext.fetch(
+            NSFetchRequest<PayRateEntity>(entityName: "PayRateEntity")
+        )
+        let originalWorkTypeObjectID = originalPersistedWorkType.objectID
+        let originalPayRateObjectIDs = Set(originalPersistedPayRates.map(\.objectID))
+
+        let updatedJob = try storageA.addWorkType(exams)
+
+        #expect(updatedJob.id == originalJob.id)
+        #expect(updatedJob.currencyCode == originalJob.currencyCode)
+        #expect(updatedJob.timeZoneIdentifier == originalJob.timeZoneIdentifier)
+        #expect(updatedJob.payCalculationCycle == originalJob.payCalculationCycle)
+        #expect(updatedJob.createdAt == originalJob.createdAt)
+        #expect(updatedJob.workTypes.count == 2)
+        #expect(updatedJob.workType(id: lecturesID) == lectures)
+        #expect(updatedJob.workType(id: examsID) == exams)
+
+        let persistedJobs = try stackA.viewContext.fetch(
+            NSFetchRequest<JobEntity>(entityName: "JobEntity")
+        )
+        let persistedWorkTypes = try stackA.viewContext.fetch(
+            NSFetchRequest<WorkTypeEntity>(entityName: "WorkTypeEntity")
+        )
+        let persistedPayRates = try stackA.viewContext.fetch(
+            NSFetchRequest<PayRateEntity>(entityName: "PayRateEntity")
+        )
+        let persistedJob = try #require(persistedJobs.first)
+        let persistedLectures = try #require(
+            persistedWorkTypes.first { $0.id == lecturesID }
+        )
+        let persistedExams = try #require(
+            persistedWorkTypes.first { $0.id == examsID }
+        )
+        let persistedLecturesInitialRate = try #require(
+            persistedPayRates.first { $0.id == lecturesInitialRateID }
+        )
+        let persistedLecturesDatedRate = try #require(
+            persistedPayRates.first { $0.id == lecturesDatedRateID }
+        )
+        let persistedExamsInitialRate = try #require(
+            persistedPayRates.first { $0.id == examsInitialRateID }
+        )
+        let persistedExamsDatedRate = try #require(
+            persistedPayRates.first { $0.id == examsDatedRateID }
+        )
+        let timeZone = try #require(TimeZone(identifier: originalJob.timeZoneIdentifier))
+        let persistedLecturesEffectiveFrom = try lecturesEffectiveFrom.startOfDay(in: timeZone)
+        let persistedExamsEffectiveFrom = try examsEffectiveFrom.startOfDay(in: timeZone)
+        #expect(persistedLectures.objectID == originalWorkTypeObjectID)
+
+        let persistedLecturesRateObjectIDs = Set(
+            persistedPayRates
+                .filter { [lecturesInitialRateID, lecturesDatedRateID].contains($0.id) }
+                .map(\.objectID)
+        )
+        #expect(persistedLecturesRateObjectIDs == originalPayRateObjectIDs)
+        #expect(persistedJobs.count == 1)
+        #expect(persistedWorkTypes.count == 2)
+        #expect(persistedPayRates.count == 4)
+        #expect(persistedJob.id == originalJob.id)
+        #expect(persistedJob.currencyCode == originalJob.currencyCode)
+        #expect(persistedJob.timeZoneIdentifier == originalJob.timeZoneIdentifier)
+        #expect(persistedJob.payPeriodKind == "perShift")
+        #expect(persistedJob.payPeriodAnchorDate == nil)
+        #expect(persistedJob.createdAt == originalJob.createdAt)
+        #expect(persistedJob.basePayKind == nil)
+        #expect(persistedLectures.name == "Lectures")
+        #expect(persistedLectures.basePayKind == "hourly")
+        #expect(persistedLectures.job.objectID == persistedJob.objectID)
+        #expect(
+            Set(persistedLectures.payRates?.compactMap { ($0 as? PayRateEntity)?.id } ?? [])
+                == Set([lecturesInitialRateID, lecturesDatedRateID])
+        )
+        #expect(persistedLecturesInitialRate.amount.decimalValue == 100)
+        #expect(persistedLecturesInitialRate.effectiveFrom == nil)
+        #expect(persistedLecturesDatedRate.amount.decimalValue == 125)
+        #expect(persistedLecturesDatedRate.effectiveFrom == persistedLecturesEffectiveFrom)
+        #expect(persistedExams.id == examsID)
+        #expect(persistedExams.name == "Exams")
+        #expect(persistedExams.basePayKind == "fixedPerShift")
+        #expect(persistedExams.job.objectID == persistedJob.objectID)
+        #expect(
+            Set(persistedExams.payRates?.compactMap { ($0 as? PayRateEntity)?.id } ?? [])
+                == Set([examsInitialRateID, examsDatedRateID])
+        )
+        #expect(persistedExamsInitialRate.amount.decimalValue == 500)
+        #expect(persistedExamsInitialRate.effectiveFrom == nil)
+        #expect(persistedExamsDatedRate.amount.decimalValue == 650)
+        #expect(persistedExamsDatedRate.effectiveFrom == persistedExamsEffectiveFrom)
+        #expect(
+            persistedPayRates
+                .filter { [examsInitialRateID, examsDatedRateID].contains($0.id) }
+                .allSatisfy {
+                    $0.job.objectID == persistedJob.objectID
+                        && $0.workType?.objectID == persistedExams.objectID
+                }
+        )
+
+        try close(stackA)
+
+        let stackB = try await CoreDataStack.load(storeURL: storeURL)
+        stacks.append(stackB)
+        let restoredJob = try #require(try JobStorage(stack: stackB).load())
+
+        #expect(restoredJob == updatedJob)
+        #expect(restoredJob.workType(id: lecturesID) == lectures)
+        #expect(restoredJob.workType(id: examsID) == exams)
+    }
+
+    @Test("Повторяющийся WorkType ID отклоняется без изменения persisted Job")
+    func rejectsDuplicateWorkTypeAdditionWithoutMutation() async throws {
+        let storeURL = try makeTemporaryStoreURL()
+        var stacks: [CoreDataStack] = []
+        defer { removeTemporaryStoreDirectory(for: storeURL, stacks: stacks) }
+
+        let jobID = UUID(uuid: (0x72, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1))
+        let workTypeID = UUID(uuid: (0x72, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2))
+        let originalRateID = UUID(uuid: (0x72, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3))
+        let suppliedRateID = UUID(uuid: (0x72, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4))
+        let originalWorkType = WorkType(
+            id: workTypeID,
+            name: "Lectures",
+            basePayBasis: .hourly,
+            payRateHistory: try PayRateHistory(
+                payRates: [try PayRate(id: originalRateID, amount: 100, effectiveFrom: nil)]
+            )
+        )
+        let duplicateWorkType = WorkType(
+            id: workTypeID,
+            name: "Exams",
+            basePayBasis: .fixedPerShift,
+            payRateHistory: try PayRateHistory(
+                payRates: [try PayRate(id: suppliedRateID, amount: 500, effectiveFrom: nil)]
+            )
+        )
+        let originalJob = try Job(
+            id: jobID,
+            currencyCode: "EUR",
+            timeZoneIdentifier: "Europe/Stockholm",
+            payCalculationCycle: .perShift,
+            workTypes: [originalWorkType],
+            createdAt: Date(timeIntervalSinceReferenceDate: 710_000)
+        )
+
+        let stackA = try await CoreDataStack.load(storeURL: storeURL)
+        stacks.append(stackA)
+        let storageA = JobStorage(stack: stackA)
+        try storageA.save(originalJob)
+
+        var receivedExpectedError = false
+        do {
+            _ = try storageA.addWorkType(duplicateWorkType)
+            Issue.record("WorkType с повторяющимся ID был добавлен")
+        } catch JobStorageError.invalidWorkTypeAddition(underlying: .duplicateWorkTypeID) {
+            receivedExpectedError = true
+        } catch {
+            Issue.record("Повторяющийся WorkType ID вернул неверную ошибку")
+        }
+
+        let persistedJobs = try stackA.viewContext.fetch(
+            NSFetchRequest<JobEntity>(entityName: "JobEntity")
+        )
+        let persistedWorkTypes = try stackA.viewContext.fetch(
+            NSFetchRequest<WorkTypeEntity>(entityName: "WorkTypeEntity")
+        )
+        let persistedPayRates = try stackA.viewContext.fetch(
+            NSFetchRequest<PayRateEntity>(entityName: "PayRateEntity")
+        )
+        let persistedJob = try #require(persistedJobs.first)
+
+        #expect(receivedExpectedError)
+        #expect(try storageA.load() == originalJob)
+        #expect(persistedWorkTypes.count == 1)
+        #expect(persistedPayRates.count == 1)
+        #expect(persistedJob.basePayKind == "hourly")
+        #expect(persistedPayRates.contains { $0.id == originalRateID })
+        #expect(persistedPayRates.contains { $0.id == suppliedRateID } == false)
+        #expect(stackA.viewContext.hasChanges == false)
+
+        try close(stackA)
+
+        let stackB = try await CoreDataStack.load(storeURL: storeURL)
+        stacks.append(stackB)
+        #expect(try JobStorage(stack: stackB).load() == originalJob)
+    }
+
+    @Test("Добавление WorkType в пустой store возвращает jobNotFound")
+    func rejectsWorkTypeAdditionWhenNoJobExists() async throws {
+        let storeURL = try makeTemporaryStoreURL()
+        var stacks: [CoreDataStack] = []
+        defer { removeTemporaryStoreDirectory(for: storeURL, stacks: stacks) }
+
+        let workType = WorkType(
+            id: UUID(uuid: (0x73, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1)),
+            name: nil,
+            basePayBasis: .hourly,
+            payRateHistory: try PayRateHistory(
+                payRates: [
+                    try PayRate(
+                        id: UUID(uuid: (0x73, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2)),
+                        amount: 100,
+                        effectiveFrom: nil
+                    )
+                ]
+            )
+        )
+        let stack = try await CoreDataStack.load(storeURL: storeURL)
+        stacks.append(stack)
+
+        var receivedExpectedError = false
+        do {
+            _ = try JobStorage(stack: stack).addWorkType(workType)
+            Issue.record("WorkType был добавлен без persisted Job")
+        } catch JobStorageError.jobNotFound {
+            receivedExpectedError = true
+        } catch {
+            Issue.record("Пустой store вернул неверную ошибку")
+        }
+
+        #expect(receivedExpectedError)
+        #expect(
+            try stack.viewContext.fetch(
+                NSFetchRequest<JobEntity>(entityName: "JobEntity")
+            ).isEmpty
+        )
+        #expect(
+            try stack.viewContext.fetch(
+                NSFetchRequest<WorkTypeEntity>(entityName: "WorkTypeEntity")
+            ).isEmpty
+        )
+        #expect(
+            try stack.viewContext.fetch(
+                NSFetchRequest<PayRateEntity>(entityName: "PayRateEntity")
+            ).isEmpty
+        )
+        #expect(stack.viewContext.hasChanges == false)
+    }
+
     @Test("Sole WorkType с произвольной identity сохраняется и восстанавливается")
     func persistsSoleArbitraryWorkTypeIdentityAcrossNewCoreDataStack() async throws {
         let storeURL = try makeTemporaryStoreURL()

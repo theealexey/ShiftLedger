@@ -30,7 +30,9 @@ enum JobStorageError: Error {
     }
 
     case jobAlreadyExists
+    case jobNotFound
     case multipleJobsFound
+    case invalidWorkTypeAddition(underlying: JobValidationError)
     case fetchFailed(underlying: Error)
     case saveFailed(underlying: Error)
     case corruptedData(Corruption)
@@ -119,24 +121,12 @@ final class JobStorage {
         jobEntity.payPeriodAnchorDate = storedPayPeriod.anchorDate
 
         for storedWorkType in storedWorkTypes {
-            let workTypeEntity = WorkTypeEntity(
-                entity: workTypeEntityDescription,
-                insertInto: context
+            insert(
+                storedWorkType,
+                into: jobEntity,
+                workTypeEntityDescription: workTypeEntityDescription,
+                payRateEntityDescription: payRateEntityDescription
             )
-            workTypeEntity.id = storedWorkType.workType.id
-            workTypeEntity.name = storedWorkType.workType.name
-            workTypeEntity.basePayKind = storedWorkType.basePayKind.rawValue
-            workTypeEntity.job = jobEntity
-
-            for storedPayRate in storedWorkType.payRates {
-                let payRate = storedPayRate.payRate
-                let payRateEntity = PayRateEntity(entity: payRateEntityDescription, insertInto: context)
-                payRateEntity.id = payRate.id
-                payRateEntity.amount = NSDecimalNumber(decimal: payRate.amount)
-                payRateEntity.effectiveFrom = storedPayRate.effectiveFrom
-                payRateEntity.job = jobEntity
-                payRateEntity.workType = workTypeEntity
-            }
         }
 
         do {
@@ -145,6 +135,71 @@ final class JobStorage {
             context.rollback()
             throw JobStorageError.saveFailed(underlying: error)
         }
+    }
+
+    func addWorkType(_ workType: WorkType) throws -> Job {
+        let jobEntities = try fetchJobs()
+        let jobEntity: JobEntity
+        switch jobEntities.count {
+        case 0:
+            throw JobStorageError.jobNotFound
+        case 1:
+            jobEntity = jobEntities[0]
+        default:
+            throw JobStorageError.multipleJobsFound
+        }
+
+        let existingJob = try makeJob(from: jobEntity)
+        let candidateJob: Job
+        do {
+            candidateJob = try Job(
+                id: existingJob.id,
+                currencyCode: existingJob.currencyCode,
+                timeZoneIdentifier: existingJob.timeZoneIdentifier,
+                payCalculationCycle: existingJob.payCalculationCycle,
+                workTypes: existingJob.workTypes + [workType],
+                createdAt: existingJob.createdAt
+            )
+        } catch {
+            throw JobStorageError.invalidWorkTypeAddition(underlying: error)
+        }
+
+        let timeZone = try makeTimeZone(from: existingJob.timeZoneIdentifier)
+        let storedWorkType = try prepareStoredWorkType(workType, timeZone: timeZone)
+
+        guard let payRateEntityDescription = NSEntityDescription.entity(
+            forEntityName: "PayRateEntity",
+            in: context
+        ) else {
+            throw JobStorageError.saveFailed(
+                underlying: ManagedObjectCreationError.missingPayRateEntityDescription
+            )
+        }
+        guard let workTypeEntityDescription = NSEntityDescription.entity(
+            forEntityName: "WorkTypeEntity",
+            in: context
+        ) else {
+            throw JobStorageError.saveFailed(
+                underlying: ManagedObjectCreationError.missingWorkTypeEntityDescription
+            )
+        }
+
+        insert(
+            storedWorkType,
+            into: jobEntity,
+            workTypeEntityDescription: workTypeEntityDescription,
+            payRateEntityDescription: payRateEntityDescription
+        )
+        jobEntity.basePayKind = nil
+
+        do {
+            try context.save()
+        } catch {
+            context.rollback()
+            throw JobStorageError.saveFailed(underlying: error)
+        }
+
+        return candidateJob
     }
 
     func load() throws -> Job? {
@@ -197,21 +252,54 @@ final class JobStorage {
         _ workTypes: [WorkType],
         timeZone: TimeZone
     ) throws -> [StoredWorkType] {
-        try workTypes.sorted { $0.id.uuidString < $1.id.uuidString }.map { workType in
-            let payRates = try workType.payRates.map { payRate in
-                StoredPayRate(
-                    payRate: payRate,
-                    effectiveFrom: try payRate.effectiveFrom.map {
-                        try $0.startOfDay(in: timeZone)
-                    }
-                )
-            }
+        try workTypes.sorted { $0.id.uuidString < $1.id.uuidString }.map {
+            try prepareStoredWorkType($0, timeZone: timeZone)
+        }
+    }
 
-            return StoredWorkType(
-                workType: workType,
-                basePayKind: encodeBasePayBasis(workType.basePayBasis),
-                payRates: payRates
+    private func prepareStoredWorkType(
+        _ workType: WorkType,
+        timeZone: TimeZone
+    ) throws -> StoredWorkType {
+        let payRates = try workType.payRates.map { payRate in
+            StoredPayRate(
+                payRate: payRate,
+                effectiveFrom: try payRate.effectiveFrom.map {
+                    try $0.startOfDay(in: timeZone)
+                }
             )
+        }
+
+        return StoredWorkType(
+            workType: workType,
+            basePayKind: encodeBasePayBasis(workType.basePayBasis),
+            payRates: payRates
+        )
+    }
+
+    private func insert(
+        _ storedWorkType: StoredWorkType,
+        into jobEntity: JobEntity,
+        workTypeEntityDescription: NSEntityDescription,
+        payRateEntityDescription: NSEntityDescription
+    ) {
+        let workTypeEntity = WorkTypeEntity(
+            entity: workTypeEntityDescription,
+            insertInto: context
+        )
+        workTypeEntity.id = storedWorkType.workType.id
+        workTypeEntity.name = storedWorkType.workType.name
+        workTypeEntity.basePayKind = storedWorkType.basePayKind.rawValue
+        workTypeEntity.job = jobEntity
+
+        for storedPayRate in storedWorkType.payRates {
+            let payRate = storedPayRate.payRate
+            let payRateEntity = PayRateEntity(entity: payRateEntityDescription, insertInto: context)
+            payRateEntity.id = payRate.id
+            payRateEntity.amount = NSDecimalNumber(decimal: payRate.amount)
+            payRateEntity.effectiveFrom = storedPayRate.effectiveFrom
+            payRateEntity.job = jobEntity
+            payRateEntity.workType = workTypeEntity
         }
     }
 
