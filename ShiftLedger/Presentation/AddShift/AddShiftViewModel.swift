@@ -12,6 +12,11 @@ enum AddShiftSaveResult: Equatable {
     case ignored
 }
 
+struct AddShiftWorkTypeOption: Equatable {
+    let id: UUID
+    let name: String?
+}
+
 @MainActor
 final class AddShiftViewModel {
     private static let validationID = UUID(uuid: (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0))
@@ -22,16 +27,17 @@ final class AddShiftViewModel {
     private(set) var breakStart: Date?
     private(set) var breakEnd: Date?
     private(set) var isSaving = false
+    private(set) var selectedWorkTypeID: UUID?
 
     let timeZoneIdentifier: String
+    let workTypeOptions: [AddShiftWorkTypeOption]
 
-    private let workTypeID: UUID?
     private let saveShift: (Shift) -> Result<Void, AddShiftSaveFailure>
     private let makeID: () -> UUID
 
     init(
         timeZoneIdentifier: String,
-        workTypeID: UUID?,
+        workTypes: [WorkType],
         initialStart: Date? = nil,
         initialEnd: Date? = nil,
         initialUnpaidBreakEnabled: Bool = false,
@@ -41,7 +47,10 @@ final class AddShiftViewModel {
         makeID: @escaping () -> UUID = UUID.init
     ) {
         self.timeZoneIdentifier = timeZoneIdentifier
-        self.workTypeID = workTypeID
+        workTypeOptions = workTypes.map {
+            AddShiftWorkTypeOption(id: $0.id, name: $0.name)
+        }
+        selectedWorkTypeID = workTypes.count == 1 ? workTypes[0].id : nil
         start = initialStart
         end = initialEnd
         isUnpaidBreakEnabled = initialUnpaidBreakEnabled
@@ -52,7 +61,7 @@ final class AddShiftViewModel {
     }
 
     var canSave: Bool {
-        workTypeID != nil
+        selectedWorkTypeID != nil
             && validationError == nil
             && start != nil
             && end != nil
@@ -70,10 +79,10 @@ final class AddShiftViewModel {
         }
 
         do {
-            guard let workTypeID else { return nil }
+            guard let selectedWorkTypeID else { return nil }
             _ = try Shift(
                 id: Self.validationID,
-                workTypeID: workTypeID,
+                workTypeID: selectedWorkTypeID,
                 start: start,
                 end: end,
                 unpaidBreak: unpaidBreak
@@ -104,6 +113,22 @@ final class AddShiftViewModel {
         breakEnd = value
     }
 
+    var selectedWorkType: AddShiftWorkTypeOption? {
+        guard let selectedWorkTypeID else {
+            return nil
+        }
+        return workTypeOptions.first { $0.id == selectedWorkTypeID }
+    }
+
+    func selectWorkType(id: UUID) -> Bool {
+        guard workTypeOptions.contains(where: { $0.id == id }) else {
+            return false
+        }
+
+        selectedWorkTypeID = id
+        return true
+    }
+
     func reset() {
         start = nil
         end = nil
@@ -111,10 +136,11 @@ final class AddShiftViewModel {
         breakStart = nil
         breakEnd = nil
         isSaving = false
+        selectedWorkTypeID = workTypeOptions.count == 1 ? workTypeOptions[0].id : nil
     }
 
     func makeShift(id: UUID) throws(AddShiftValidationError) -> Shift {
-        guard let workTypeID else {
+        guard let selectedWorkTypeID else {
             throw AddShiftValidationError.missingWorkTypeAssignment
         }
         guard let start, let end else {
@@ -134,7 +160,7 @@ final class AddShiftViewModel {
         do {
             return try Shift(
                 id: id,
-                workTypeID: workTypeID,
+                workTypeID: selectedWorkTypeID,
                 start: start,
                 end: end,
                 unpaidBreak: unpaidBreak

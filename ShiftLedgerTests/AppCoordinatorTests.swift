@@ -390,6 +390,41 @@ struct AppCoordinatorTests {
         }
     }
 
+    @Test("Выбор второго WorkType сохраняет его точный ID и возвращает в Overview")
+    func multiWorkTypeSelectionPersistsExactAssignment() async throws {
+        let job = try makeMultiWorkTypeJob()
+        let selectedWorkType = try #require(job.workTypes.dropFirst().first)
+        let expectedShift = try makeShift(day: 22, workTypeID: selectedWorkType.id)
+
+        try await withOverview(job: job) { stack, navigation, overview in
+            overview.onAddShift?()
+            let addShift = try #require(navigation.topViewController as? AddShiftViewController)
+            addShift.loadViewIfNeeded()
+
+            try await selectWorkType(at: 1, in: addShift)
+            try await selectDate(
+                expectedShift.start,
+                in: addShift,
+                rowWithAccessibilityLabel: AddShiftStrings.start
+            )
+            try await selectDate(
+                expectedShift.end,
+                in: addShift,
+                rowWithAccessibilityLabel: AddShiftStrings.end
+            )
+            try tapBarButtonItem(addShift.navigationItem.rightBarButtonItem)
+
+            let persistedShifts = try ShiftStorage(stack: stack).loadAll()
+            let persistedShift = try #require(persistedShifts.first)
+            #expect(persistedShifts.count == 1)
+            #expect(persistedShift.workTypeID == selectedWorkType.id)
+            #expect(persistedShift.start == expectedShift.start)
+            #expect(persistedShift.end == expectedShift.end)
+            #expect(navigation.topViewController === overview)
+            #expect(navigation.viewControllers.count == 1)
+        }
+    }
+
     @Test("Check Paycheck uses supplied period, Job currency and persisted Domain comparison")
     func checkPaycheckUsesDomainOutput() async throws {
         let job = try makeValidJob()
@@ -547,6 +582,27 @@ struct AppCoordinatorTests {
         try await waitUntil { addShift.presentedViewController == nil }
     }
 
+    private func selectWorkType(
+        at row: Int,
+        in addShift: AddShiftViewController
+    ) async throws {
+        let workTypeRow = try requireControl(
+            accessibilityLabel: AddShiftStrings.workType,
+            in: addShift.view
+        )
+        workTypeRow.sendActions(for: .touchUpInside)
+
+        let pickerNavigationController = try #require(
+            addShift.presentedViewController as? UINavigationController
+        )
+        let picker = try #require(
+            pickerNavigationController.topViewController as? WorkTypeSelectionViewController
+        )
+        picker.loadViewIfNeeded()
+        picker.tableView(picker.tableView, didSelectRowAt: IndexPath(row: row, section: 0))
+        try await waitUntil { addShift.presentedViewController == nil }
+    }
+
     private func tapBarButtonItem(_ item: UIBarButtonItem?) throws {
         let item = try #require(item)
         let target = try #require(item.target as? NSObject)
@@ -623,13 +679,13 @@ struct AppCoordinatorTests {
         return try #require(find(in: root))
     }
 
-    private func makeShift(day: Int) throws -> Shift {
+    private func makeShift(day: Int, workTypeID: UUID = testWorkTypeID) throws -> Shift {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = try #require(TimeZone(identifier: "Europe/Stockholm"))
         let start = try #require(calendar.date(from: DateComponents(year: 2026, month: 9, day: day, hour: 8)))
         return try Shift(
             id: try #require(UUID(uuidString: String(format: "B0000000-0000-0000-0000-%012d", day))),
-            workTypeID: testWorkTypeID,
+            workTypeID: workTypeID,
             start: start,
             end: start.addingTimeInterval(8 * 3_600)
         )
@@ -679,7 +735,8 @@ struct AppCoordinatorTests {
             timeZoneIdentifier: "Europe/Stockholm",
             basePayBasis: .hourly,
             payCalculationCycleKind: .perShift,
-            payPeriodAnchorDate: nil
+            payPeriodAnchorDate: nil,
+            workTypeNameText: "Lectures"
         )
     }
 
@@ -691,6 +748,45 @@ struct AppCoordinatorTests {
             basePayBasis: .hourly,
             payCalculationCycle: cycle,
             payRates: [try PayRate(amount: 100, effectiveFrom: nil)],
+            createdAt: Date(timeIntervalSinceReferenceDate: 1_000)
+        )
+    }
+
+    private func makeMultiWorkTypeJob() throws -> Job {
+        let first = WorkType(
+            id: UUID(uuid: (0x61, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2)),
+            name: "Lectures",
+            basePayBasis: .hourly,
+            payRateHistory: try PayRateHistory(
+                payRates: [
+                    try PayRate(
+                        id: UUID(uuid: (0x61, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4)),
+                        amount: 100,
+                        effectiveFrom: nil
+                    )
+                ]
+            )
+        )
+        let second = WorkType(
+            id: UUID(uuid: (0x61, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3)),
+            name: "Exams",
+            basePayBasis: .fixedPerShift,
+            payRateHistory: try PayRateHistory(
+                payRates: [
+                    try PayRate(
+                        id: UUID(uuid: (0x61, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5)),
+                        amount: 500,
+                        effectiveFrom: nil
+                    )
+                ]
+            )
+        )
+        return try Job(
+            id: UUID(uuid: (0x61, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1)),
+            currencyCode: "USD",
+            timeZoneIdentifier: "Europe/Stockholm",
+            payCalculationCycle: .perShift,
+            workTypes: [first, second],
             createdAt: Date(timeIntervalSinceReferenceDate: 1_000)
         )
     }

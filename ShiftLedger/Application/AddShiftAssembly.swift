@@ -6,7 +6,7 @@ enum AddShiftAssembly {
         let shiftStorage = ShiftStorage(stack: stack)
         let viewModel = AddShiftViewModel(
             timeZoneIdentifier: job.timeZoneIdentifier,
-            workTypeID: job.soleWorkType?.id,
+            workTypes: job.workTypes,
             saveShift: { shift in
                 saveShift(shift, using: shiftStorage)
             }

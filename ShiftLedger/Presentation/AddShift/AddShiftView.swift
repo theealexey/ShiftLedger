@@ -1,6 +1,7 @@
 import UIKit
 
 final class AddShiftView: UIView {
+    var onWorkTypeTapped: (() -> Void)?
     var onStartTapped: (() -> Void)?
     var onEndTapped: (() -> Void)?
     var onBreakStartTapped: (() -> Void)?
@@ -11,12 +12,16 @@ final class AddShiftView: UIView {
     private let contentView = UIView()
     private let stack = UIStackView()
     private let breakStack = UIStackView()
-    private let startRow = AddShiftDateRow(title: AddShiftStrings.start)
-    private let endRow = AddShiftDateRow(title: AddShiftStrings.end)
+    private let workTypeRow = AddShiftValueRow(
+        title: AddShiftStrings.workType,
+        accessibilityIdentifier: "addShift.workType"
+    )
+    private let startRow = AddShiftValueRow(title: AddShiftStrings.start)
+    private let endRow = AddShiftValueRow(title: AddShiftStrings.end)
     private let timeZoneLabel = UILabel()
     private let breakSwitchRow = AddShiftSwitchRow(title: AddShiftStrings.unpaidBreak)
-    private let breakStartRow = AddShiftDateRow(title: AddShiftStrings.breakStart)
-    private let breakEndRow = AddShiftDateRow(title: AddShiftStrings.breakEnd)
+    private let breakStartRow = AddShiftValueRow(title: AddShiftStrings.breakStart)
+    private let breakEndRow = AddShiftValueRow(title: AddShiftStrings.breakEnd)
     private let validationLabel = UILabel()
 
     override init(frame: CGRect) {
@@ -33,6 +38,8 @@ final class AddShiftView: UIView {
     }
 
     func render(
+        workTypeText: String,
+        canSelectWorkType: Bool,
         startText: String?,
         startAccessibilityText: String?,
         endText: String?,
@@ -45,6 +52,11 @@ final class AddShiftView: UIView {
         breakEndAccessibilityText: String?,
         validationMessage: String?
     ) {
+        workTypeRow.setValue(workTypeText, accessibilityValue: workTypeText)
+        workTypeRow.setSelectable(
+            canSelectWorkType,
+            accessibilityHint: canSelectWorkType ? AddShiftStrings.workTypeAccessibilityHint : nil
+        )
         startRow.setValue(startText ?? AddShiftStrings.select, accessibilityValue: startAccessibilityText)
         endRow.setValue(endText ?? AddShiftStrings.select, accessibilityValue: endAccessibilityText)
         timeZoneLabel.text = timeZoneText
@@ -89,6 +101,7 @@ final class AddShiftView: UIView {
         addSubview(scrollView)
         scrollView.addSubview(contentView)
         contentView.addSubview(stack)
+        stack.addArrangedSubview(workTypeRow)
         stack.addArrangedSubview(startRow)
         stack.addArrangedSubview(endRow)
         stack.addArrangedSubview(timeZoneLabel)
@@ -122,6 +135,7 @@ final class AddShiftView: UIView {
     }
 
     private func configureInteractions() {
+        workTypeRow.addAction(UIAction { [weak self] _ in self?.onWorkTypeTapped?() }, for: .touchUpInside)
         startRow.addAction(UIAction { [weak self] _ in self?.onStartTapped?() }, for: .touchUpInside)
         endRow.addAction(UIAction { [weak self] _ in self?.onEndTapped?() }, for: .touchUpInside)
         breakStartRow.addAction(UIAction { [weak self] _ in self?.onBreakStartTapped?() }, for: .touchUpInside)
@@ -130,13 +144,15 @@ final class AddShiftView: UIView {
     }
 }
 
-private final class AddShiftDateRow: UIControl {
+private final class AddShiftValueRow: UIControl {
     private let titleLabel: UILabel
     private let valueLabel = UILabel()
     private let chevron = UIImageView(image: UIImage(systemName: "chevron.right"))
     private let separator = AddShiftSeparator()
+    private var valueToChevronConstraint: NSLayoutConstraint?
+    private var valueToEdgeConstraint: NSLayoutConstraint?
 
-    init(title: String) {
+    init(title: String, accessibilityIdentifier: String? = nil) {
         titleLabel = UILabel()
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
@@ -144,6 +160,7 @@ private final class AddShiftDateRow: UIControl {
         titleLabel.font = ShiftLedgerTypography.body
         titleLabel.textColor = ShiftLedgerColors.textPrimary
         titleLabel.adjustsFontForContentSizeCategory = true
+        titleLabel.numberOfLines = 0
         valueLabel.font = ShiftLedgerTypography.callout
         valueLabel.textColor = ShiftLedgerColors.textSecondary
         valueLabel.adjustsFontForContentSizeCategory = true
@@ -152,7 +169,11 @@ private final class AddShiftDateRow: UIControl {
         chevron.tintColor = ShiftLedgerColors.textTertiary
         chevron.isAccessibilityElement = false
         [titleLabel, valueLabel, chevron, separator].forEach { $0.translatesAutoresizingMaskIntoConstraints = false; addSubview($0) }
+        titleLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
+        valueLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         heightAnchor.constraint(greaterThanOrEqualToConstant: 56).isActive = true
+        valueToChevronConstraint = valueLabel.trailingAnchor.constraint(equalTo: chevron.leadingAnchor, constant: -12)
+        valueToEdgeConstraint = valueLabel.trailingAnchor.constraint(equalTo: trailingAnchor)
         NSLayoutConstraint.activate([
             titleLabel.leadingAnchor.constraint(equalTo: leadingAnchor),
             titleLabel.topAnchor.constraint(equalTo: topAnchor, constant: 12),
@@ -160,7 +181,6 @@ private final class AddShiftDateRow: UIControl {
             valueLabel.leadingAnchor.constraint(greaterThanOrEqualTo: titleLabel.trailingAnchor, constant: 12),
             valueLabel.topAnchor.constraint(equalTo: topAnchor, constant: 12),
             valueLabel.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -12),
-            valueLabel.trailingAnchor.constraint(equalTo: chevron.leadingAnchor, constant: -12),
             chevron.trailingAnchor.constraint(equalTo: trailingAnchor),
             chevron.centerYAnchor.constraint(equalTo: centerYAnchor),
             chevron.widthAnchor.constraint(equalToConstant: 9),
@@ -172,6 +192,8 @@ private final class AddShiftDateRow: UIControl {
         isAccessibilityElement = true
         accessibilityTraits = .button
         accessibilityLabel = title
+        self.accessibilityIdentifier = accessibilityIdentifier
+        valueToChevronConstraint?.isActive = true
     }
 
     @available(*, unavailable)
@@ -181,6 +203,15 @@ private final class AddShiftDateRow: UIControl {
         valueLabel.text = value
         valueLabel.textColor = value == AddShiftStrings.select ? ShiftLedgerColors.textTertiary : ShiftLedgerColors.textSecondary
         self.accessibilityValue = accessibilityValue ?? value
+    }
+
+    func setSelectable(_ selectable: Bool, accessibilityHint: String?) {
+        isUserInteractionEnabled = selectable
+        chevron.isHidden = !selectable
+        valueToChevronConstraint?.isActive = selectable
+        valueToEdgeConstraint?.isActive = !selectable
+        accessibilityTraits = selectable ? .button : []
+        self.accessibilityHint = accessibilityHint
     }
 }
 

@@ -6,6 +6,24 @@ import Testing
 struct AddShiftViewModelTests {
     private let start = Date(timeIntervalSince1970: 1_788_076_800)
     private let end = Date(timeIntervalSince1970: 1_788_105_600)
+    private let soleWorkType: WorkType
+
+    init() throws {
+        soleWorkType = WorkType(
+            id: testWorkTypeID,
+            name: "Lectures",
+            basePayBasis: .hourly,
+            payRateHistory: try PayRateHistory(
+                payRates: [
+                    try PayRate(
+                        id: UUID(uuid: (0x50, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2)),
+                        amount: 100,
+                        effectiveFrom: nil
+                    )
+                ]
+            )
+        )
+    }
 
     @Test("Неполный draft нельзя сохранить")
     func initialStateCannotSave() {
@@ -21,7 +39,7 @@ struct AddShiftViewModelTests {
         let timeZoneIdentifier = "Europe/Stockholm"
         let viewModel = AddShiftViewModel(
             timeZoneIdentifier: timeZoneIdentifier,
-            workTypeID: testWorkTypeID,
+            workTypes: [soleWorkType],
             saveShift: { _ in .success(()) }
         )
         viewModel.setStart(start)
@@ -200,7 +218,7 @@ struct AddShiftViewModelTests {
         let result = Result<Void, AddShiftSaveFailure>.success(())
         viewModel = AddShiftViewModel(
             timeZoneIdentifier: "Europe/Stockholm",
-            workTypeID: testWorkTypeID,
+            workTypes: [soleWorkType],
             saveShift: { _ in
             saveCalls += 1
             #expect(viewModel?.save() == .ignored)
@@ -274,7 +292,7 @@ struct AddShiftViewModelTests {
     func missingWorkTypeAssignmentIsRejected() {
         let viewModel = AddShiftViewModel(
             timeZoneIdentifier: "Europe/Stockholm",
-            workTypeID: nil,
+            workTypes: [],
             initialStart: start,
             initialEnd: end,
             saveShift: { _ in .success(()) }
@@ -287,20 +305,138 @@ struct AddShiftViewModelTests {
         #expect(viewModel.save() == .invalid)
     }
 
+    @Test("Единственный WorkType выбирается автоматически")
+    func soleWorkTypeIsAutomaticallySelected() {
+        let viewModel = makeViewModel()
+
+        #expect(viewModel.selectedWorkTypeID == soleWorkType.id)
+        #expect(viewModel.selectedWorkType == AddShiftWorkTypeOption(id: soleWorkType.id, name: "Lectures"))
+    }
+
+    @Test("Единственный WorkType позволяет сохранить валидные даты")
+    func soleWorkTypeAllowsValidShift() {
+        let viewModel = makeViewModel()
+        viewModel.setStart(start)
+        viewModel.setEnd(end)
+
+        #expect(viewModel.canSave)
+    }
+
+    @Test("Несколько WorkTypes требуют явного выбора")
+    func multipleWorkTypesRequireSelection() throws {
+        let workTypes = try makeMultipleWorkTypes()
+        let viewModel = makeViewModel(workTypes: workTypes)
+        viewModel.setStart(start)
+        viewModel.setEnd(end)
+
+        #expect(viewModel.selectedWorkTypeID == nil)
+        #expect(viewModel.canSave == false)
+        #expect(throws: AddShiftValidationError.missingWorkTypeAssignment) {
+            try viewModel.makeShift(id: knownID)
+        }
+    }
+
+    @Test("Выбор принимает точный известный ID и отклоняет неизвестный")
+    func selectionAcceptsKnownIDAndRejectsUnknownID() throws {
+        let workTypes = try makeMultipleWorkTypes()
+        let viewModel = makeViewModel(workTypes: workTypes)
+        let expectedID = workTypes[1].id
+        let unknownID = UUID(uuid: (0x50, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 9))
+
+        #expect(viewModel.selectWorkType(id: expectedID))
+        #expect(viewModel.selectedWorkTypeID == expectedID)
+        #expect(viewModel.selectWorkType(id: unknownID) == false)
+        #expect(viewModel.selectedWorkTypeID == expectedID)
+    }
+
+    @Test("Shift получает ID каждого явно выбранного WorkType")
+    func makeShiftUsesExactSelectedWorkTypeID() throws {
+        let workTypes = try makeMultipleWorkTypes()
+        let viewModel = makeViewModel(workTypes: workTypes)
+        viewModel.setStart(start)
+        viewModel.setEnd(end)
+
+        for workType in workTypes {
+            #expect(viewModel.selectWorkType(id: workType.id))
+            #expect(try viewModel.makeShift(id: knownID).workTypeID == workType.id)
+        }
+    }
+
+    @Test("Reset восстанавливает sole selection и очищает multi selection")
+    func resetRestoresInitialSelectionSemantics() throws {
+        let soleViewModel = makeViewModel()
+        soleViewModel.reset()
+        #expect(soleViewModel.selectedWorkTypeID == soleWorkType.id)
+
+        let workTypes = try makeMultipleWorkTypes()
+        let multiViewModel = makeViewModel(workTypes: workTypes)
+        #expect(multiViewModel.selectWorkType(id: workTypes[1].id))
+        multiViewModel.reset()
+        #expect(multiViewModel.selectedWorkTypeID == nil)
+    }
+
+    @Test("Presentation options сохраняют ID, имена, nil и входной порядок")
+    func presentationOptionsPreserveInputValuesAndOrder() throws {
+        let workTypes = try makeMultipleWorkTypes()
+        let viewModel = makeViewModel(workTypes: workTypes)
+
+        #expect(viewModel.workTypeOptions == [
+            AddShiftWorkTypeOption(id: workTypes[0].id, name: workTypes[0].name),
+            AddShiftWorkTypeOption(id: workTypes[1].id, name: workTypes[1].name)
+        ])
+        #expect(viewModel.workTypeOptions[1].name == nil)
+    }
+
     private var knownID: UUID {
-        UUID(uuidString: "50000000-0000-0000-0000-000000000001") ?? UUID()
+        UUID(uuid: (0x50, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1))
     }
 
     private func makeViewModel(
+        workTypes: [WorkType]? = nil,
         saveShift: @escaping (Shift) -> Result<Void, AddShiftSaveFailure> = { _ in .success(()) },
-        makeID: @escaping () -> UUID = { UUID(uuidString: "50000000-0000-0000-0000-000000000001") ?? UUID() }
+        makeID: @escaping () -> UUID = {
+            UUID(uuid: (0x50, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1))
+        }
     ) -> AddShiftViewModel {
         AddShiftViewModel(
             timeZoneIdentifier: "Europe/Stockholm",
-            workTypeID: testWorkTypeID,
+            workTypes: workTypes ?? [soleWorkType],
             saveShift: saveShift,
             makeID: makeID
         )
+    }
+
+    private func makeMultipleWorkTypes() throws -> [WorkType] {
+        [
+            WorkType(
+                id: UUID(uuid: (0x50, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3)),
+                name: "Lectures",
+                basePayBasis: .hourly,
+                payRateHistory: try PayRateHistory(
+                    payRates: [
+                        try PayRate(
+                            id: UUID(uuid: (0x50, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4)),
+                            amount: 100,
+                            effectiveFrom: nil
+                        )
+                    ]
+                )
+            ),
+            WorkType(
+                id: UUID(uuid: (0x50, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5)),
+                name: nil,
+                basePayBasis: .fixedPerShift,
+                payRateHistory: try PayRateHistory(
+                    payRates: [
+                        try PayRate(
+                            id: UUID(uuid: (0x50, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 6)),
+                            amount: 500,
+                            effectiveFrom: nil
+                        )
+                    ]
+                )
+            )
+        ]
     }
 }
 

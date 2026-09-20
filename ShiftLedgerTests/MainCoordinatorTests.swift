@@ -151,7 +151,7 @@ struct MainCoordinatorTests {
                 AddShiftViewController(
                     viewModel: AddShiftViewModel(
                         timeZoneIdentifier: job.timeZoneIdentifier,
-                        workTypeID: job.soleWorkType?.id,
+                        workTypes: job.workTypes,
                         saveShift: { _ in .success(()) }
                     )
                 )

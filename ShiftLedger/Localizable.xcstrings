@@ -590,6 +590,27 @@
         "ru" : { "stringUnit" : { "state" : "translated", "value" : "Выберите" } }
       }
     },
+    "addShift.workType" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Work type" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Вид работы" } }
+      }
+    },
+    "addShift.workType.unnamed" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Unnamed work type" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Вид работы без названия" } }
+      }
+    },
+    "addShift.workType.accessibilityHint" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Choose the work type for this shift." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Выберите вид работы для этой смены." } }
+      }
+    },
     "addShift.timeZone.prefix" : {
       "extractionState" : "manual",
       "localizations" : {

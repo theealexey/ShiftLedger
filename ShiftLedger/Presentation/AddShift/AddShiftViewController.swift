@@ -34,6 +34,7 @@ final class AddShiftViewController: UIViewController {
     }
 
     private func bindView() {
+        addShiftView.onWorkTypeTapped = { [weak self] in self?.presentWorkTypePicker() }
         addShiftView.onStartTapped = { [weak self] in self?.presentPicker(for: .start) }
         addShiftView.onEndTapped = { [weak self] in self?.presentPicker(for: .end) }
         addShiftView.onBreakStartTapped = { [weak self] in self?.presentPicker(for: .breakStart) }
@@ -47,6 +48,8 @@ final class AddShiftViewController: UIViewController {
     private func render() {
         let timeZoneText = "\(AddShiftStrings.timeZonePrefix) \(TimeZoneDisplayName.value(for: viewModel.timeZoneIdentifier, locale: displayLocale))"
         addShiftView.render(
+            workTypeText: selectedWorkTypeText,
+            canSelectWorkType: viewModel.workTypeOptions.count > 1,
             startText: formatted(viewModel.start),
             startAccessibilityText: accessibilityFormatted(viewModel.start),
             endText: formatted(viewModel.end),
@@ -60,6 +63,38 @@ final class AddShiftViewController: UIViewController {
             validationMessage: validationMessage
         )
         navigationItem.rightBarButtonItem?.isEnabled = viewModel.canSave && viewModel.isSaving == false
+    }
+
+    private var selectedWorkTypeText: String {
+        guard let selectedWorkType = viewModel.selectedWorkType else {
+            return AddShiftStrings.select
+        }
+        return selectedWorkType.name ?? AddShiftStrings.unnamedWorkType
+    }
+
+    private func presentWorkTypePicker() {
+        guard viewModel.workTypeOptions.count > 1 else {
+            return
+        }
+
+        let picker = WorkTypeSelectionViewController(
+            options: viewModel.workTypeOptions,
+            selectedWorkTypeID: viewModel.selectedWorkTypeID
+        ) { [weak self] workTypeID in
+            guard let self, viewModel.selectWorkType(id: workTypeID) else {
+                return
+            }
+            render()
+        }
+        let navigationController = UINavigationController(rootViewController: picker)
+        navigationController.modalPresentationStyle = .pageSheet
+        navigationController.view.tintColor = ShiftLedgerColors.accentPrimary
+        if let sheet = navigationController.sheetPresentationController {
+            sheet.detents = [.medium(), .large()]
+            sheet.selectedDetentIdentifier = .medium
+            sheet.prefersGrabberVisible = true
+        }
+        present(navigationController, animated: true)
     }
 
     private var validationMessage: String? {
