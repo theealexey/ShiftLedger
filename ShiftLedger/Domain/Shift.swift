@@ -17,6 +17,7 @@ struct Shift: Equatable, Identifiable {
     static let maximumDuration: TimeInterval = 48 * 60 * 60
 
     let id: UUID
+    let workTypeID: UUID
     let start: Date
     let end: Date
     let unpaidBreak: UnpaidBreak?
@@ -32,6 +33,7 @@ struct Shift: Equatable, Identifiable {
 
     init(
         id: UUID = UUID(),
+        workTypeID: UUID,
         start: Date,
         end: Date,
         unpaidBreak: UnpaidBreak? = nil
@@ -60,6 +62,7 @@ struct Shift: Equatable, Identifiable {
         }
 
         self.id = id
+        self.workTypeID = workTypeID
         self.start = start
         self.end = end
         self.unpaidBreak = unpaidBreak

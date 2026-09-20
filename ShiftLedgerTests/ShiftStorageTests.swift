@@ -5,6 +5,8 @@ import Testing
 
 @MainActor
 struct ShiftStorageTests {
+    private let canonicalWorkTypeID = UUID(uuid: (0x70, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1))
+
     @Test("Смена без перерыва переживает SQLite reopen")
     func roundTripsShiftWithoutBreak() async throws {
         let storeURL = try makeTemporaryStoreURL()
@@ -46,6 +48,7 @@ struct ShiftStorageTests {
         let stackB = try await makeStack(storeURL: storeURL, stacks: &stacks)
         let loaded = try #require(try ShiftStorage(stack: stackB).loadAll().first)
         #expect(loaded == shift)
+        #expect(loaded.workTypeID == canonicalWorkTypeID)
         #expect(loaded.unpaidBreak == nil)
         #expect(try fetchWorkTypes(in: stackB.viewContext).count == 1)
         #expect(try fetchShifts(in: stackB.viewContext).count == 1)
@@ -65,6 +68,7 @@ struct ShiftStorageTests {
         let start = Date(timeIntervalSinceReferenceDate: 20_000)
         let shift = try Shift(
             id: try #require(UUID(uuidString: "2E80C3A1-7F3C-4D6C-BDA9-1E62C2A4A1F4")),
+            workTypeID: canonicalWorkTypeID,
             start: start,
             end: start.addingTimeInterval(8 * 60 * 60),
             unpaidBreak: UnpaidBreak(
@@ -79,6 +83,7 @@ struct ShiftStorageTests {
         let stackB = try await makeStack(storeURL: storeURL, stacks: &stacks)
         let loaded = try #require(try ShiftStorage(stack: stackB).loadAll().first)
         #expect(loaded.id == shift.id)
+        #expect(loaded.workTypeID == canonicalWorkTypeID)
         #expect(loaded.start == shift.start)
         #expect(loaded.end == shift.end)
         #expect(loaded.unpaidBreak == shift.unpaidBreak)
@@ -142,6 +147,35 @@ struct ShiftStorageTests {
             Issue.record("Shift сохранён без Job")
         } catch ShiftStorageError.jobNotFound {
         }
+    }
+
+    @Test("Неподдерживаемое назначение WorkType отклоняется до вставки")
+    func rejectsUnsupportedWorkTypeAssignmentWithoutPartialSave() async throws {
+        let storeURL = try makeTemporaryStoreURL()
+        var stacks: [CoreDataStack] = []
+        defer { removeTemporaryStoreDirectory(for: storeURL, stacks: stacks) }
+        let stack = try await makeStack(storeURL: storeURL, stacks: &stacks)
+        try JobStorage(stack: stack).save(try makeJob())
+        let unsupportedID = UUID(uuid: (0x71, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1))
+        let start = Date(timeIntervalSinceReferenceDate: 1_000)
+        let shift = try Shift(
+            workTypeID: unsupportedID,
+            start: start,
+            end: start.addingTimeInterval(60)
+        )
+
+        do {
+            try ShiftStorage(stack: stack).save(shift)
+            Issue.record("Shift с неподдерживаемым WorkType был сохранён")
+        } catch ShiftStorageError.unsupportedWorkTypeAssignment(
+            let expectedWorkTypeID,
+            let actualWorkTypeID
+        ) {
+            #expect(expectedWorkTypeID == canonicalWorkTypeID)
+            #expect(actualWorkTypeID == unsupportedID)
+        }
+        #expect(try fetchShifts(in: stack.viewContext).isEmpty)
+        #expect(stack.viewContext.hasChanges == false)
     }
 
     @Test("Legacy Job link не заменяет отсутствующий canonical Shift WorkType")
@@ -352,6 +386,7 @@ struct ShiftStorageTests {
         let start = Date(timeIntervalSinceReferenceDate: offset)
         return try Shift(
             id: try #require(UUID(uuidString: id)),
+            workTypeID: canonicalWorkTypeID,
             start: start,
             end: start.addingTimeInterval(8 * 60 * 60)
         )

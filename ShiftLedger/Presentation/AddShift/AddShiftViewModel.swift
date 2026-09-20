@@ -25,11 +25,13 @@ final class AddShiftViewModel {
 
     let timeZoneIdentifier: String
 
+    private let workTypeID: UUID?
     private let saveShift: (Shift) -> Result<Void, AddShiftSaveFailure>
     private let makeID: () -> UUID
 
     init(
         timeZoneIdentifier: String,
+        workTypeID: UUID?,
         initialStart: Date? = nil,
         initialEnd: Date? = nil,
         initialUnpaidBreakEnabled: Bool = false,
@@ -39,6 +41,7 @@ final class AddShiftViewModel {
         makeID: @escaping () -> UUID = UUID.init
     ) {
         self.timeZoneIdentifier = timeZoneIdentifier
+        self.workTypeID = workTypeID
         start = initialStart
         end = initialEnd
         isUnpaidBreakEnabled = initialUnpaidBreakEnabled
@@ -49,7 +52,11 @@ final class AddShiftViewModel {
     }
 
     var canSave: Bool {
-        validationError == nil && start != nil && end != nil && (!isUnpaidBreakEnabled || (breakStart != nil && breakEnd != nil))
+        workTypeID != nil
+            && validationError == nil
+            && start != nil
+            && end != nil
+            && (!isUnpaidBreakEnabled || (breakStart != nil && breakEnd != nil))
     }
 
     var validationError: ShiftValidationError? {
@@ -63,7 +70,14 @@ final class AddShiftViewModel {
         }
 
         do {
-            _ = try Shift(id: Self.validationID, start: start, end: end, unpaidBreak: unpaidBreak)
+            guard let workTypeID else { return nil }
+            _ = try Shift(
+                id: Self.validationID,
+                workTypeID: workTypeID,
+                start: start,
+                end: end,
+                unpaidBreak: unpaidBreak
+            )
             return nil
         } catch {
             return error
@@ -100,6 +114,9 @@ final class AddShiftViewModel {
     }
 
     func makeShift(id: UUID) throws(AddShiftValidationError) -> Shift {
+        guard let workTypeID else {
+            throw AddShiftValidationError.missingWorkTypeAssignment
+        }
         guard let start, let end else {
             throw AddShiftValidationError.incomplete
         }
@@ -115,7 +132,13 @@ final class AddShiftViewModel {
         }
 
         do {
-            return try Shift(id: id, start: start, end: end, unpaidBreak: unpaidBreak)
+            return try Shift(
+                id: id,
+                workTypeID: workTypeID,
+                start: start,
+                end: end,
+                unpaidBreak: unpaidBreak
+            )
         } catch {
             throw .invalidShift(error)
         }
@@ -147,6 +170,7 @@ final class AddShiftViewModel {
 }
 
 enum AddShiftValidationError: Error, Equatable {
+    case missingWorkTypeAssignment
     case incomplete
     case invalidShift(ShiftValidationError)
 }

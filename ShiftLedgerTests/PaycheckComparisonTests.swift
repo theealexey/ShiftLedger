@@ -82,6 +82,7 @@ struct PaycheckComparisonTests {
     func preservesCompleteExpectedBreakdown() throws {
         let start = Date(timeIntervalSinceReferenceDate: 100_000)
         let shift = try Shift(
+            workTypeID: testWorkTypeID,
             start: start,
             end: start.addingTimeInterval(8 * 60 * 60)
         )

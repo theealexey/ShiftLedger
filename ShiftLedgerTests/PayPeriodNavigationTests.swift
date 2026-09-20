@@ -78,7 +78,7 @@ struct PayPeriodNavigationTests {
         let anchor = try localDate(year: 2026, month: 8, day: 3)
         let job = try makeJob(cycle: .scheduled(.weekly(anchorDate: anchor)))
         let start = try date(year: 2026, month: 8, day: 5, hour: 8, in: "Europe/Stockholm")
-        let shift = try Shift(start: start, end: start.addingTimeInterval(hour))
+        let shift = try Shift(workTypeID: testWorkTypeID, start: start, end: start.addingTimeInterval(hour))
 
         #expect(
             try job.payCalculationPeriod(for: shift)

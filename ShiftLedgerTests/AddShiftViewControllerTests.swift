@@ -17,6 +17,7 @@ struct AddShiftViewControllerTests {
         var completedShift: Shift?
         let viewModel = AddShiftViewModel(
             timeZoneIdentifier: timeZoneIdentifier,
+            workTypeID: testWorkTypeID,
             initialStart: start,
             initialEnd: end,
             saveShift: { shift in
@@ -35,7 +36,12 @@ struct AddShiftViewControllerTests {
 
         try tapSave(on: viewController)
 
-        let expectedShift = try Shift(id: knownID, start: start, end: end)
+        let expectedShift = try Shift(
+            id: knownID,
+            workTypeID: testWorkTypeID,
+            start: start,
+            end: end
+        )
         #expect(persistenceCallCount == 1)
         #expect(completionCallCount == 1)
         #expect(persistedShift != nil)
@@ -59,6 +65,7 @@ struct AddShiftViewControllerTests {
         var completionCallCount = 0
         let viewModel = AddShiftViewModel(
             timeZoneIdentifier: timeZoneIdentifier,
+            workTypeID: testWorkTypeID,
             initialStart: start,
             initialEnd: end,
             saveShift: { _ in

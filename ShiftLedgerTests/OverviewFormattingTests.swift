@@ -238,6 +238,7 @@ struct OverviewFormattingTests {
     func shiftEndpointsUseJobTimeZone() throws {
         let start = try date(year: 2026, month: 9, day: 19, hour: 23, minute: 30)
         let shift = try Shift(
+            workTypeID: testWorkTypeID,
             start: start,
             end: start.addingTimeInterval(2 * 60 * 60),
             unpaidBreak: UnpaidBreak(
@@ -423,6 +424,7 @@ struct OverviewFormattingTests {
     private func makeShift(start: Date, duration: TimeInterval) throws -> Shift {
         try Shift(
             id: UUID(uuid: (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1)),
+            workTypeID: testWorkTypeID,
             start: start,
             end: start.addingTimeInterval(duration)
         )

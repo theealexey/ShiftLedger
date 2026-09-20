@@ -99,6 +99,7 @@ struct PaycheckComparisonCalculationTests {
         let job = try makeJob(payRates: [initialRate, datedRate])
         let firstStart = try date(month: 9, day: 10)
         let first = try Shift(
+            workTypeID: testWorkTypeID,
             start: firstStart,
             end: firstStart.addingTimeInterval(8 * hour),
             unpaidBreak: UnpaidBreak(
@@ -181,6 +182,7 @@ struct PaycheckComparisonCalculationTests {
         payRates: [PayRate]
     ) throws -> Job {
         try Job(
+            id: testWorkTypeID,
             currencyCode: "EUR",
             timeZoneIdentifier: "Europe/Stockholm",
             basePayBasis: .hourly,
@@ -196,7 +198,11 @@ struct PaycheckComparisonCalculationTests {
         hours: TimeInterval
     ) throws -> Shift {
         let start = try date(month: month, day: day)
-        return try Shift(start: start, end: start.addingTimeInterval(hours * hour))
+        return try Shift(
+            workTypeID: testWorkTypeID,
+            start: start,
+            end: start.addingTimeInterval(hours * hour)
+        )
     }
 
     private func septemberPeriod() throws -> PayCalculationPeriod {

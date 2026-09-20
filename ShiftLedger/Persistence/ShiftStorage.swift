@@ -30,6 +30,7 @@ enum ShiftStorageError: Error {
 
     case jobNotFound
     case multipleJobsFound
+    case unsupportedWorkTypeAssignment(expectedWorkTypeID: UUID, actualWorkTypeID: UUID)
     case duplicateShift
     case overlappingShift
     case fetchFailed(underlying: Error)
@@ -52,6 +53,12 @@ final class ShiftStorage {
     func save(_ shift: Shift) throws {
         let job = try singleJob()
         let workType = try canonicalWorkType(for: job)
+        guard shift.workTypeID == workType.id else {
+            throw ShiftStorageError.unsupportedWorkTypeAssignment(
+                expectedWorkTypeID: workType.id,
+                actualWorkTypeID: shift.workTypeID
+            )
+        }
         let existingShifts = try fetchShifts()
 
         for entity in existingShifts {
@@ -61,7 +68,7 @@ final class ShiftStorage {
                 throw ShiftStorageError.duplicateShift
             }
 
-            let existingShift = try makeShift(from: entity)
+            let existingShift = try makeShift(from: entity, workTypeID: workType.id)
             if existingShift.overlaps(with: shift) {
                 throw ShiftStorageError.overlappingShift
             }
@@ -100,7 +107,7 @@ final class ShiftStorage {
         return try fetchShifts().map { entity in
             try validateOwnership(of: entity, canonicalWorkType: workType, job: job)
 
-            return try makeShift(from: entity)
+            return try makeShift(from: entity, workTypeID: workType.id)
         }
         .sorted {
             if $0.start != $1.start {
@@ -211,7 +218,7 @@ final class ShiftStorage {
         }
     }
 
-    private func makeShift(from entity: ShiftEntity) throws -> Shift {
+    private func makeShift(from entity: ShiftEntity, workTypeID: UUID) throws -> Shift {
         let unpaidBreak: UnpaidBreak?
 
         switch (entity.unpaidBreakStart, entity.unpaidBreakEnd) {
@@ -226,6 +233,7 @@ final class ShiftStorage {
         do {
             return try Shift(
                 id: entity.id,
+                workTypeID: workTypeID,
                 start: entity.start,
                 end: entity.end,
                 unpaidBreak: unpaidBreak

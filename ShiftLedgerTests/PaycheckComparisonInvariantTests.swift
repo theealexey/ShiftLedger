@@ -81,20 +81,24 @@ struct PaycheckComparisonInvariantTests {
         let higherID = try #require(UUID(uuidString: "50000000-0000-0000-0000-000000000002"))
         let start = try date(day: 10)
         let earliest = try Shift(
+            workTypeID: testWorkTypeID,
             start: start.addingTimeInterval(-hour),
             end: start
         )
         let shorter = try Shift(
+            workTypeID: testWorkTypeID,
             start: start,
             end: start.addingTimeInterval(hour)
         )
         let lowerUUID = try Shift(
             id: lowerID,
+            workTypeID: testWorkTypeID,
             start: start,
             end: start.addingTimeInterval(2 * hour)
         )
         let higherUUID = try Shift(
             id: higherID,
+            workTypeID: testWorkTypeID,
             start: start,
             end: start.addingTimeInterval(2 * hour)
         )
@@ -242,6 +246,7 @@ struct PaycheckComparisonInvariantTests {
         let job = try makeJob(payRates: [initialRate, datedRate])
         let firstStart = try date(day: 10)
         let first = try Shift(
+            workTypeID: testWorkTypeID,
             start: firstStart,
             end: firstStart.addingTimeInterval(8 * hour),
             unpaidBreak: UnpaidBreak(
@@ -268,6 +273,7 @@ struct PaycheckComparisonInvariantTests {
         payRates: [PayRate]
     ) throws -> Job {
         try Job(
+            id: testWorkTypeID,
             currencyCode: "EUR",
             timeZoneIdentifier: "Europe/Stockholm",
             basePayBasis: .hourly,
@@ -283,7 +289,11 @@ struct PaycheckComparisonInvariantTests {
         hours: TimeInterval
     ) throws -> Shift {
         let start = try date(month: month, day: day)
-        return try Shift(start: start, end: start.addingTimeInterval(hours * hour))
+        return try Shift(
+            workTypeID: testWorkTypeID,
+            start: start,
+            end: start.addingTimeInterval(hours * hour)
+        )
     }
 
     private func septemberPeriod() throws -> PayCalculationPeriod {

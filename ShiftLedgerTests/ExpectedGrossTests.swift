@@ -31,10 +31,10 @@ struct ExpectedGrossTests {
             date(year: 2026, month: 10, day: 1, hour: 8, in: stockholm)
         )
         let shifts = [
-            try Shift(start: outsideBeforeStart, end: outsideBeforeStart.addingTimeInterval(hour)),
-            try Shift(start: firstMemberStart, end: firstMemberStart.addingTimeInterval(8 * hour)),
-            try Shift(start: secondMemberStart, end: secondMemberStart.addingTimeInterval(4 * hour)),
-            try Shift(start: outsideEndStart, end: outsideEndStart.addingTimeInterval(hour))
+            try Shift(workTypeID: testWorkTypeID, start: outsideBeforeStart, end: outsideBeforeStart.addingTimeInterval(hour)),
+            try Shift(workTypeID: testWorkTypeID, start: firstMemberStart, end: firstMemberStart.addingTimeInterval(8 * hour)),
+            try Shift(workTypeID: testWorkTypeID, start: secondMemberStart, end: secondMemberStart.addingTimeInterval(4 * hour)),
+            try Shift(workTypeID: testWorkTypeID, start: outsideEndStart, end: outsideEndStart.addingTimeInterval(hour))
         ]
 
         #expect(try job.expectedGross(for: .scheduled(septemberPeriod()), from: shifts) == Decimal(240))
@@ -52,8 +52,9 @@ struct ExpectedGrossTests {
             date(year: 2026, month: 9, day: 20, hour: 8, in: stockholm)
         )
         let shifts = [
-            try Shift(start: firstStart, end: firstStart.addingTimeInterval(8 * hour)),
+            try Shift(workTypeID: testWorkTypeID, start: firstStart, end: firstStart.addingTimeInterval(8 * hour)),
             try Shift(
+                workTypeID: testWorkTypeID,
                 start: secondStart,
                 end: secondStart.addingTimeInterval(8 * hour),
                 unpaidBreak: UnpaidBreak(
@@ -82,8 +83,8 @@ struct ExpectedGrossTests {
             date(year: 2026, month: 9, day: 20, hour: 8, in: stockholm)
         )
         let shifts = [
-            try Shift(start: firstStart, end: firstStart.addingTimeInterval(8 * hour)),
-            try Shift(start: secondStart, end: secondStart.addingTimeInterval(8 * hour))
+            try Shift(workTypeID: testWorkTypeID, start: firstStart, end: firstStart.addingTimeInterval(8 * hour)),
+            try Shift(workTypeID: testWorkTypeID, start: secondStart, end: secondStart.addingTimeInterval(8 * hour))
         ]
 
         #expect(try job.expectedGross(for: .scheduled(septemberPeriod()), from: shifts) == Decimal(360))
@@ -102,6 +103,7 @@ struct ExpectedGrossTests {
         )
         let shifts = [
             try Shift(
+                workTypeID: testWorkTypeID,
                 start: firstStart,
                 end: firstStart.addingTimeInterval(2 * hour),
                 unpaidBreak: UnpaidBreak(
@@ -109,7 +111,7 @@ struct ExpectedGrossTests {
                     end: firstStart.addingTimeInterval(hour)
                 )
             ),
-            try Shift(start: secondStart, end: secondStart.addingTimeInterval(12 * hour))
+            try Shift(workTypeID: testWorkTypeID, start: secondStart, end: secondStart.addingTimeInterval(12 * hour))
         ]
 
         #expect(try job.expectedGross(for: .scheduled(septemberPeriod()), from: shifts) == Decimal(360))
@@ -125,16 +127,19 @@ struct ExpectedGrossTests {
         let start = Date(timeIntervalSinceReferenceDate: 100_000)
         let firstShift = try Shift(
             id: firstID,
+            workTypeID: testWorkTypeID,
             start: start,
             end: start.addingTimeInterval(hour)
         )
         let secondShift = try Shift(
             id: secondID,
+            workTypeID: testWorkTypeID,
             start: start.addingTimeInterval(2 * hour),
             end: start.addingTimeInterval(4 * hour)
         )
         let thirdShift = try Shift(
             id: thirdID,
+            workTypeID: testWorkTypeID,
             start: start.addingTimeInterval(5 * hour),
             end: start.addingTimeInterval(8 * hour)
         )
@@ -158,7 +163,7 @@ struct ExpectedGrossTests {
         let end = try #require(
             date(year: 2026, month: 9, day: 1, hour: 7, in: stockholm)
         )
-        let shift = try Shift(start: start, end: end)
+        let shift = try Shift(workTypeID: testWorkTypeID, start: start, end: end)
 
         #expect(try job.expectedGross(for: .scheduled(augustPeriod()), from: [shift]) == Decimal(160))
     }
@@ -178,7 +183,7 @@ struct ExpectedGrossTests {
         let start = try #require(
             date(year: 2026, month: 9, day: 1, hour: 0, minute: 30, in: utc)
         )
-        let shift = try Shift(start: start, end: start.addingTimeInterval(hour))
+        let shift = try Shift(workTypeID: testWorkTypeID, start: start, end: start.addingTimeInterval(hour))
 
         #expect(try stockholmJob.expectedGross(for: .scheduled(septemberPeriod()), from: [shift]) == Decimal(20))
         #expect(try newYorkJob.expectedGross(for: .scheduled(septemberPeriod()), from: [shift]) == .zero)
@@ -199,8 +204,8 @@ struct ExpectedGrossTests {
             date(year: 2026, month: 9, day: 11, hour: 8, in: stockholm)
         )
         let shifts = [
-            try Shift(start: firstStart, end: firstStart.addingTimeInterval(1.5 * hour)),
-            try Shift(start: secondStart, end: secondStart.addingTimeInterval(1.5 * hour))
+            try Shift(workTypeID: testWorkTypeID, start: firstStart, end: firstStart.addingTimeInterval(1.5 * hour)),
+            try Shift(workTypeID: testWorkTypeID, start: secondStart, end: secondStart.addingTimeInterval(1.5 * hour))
         ]
 
         #expect(try job.expectedGross(for: .scheduled(septemberPeriod()), from: shifts) == expectedGross)
@@ -220,9 +225,9 @@ struct ExpectedGrossTests {
         let thirdStart = try #require(
             date(year: 2026, month: 9, day: 20, hour: 8, in: stockholm)
         )
-        let firstShift = try Shift(start: firstStart, end: firstStart.addingTimeInterval(hour))
-        let secondShift = try Shift(start: secondStart, end: secondStart.addingTimeInterval(2 * hour))
-        let thirdShift = try Shift(start: thirdStart, end: thirdStart.addingTimeInterval(4 * hour))
+        let firstShift = try Shift(workTypeID: testWorkTypeID, start: firstStart, end: firstStart.addingTimeInterval(hour))
+        let secondShift = try Shift(workTypeID: testWorkTypeID, start: secondStart, end: secondStart.addingTimeInterval(2 * hour))
+        let thirdShift = try Shift(workTypeID: testWorkTypeID, start: thirdStart, end: thirdStart.addingTimeInterval(4 * hour))
         let orderedGross = try job.expectedGross(
             for: .scheduled(septemberPeriod()),
             from: [firstShift, secondShift, thirdShift]
@@ -242,6 +247,7 @@ struct ExpectedGrossTests {
         payRates: [PayRate]
     ) throws -> Job {
         try Job(
+            id: testWorkTypeID,
             currencyCode: "EUR",
             timeZoneIdentifier: timeZoneIdentifier,
             basePayBasis: basePayBasis,

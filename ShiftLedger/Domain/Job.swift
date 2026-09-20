@@ -13,7 +13,7 @@ enum JobValidationError: Error, Equatable {
 }
 
 enum PayRateResolutionError: Error, Equatable {
-    case workTypeAssignmentRequired
+    case workTypeNotFound(workTypeID: UUID)
     case invalidJobTimeZoneIdentifier
     case localDateConversionFailed(LocalDateConversionError)
     case missingInitialPayRate
@@ -126,13 +126,13 @@ struct Job: Equatable {
     }
 
     func applicablePayRate(for shift: Shift) throws(PayRateResolutionError) -> PayRate {
-        let workType = try compensationWorkType()
+        let workType = try compensationWorkType(for: shift)
         let localStartDate = try localStartDate(for: shift)
         return workType.applicablePayRate(on: localStartDate)
     }
 
     func basePay(for shift: Shift) throws(PayRateResolutionError) -> Decimal {
-        let workType = try compensationWorkType()
+        let workType = try compensationWorkType(for: shift)
         let localStartDate = try localStartDate(for: shift)
         return workType.basePay(for: shift, on: localStartDate)
     }
@@ -237,7 +237,7 @@ struct Job: Equatable {
     }
 
     private func shiftPayBreakdown(for shift: Shift) throws(PayRateResolutionError) -> ShiftPayBreakdown {
-        let workType = try compensationWorkType()
+        let workType = try compensationWorkType(for: shift)
         let localStartDate = try localStartDate(for: shift)
         let payRate = workType.applicablePayRate(on: localStartDate)
         let amount = workType.basePay(for: shift, using: payRate)
@@ -251,11 +251,11 @@ struct Job: Equatable {
         )
     }
 
-    private func compensationWorkType() throws(PayRateResolutionError) -> WorkType {
-        guard let soleWorkType else {
-            throw PayRateResolutionError.workTypeAssignmentRequired
+    private func compensationWorkType(for shift: Shift) throws(PayRateResolutionError) -> WorkType {
+        guard let workType = workType(id: shift.workTypeID) else {
+            throw PayRateResolutionError.workTypeNotFound(workTypeID: shift.workTypeID)
         }
-        return soleWorkType
+        return workType
     }
 
     private static func validateMetadata(

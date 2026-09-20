@@ -15,7 +15,7 @@ struct ApplicablePayRateTests {
         let job = try makeJob(payRates: [initialRate, datedRate])
         let stockholm = try #require(TimeZone(identifier: "Europe/Stockholm"))
         let start = try #require(date(year: 2026, month: 8, day: 31, hour: 8, in: stockholm))
-        let shift = try Shift(start: start, end: start.addingTimeInterval(8 * hour))
+        let shift = try Shift(workTypeID: testWorkTypeID, start: start, end: start.addingTimeInterval(8 * hour))
 
         #expect(try job.applicablePayRate(for: shift) == initialRate)
     }
@@ -30,7 +30,7 @@ struct ApplicablePayRateTests {
         let job = try makeJob(payRates: [initialRate, datedRate])
         let stockholm = try #require(TimeZone(identifier: "Europe/Stockholm"))
         let start = try #require(date(year: 2026, month: 9, day: 1, hour: 8, in: stockholm))
-        let shift = try Shift(start: start, end: start.addingTimeInterval(8 * hour))
+        let shift = try Shift(workTypeID: testWorkTypeID, start: start, end: start.addingTimeInterval(8 * hour))
 
         #expect(try job.applicablePayRate(for: shift) == datedRate)
     }
@@ -49,7 +49,7 @@ struct ApplicablePayRateTests {
         let job = try makeJob(payRates: [initialRate, septemberRate, octoberRate])
         let stockholm = try #require(TimeZone(identifier: "Europe/Stockholm"))
         let start = try #require(date(year: 2026, month: 9, day: 20, hour: 8, in: stockholm))
-        let shift = try Shift(start: start, end: start.addingTimeInterval(8 * hour))
+        let shift = try Shift(workTypeID: testWorkTypeID, start: start, end: start.addingTimeInterval(8 * hour))
 
         #expect(try job.applicablePayRate(for: shift) == septemberRate)
     }
@@ -68,7 +68,7 @@ struct ApplicablePayRateTests {
         let job = try makeJob(payRates: [initialRate, septemberRate, octoberRate])
         let stockholm = try #require(TimeZone(identifier: "Europe/Stockholm"))
         let start = try #require(date(year: 2026, month: 10, day: 15, hour: 8, in: stockholm))
-        let shift = try Shift(start: start, end: start.addingTimeInterval(8 * hour))
+        let shift = try Shift(workTypeID: testWorkTypeID, start: start, end: start.addingTimeInterval(8 * hour))
 
         #expect(try job.applicablePayRate(for: shift) == octoberRate)
     }
@@ -87,7 +87,7 @@ struct ApplicablePayRateTests {
         let job = try makeJob(payRates: [initialRate, septemberRate, octoberRate])
         let stockholm = try #require(TimeZone(identifier: "Europe/Stockholm"))
         let start = try #require(date(year: 2026, month: 9, day: 30, hour: 8, in: stockholm))
-        let shift = try Shift(start: start, end: start.addingTimeInterval(8 * hour))
+        let shift = try Shift(workTypeID: testWorkTypeID, start: start, end: start.addingTimeInterval(8 * hour))
 
         #expect(try job.applicablePayRate(for: shift) == septemberRate)
     }
@@ -109,7 +109,7 @@ struct ApplicablePayRateTests {
         )
         let utc = try #require(TimeZone(identifier: "UTC"))
         let start = try #require(date(year: 2026, month: 9, day: 1, hour: 0, minute: 30, in: utc))
-        let shift = try Shift(start: start, end: start.addingTimeInterval(8 * hour))
+        let shift = try Shift(workTypeID: testWorkTypeID, start: start, end: start.addingTimeInterval(8 * hour))
 
         #expect(try stockholmJob.applicablePayRate(for: shift) == datedRate)
         #expect(try newYorkJob.applicablePayRate(for: shift) == initialRate)
@@ -126,7 +126,7 @@ struct ApplicablePayRateTests {
         let stockholm = try #require(TimeZone(identifier: "Europe/Stockholm"))
         let start = try #require(date(year: 2026, month: 8, day: 31, hour: 23, in: stockholm))
         let end = try #require(date(year: 2026, month: 9, day: 1, hour: 7, in: stockholm))
-        let shift = try Shift(start: start, end: end)
+        let shift = try Shift(workTypeID: testWorkTypeID, start: start, end: end)
 
         #expect(try job.applicablePayRate(for: shift) == initialRate)
     }
@@ -145,7 +145,7 @@ struct ApplicablePayRateTests {
         let job = try makeJob(payRates: [octoberRate, initialRate, septemberRate])
         let stockholm = try #require(TimeZone(identifier: "Europe/Stockholm"))
         let start = try #require(date(year: 2026, month: 10, day: 15, hour: 8, in: stockholm))
-        let shift = try Shift(start: start, end: start.addingTimeInterval(8 * hour))
+        let shift = try Shift(workTypeID: testWorkTypeID, start: start, end: start.addingTimeInterval(8 * hour))
 
         #expect(job.soleWorkType?.payRates == [initialRate, septemberRate, octoberRate])
         #expect(try job.applicablePayRate(for: shift) == octoberRate)
@@ -156,6 +156,7 @@ struct ApplicablePayRateTests {
         payRates: [PayRate]
     ) throws -> Job {
         try Job(
+            id: testWorkTypeID,
             currencyCode: "EUR",
             timeZoneIdentifier: timeZoneIdentifier,
             basePayBasis: .hourly,

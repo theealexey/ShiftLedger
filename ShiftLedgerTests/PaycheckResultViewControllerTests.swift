@@ -611,6 +611,7 @@ struct PaycheckResultViewControllerTests {
         let start = try date(day: 20, hour: 8)
         let shift = try Shift(
             id: try uuid(20),
+            workTypeID: testWorkTypeID,
             start: start,
             end: start.addingTimeInterval(8 * 3_600),
             unpaidBreak: UnpaidBreak(
@@ -630,6 +631,7 @@ struct PaycheckResultViewControllerTests {
     private func realDomainComparison() throws -> PaycheckComparison {
         let rate = try PayRate(amount: 20, effectiveFrom: nil)
         let job = try Job(
+            id: testWorkTypeID,
             currencyCode: "EUR",
             timeZoneIdentifier: "Europe/Stockholm",
             basePayBasis: .hourly,
@@ -650,6 +652,7 @@ struct PaycheckResultViewControllerTests {
         let start = try date(day: day, hour: hour)
         return try Shift(
             id: try uuid(day),
+            workTypeID: testWorkTypeID,
             start: start,
             end: start.addingTimeInterval(duration)
         )

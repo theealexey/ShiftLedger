@@ -721,6 +721,7 @@ struct OverviewViewModelTests {
         rate: Decimal = 20
     ) throws -> Job {
         try Job(
+            id: testWorkTypeID,
             currencyCode: "EUR",
             timeZoneIdentifier: timeZoneIdentifier,
             basePayBasis: .hourly,
@@ -741,6 +742,7 @@ struct OverviewViewModelTests {
         let start = try date(year: year, month: month, day: day, hour: hour)
         return try Shift(
             id: UUID(uuid: (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, id)),
+            workTypeID: testWorkTypeID,
             start: start,
             end: start.addingTimeInterval(durationHours * self.hour)
         )

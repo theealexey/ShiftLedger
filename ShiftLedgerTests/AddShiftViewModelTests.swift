@@ -19,7 +19,11 @@ struct AddShiftViewModelTests {
     @Test("Сброс возвращает draft к начальному состоянию")
     func resetRestoresInitialState() {
         let timeZoneIdentifier = "Europe/Stockholm"
-        let viewModel = AddShiftViewModel(timeZoneIdentifier: timeZoneIdentifier, saveShift: { _ in .success(()) })
+        let viewModel = AddShiftViewModel(
+            timeZoneIdentifier: timeZoneIdentifier,
+            workTypeID: testWorkTypeID,
+            saveShift: { _ in .success(()) }
+        )
         viewModel.setStart(start)
         viewModel.setEnd(end)
         viewModel.setUnpaidBreakEnabled(true)
@@ -72,6 +76,7 @@ struct AddShiftViewModelTests {
         viewModel.setEnd(end)
         #expect(viewModel.canSave)
         let shift = try viewModel.makeShift(id: knownID)
+        #expect(shift.workTypeID == testWorkTypeID)
         #expect(shift.start == start)
         #expect(shift.end == end)
     }
@@ -178,7 +183,12 @@ struct AddShiftViewModelTests {
         })
         viewModel.setStart(start)
         viewModel.setEnd(end)
-        let expectedShift = try Shift(id: knownID, start: start, end: end)
+        let expectedShift = try Shift(
+            id: knownID,
+            workTypeID: testWorkTypeID,
+            start: start,
+            end: end
+        )
         #expect(viewModel.save() == .saved(expectedShift))
         #expect(calls == 1)
     }
@@ -188,11 +198,16 @@ struct AddShiftViewModelTests {
         var viewModel: AddShiftViewModel?
         var saveCalls = 0
         let result = Result<Void, AddShiftSaveFailure>.success(())
-        viewModel = AddShiftViewModel(timeZoneIdentifier: "Europe/Stockholm", saveShift: { _ in
+        viewModel = AddShiftViewModel(
+            timeZoneIdentifier: "Europe/Stockholm",
+            workTypeID: testWorkTypeID,
+            saveShift: { _ in
             saveCalls += 1
             #expect(viewModel?.save() == .ignored)
             return result
-        }, makeID: { knownID })
+            },
+            makeID: { knownID }
+        )
         guard let viewModel else { return }
         viewModel.setStart(start)
         viewModel.setEnd(end)
@@ -255,6 +270,23 @@ struct AddShiftViewModelTests {
         #expect(instant == Date(timeIntervalSince1970: 1_788_048_000))
     }
 
+    @Test("Отсутствующее назначение WorkType блокирует сохранение")
+    func missingWorkTypeAssignmentIsRejected() {
+        let viewModel = AddShiftViewModel(
+            timeZoneIdentifier: "Europe/Stockholm",
+            workTypeID: nil,
+            initialStart: start,
+            initialEnd: end,
+            saveShift: { _ in .success(()) }
+        )
+
+        #expect(viewModel.canSave == false)
+        #expect(throws: AddShiftValidationError.missingWorkTypeAssignment) {
+            try viewModel.makeShift(id: knownID)
+        }
+        #expect(viewModel.save() == .invalid)
+    }
+
     private var knownID: UUID {
         UUID(uuidString: "50000000-0000-0000-0000-000000000001") ?? UUID()
     }
@@ -263,7 +295,12 @@ struct AddShiftViewModelTests {
         saveShift: @escaping (Shift) -> Result<Void, AddShiftSaveFailure> = { _ in .success(()) },
         makeID: @escaping () -> UUID = { UUID(uuidString: "50000000-0000-0000-0000-000000000001") ?? UUID() }
     ) -> AddShiftViewModel {
-        AddShiftViewModel(timeZoneIdentifier: "Europe/Stockholm", saveShift: saveShift, makeID: makeID)
+        AddShiftViewModel(
+            timeZoneIdentifier: "Europe/Stockholm",
+            workTypeID: testWorkTypeID,
+            saveShift: saveShift,
+            makeID: makeID
+        )
     }
 }
 

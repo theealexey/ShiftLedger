@@ -629,6 +629,7 @@ struct AppCoordinatorTests {
         let start = try #require(calendar.date(from: DateComponents(year: 2026, month: 9, day: day, hour: 8)))
         return try Shift(
             id: try #require(UUID(uuidString: String(format: "B0000000-0000-0000-0000-%012d", day))),
+            workTypeID: testWorkTypeID,
             start: start,
             end: start.addingTimeInterval(8 * 3_600)
         )
@@ -684,7 +685,7 @@ struct AppCoordinatorTests {
 
     private func makeValidJob(cycle: PayCalculationCycle = .perShift) throws -> Job {
         try Job(
-            id: try #require(UUID(uuidString: "A0000000-0000-0000-0000-000000000001")),
+            id: testWorkTypeID,
             currencyCode: "USD",
             timeZoneIdentifier: "Europe/Stockholm",
             basePayBasis: .hourly,

@@ -11,7 +11,7 @@ struct ExpectedGrossBreakdownTests {
         let job = try makeJob(payRates: [rate])
         let period = try septemberPeriod()
         let outsideStart = try date(month: 8, day: 31)
-        let outsideShift = try Shift(start: outsideStart, end: outsideStart.addingTimeInterval(hour))
+        let outsideShift = try Shift(workTypeID: testWorkTypeID, start: outsideStart, end: outsideStart.addingTimeInterval(hour))
 
         let result = try job.expectedGrossBreakdown(for: period, from: [outsideShift])
 
@@ -26,8 +26,8 @@ struct ExpectedGrossBreakdownTests {
         let job = try makeJob(payRates: [rate])
         let beforeStart = try date(month: 8, day: 31)
         let endBoundary = try date(month: 10, day: 1, hour: 0)
-        let before = try Shift(start: beforeStart, end: beforeStart.addingTimeInterval(hour))
-        let after = try Shift(start: endBoundary, end: endBoundary.addingTimeInterval(hour))
+        let before = try Shift(workTypeID: testWorkTypeID, start: beforeStart, end: beforeStart.addingTimeInterval(hour))
+        let after = try Shift(workTypeID: testWorkTypeID, start: endBoundary, end: endBoundary.addingTimeInterval(hour))
         let first = try makeShift(day: 10, hours: 8)
         let second = try makeShift(day: 20, hours: 4)
 
@@ -46,6 +46,7 @@ struct ExpectedGrossBreakdownTests {
         let job = try makeJob(payRates: [rate])
         let start = try date(day: 10)
         let shift = try Shift(
+            workTypeID: testWorkTypeID,
             start: start,
             end: start.addingTimeInterval(8 * hour),
             unpaidBreak: UnpaidBreak(
@@ -97,6 +98,7 @@ struct ExpectedGrossBreakdownTests {
         let job = try makeJob(basePayBasis: .fixedPerShift, payRates: [rate])
         let start = try date(day: 10)
         let shift = try Shift(
+            workTypeID: testWorkTypeID,
             start: start,
             end: start.addingTimeInterval(8 * hour),
             unpaidBreak: UnpaidBreak(
@@ -141,6 +143,7 @@ struct ExpectedGrossBreakdownTests {
         let rate = try PayRate(amount: 20, effectiveFrom: nil)
         let job = try makeJob(payRates: [rate])
         let shift = try Shift(
+            workTypeID: testWorkTypeID,
             start: date(month: 8, day: 31, hour: 23),
             end: date(day: 1, hour: 7)
         )
@@ -166,7 +169,7 @@ struct ExpectedGrossBreakdownTests {
         let stockholmJob = try makeJob(payRates: [rate])
         let newYorkJob = try makeJob(timeZoneIdentifier: "America/New_York", payRates: [rate])
         let start = try date(day: 1, hour: 0, minute: 30, timeZoneIdentifier: "UTC")
-        let shift = try Shift(start: start, end: start.addingTimeInterval(hour))
+        let shift = try Shift(workTypeID: testWorkTypeID, start: start, end: start.addingTimeInterval(hour))
         let period = try septemberPeriod()
 
         let stockholm = try stockholmJob.expectedGrossBreakdown(for: period, from: [shift])
@@ -205,13 +208,19 @@ struct ExpectedGrossBreakdownTests {
         let fifthID = try #require(UUID(uuidString: "40000000-0000-0000-0000-000000000005"))
         let start = try date(day: 10)
         let earliest = try Shift(
-            id: fifthID, start: start.addingTimeInterval(-hour), end: start.addingTimeInterval(12 * hour)
+            id: fifthID,
+            workTypeID: testWorkTypeID,
+            start: start.addingTimeInterval(-hour),
+            end: start.addingTimeInterval(12 * hour)
         )
-        let shorter = try Shift(id: fourthID, start: start, end: start.addingTimeInterval(hour))
-        let lowerID = try Shift(id: secondID, start: start, end: start.addingTimeInterval(2 * hour))
-        let higherID = try Shift(id: thirdID, start: start, end: start.addingTimeInterval(2 * hour))
+        let shorter = try Shift(id: fourthID, workTypeID: testWorkTypeID, start: start, end: start.addingTimeInterval(hour))
+        let lowerID = try Shift(id: secondID, workTypeID: testWorkTypeID, start: start, end: start.addingTimeInterval(2 * hour))
+        let higherID = try Shift(id: thirdID, workTypeID: testWorkTypeID, start: start, end: start.addingTimeInterval(2 * hour))
         let latest = try Shift(
-            id: firstID, start: start.addingTimeInterval(hour), end: start.addingTimeInterval(2 * hour)
+            id: firstID,
+            workTypeID: testWorkTypeID,
+            start: start.addingTimeInterval(hour),
+            end: start.addingTimeInterval(2 * hour)
         )
         let input = [latest, higherID, earliest, lowerID, shorter]
         let period = try septemberPeriod()
@@ -233,7 +242,7 @@ struct ExpectedGrossBreakdownTests {
         )
         let job = try makeJob(payRates: [initialRate, datedRate])
         let beforeStart = try date(month: 8, day: 31)
-        let outside = try Shift(start: beforeStart, end: beforeStart.addingTimeInterval(hour))
+        let outside = try Shift(workTypeID: testWorkTypeID, start: beforeStart, end: beforeStart.addingTimeInterval(hour))
         let first = try makeShift(day: 10, hours: 8)
         let second = try makeShift(day: 20, hours: 4)
         let input = [second, outside, first]
@@ -259,6 +268,7 @@ struct ExpectedGrossBreakdownTests {
         payRates: [PayRate]
     ) throws -> Job {
         try Job(
+            id: testWorkTypeID,
             currencyCode: "EUR",
             timeZoneIdentifier: timeZoneIdentifier,
             basePayBasis: basePayBasis,
@@ -270,7 +280,11 @@ struct ExpectedGrossBreakdownTests {
 
     private func makeShift(day: Int, hours: TimeInterval = 8) throws -> Shift {
         let start = try date(day: day)
-        return try Shift(start: start, end: start.addingTimeInterval(hours * hour))
+        return try Shift(
+            workTypeID: testWorkTypeID,
+            start: start,
+            end: start.addingTimeInterval(hours * hour)
+        )
     }
 
     private func septemberPeriod() throws -> PayCalculationPeriod {

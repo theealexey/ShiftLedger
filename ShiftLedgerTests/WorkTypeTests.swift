@@ -144,7 +144,11 @@ struct WorkTypeTests {
             amount: 20
         )
         let start = Date(timeIntervalSinceReferenceDate: 100_000)
-        let shift = try Shift(start: start, end: start.addingTimeInterval(8 * hour))
+        let shift = try Shift(
+            workTypeID: workType.id,
+            start: start,
+            end: start.addingTimeInterval(8 * hour)
+        )
 
         #expect(
             workType.basePay(
@@ -162,7 +166,11 @@ struct WorkTypeTests {
             amount: 180
         )
         let start = Date(timeIntervalSinceReferenceDate: 100_000)
-        let shift = try Shift(start: start, end: start.addingTimeInterval(8 * hour))
+        let shift = try Shift(
+            workTypeID: workType.id,
+            start: start,
+            end: start.addingTimeInterval(8 * hour)
+        )
 
         #expect(
             workType.basePay(

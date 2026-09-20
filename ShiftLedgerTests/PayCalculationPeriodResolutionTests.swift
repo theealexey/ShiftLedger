@@ -12,6 +12,7 @@ struct PayCalculationPeriodResolutionTests {
         let start = Date(timeIntervalSinceReferenceDate: 100_000)
         let shift = try Shift(
             id: shiftID,
+            workTypeID: testWorkTypeID,
             start: start,
             end: start.addingTimeInterval(hour)
         )
@@ -27,11 +28,13 @@ struct PayCalculationPeriodResolutionTests {
         let start = Date(timeIntervalSinceReferenceDate: 100_000)
         let firstShift = try Shift(
             id: firstID,
+            workTypeID: testWorkTypeID,
             start: start,
             end: start.addingTimeInterval(hour)
         )
         let secondShift = try Shift(
             id: secondID,
+            workTypeID: testWorkTypeID,
             start: start,
             end: start.addingTimeInterval(hour)
         )
@@ -52,7 +55,7 @@ struct PayCalculationPeriodResolutionTests {
         let start = try #require(
             date(year: 2026, month: 8, day: 5, hour: 8, in: stockholm)
         )
-        let shift = try Shift(start: start, end: start.addingTimeInterval(hour))
+        let shift = try Shift(workTypeID: testWorkTypeID, start: start, end: start.addingTimeInterval(hour))
         let expectedPeriod = PayPeriod(
             start: try LocalDate(year: 2026, month: 8, day: 3),
             endExclusive: try LocalDate(year: 2026, month: 8, day: 10)
@@ -71,7 +74,7 @@ struct PayCalculationPeriodResolutionTests {
         let start = try #require(
             date(year: 2026, month: 8, day: 12, hour: 8, in: stockholm)
         )
-        let shift = try Shift(start: start, end: start.addingTimeInterval(hour))
+        let shift = try Shift(workTypeID: testWorkTypeID, start: start, end: start.addingTimeInterval(hour))
         let expectedPeriod = PayPeriod(
             start: try LocalDate(year: 2026, month: 8, day: 3),
             endExclusive: try LocalDate(year: 2026, month: 8, day: 17)
@@ -89,7 +92,7 @@ struct PayCalculationPeriodResolutionTests {
         let start = try #require(
             date(year: 2026, month: 9, day: 15, hour: 8, in: stockholm)
         )
-        let shift = try Shift(start: start, end: start.addingTimeInterval(hour))
+        let shift = try Shift(workTypeID: testWorkTypeID, start: start, end: start.addingTimeInterval(hour))
         let expectedPeriod = PayPeriod(
             start: try LocalDate(year: 2026, month: 9, day: 1),
             endExclusive: try LocalDate(year: 2026, month: 10, day: 1)
@@ -112,7 +115,7 @@ struct PayCalculationPeriodResolutionTests {
         let start = try #require(
             date(year: 2026, month: 9, day: 1, hour: 0, minute: 30, in: utc)
         )
-        let shift = try Shift(start: start, end: start.addingTimeInterval(hour))
+        let shift = try Shift(workTypeID: testWorkTypeID, start: start, end: start.addingTimeInterval(hour))
         let septemberPeriod = PayPeriod(
             start: try LocalDate(year: 2026, month: 9, day: 1),
             endExclusive: try LocalDate(year: 2026, month: 10, day: 1)
@@ -144,7 +147,7 @@ struct PayCalculationPeriodResolutionTests {
         let end = try #require(
             date(year: 2026, month: 9, day: 1, hour: 7, in: stockholm)
         )
-        let shift = try Shift(start: start, end: end)
+        let shift = try Shift(workTypeID: testWorkTypeID, start: start, end: end)
         let augustPeriod = PayPeriod(
             start: try LocalDate(year: 2026, month: 8, day: 1),
             endExclusive: try LocalDate(year: 2026, month: 9, day: 1)
@@ -163,7 +166,7 @@ struct PayCalculationPeriodResolutionTests {
         let start = try #require(
             date(year: 2026, month: 8, day: 10, hour: 0, in: stockholm)
         )
-        let shift = try Shift(start: start, end: start.addingTimeInterval(hour))
+        let shift = try Shift(workTypeID: testWorkTypeID, start: start, end: start.addingTimeInterval(hour))
         let expectedPeriod = PayPeriod(
             start: try LocalDate(year: 2026, month: 8, day: 10),
             endExclusive: try LocalDate(year: 2026, month: 8, day: 17)

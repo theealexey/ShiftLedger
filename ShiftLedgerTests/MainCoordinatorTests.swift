@@ -151,6 +151,7 @@ struct MainCoordinatorTests {
                 AddShiftViewController(
                     viewModel: AddShiftViewModel(
                         timeZoneIdentifier: job.timeZoneIdentifier,
+                        workTypeID: job.soleWorkType?.id,
                         saveShift: { _ in .success(()) }
                     )
                 )
@@ -191,6 +192,7 @@ struct MainCoordinatorTests {
 
     private func makeJob(cycle: PayCalculationCycle = .scheduled(.calendarMonthly)) throws -> Job {
         try Job(
+            id: testWorkTypeID,
             currencyCode: "USD",
             timeZoneIdentifier: "Europe/Stockholm",
             basePayBasis: .hourly,
@@ -202,7 +204,11 @@ struct MainCoordinatorTests {
 
     private func makeShift() throws -> Shift {
         let start = Date(timeIntervalSinceReferenceDate: 800_000_000)
-        return try Shift(start: start, end: start.addingTimeInterval(3_600))
+        return try Shift(
+            workTypeID: testWorkTypeID,
+            start: start,
+            end: start.addingTimeInterval(3_600)
+        )
     }
 
     private func requireView<View: UIView>(
