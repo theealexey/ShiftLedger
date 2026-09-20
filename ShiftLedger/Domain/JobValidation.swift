@@ -3,7 +3,7 @@ import Foundation
 struct JobValidationContext {
     let currencyCode: String
     let timeZoneIdentifier: String
-    let payRates: [PayRate]
+    let workTypes: [WorkType]
 }
 
 class JobValidationHandler {
@@ -40,28 +40,20 @@ final class TimeZoneValidationHandler: JobValidationHandler {
     }
 }
 
-final class PayRatesValidationHandler: JobValidationHandler {
+final class WorkTypesValidationHandler: JobValidationHandler {
     override func validateCurrent(_ context: JobValidationContext) throws(JobValidationError) {
-        _ = try Self.makePayRateHistory(from: context.payRates)
+        try Self.validate(context.workTypes)
     }
 
-    static func makePayRateHistory(
-        from payRates: [PayRate]
-    ) throws(JobValidationError) -> PayRateHistory {
-        do {
-            return try PayRateHistory(payRates: payRates)
-        } catch {
-            switch error {
-            case .missingPayRates:
-                throw JobValidationError.missingPayRates
-            case .missingInitialPayRate:
-                throw JobValidationError.missingInitialPayRate
-            case .multipleInitialPayRates:
-                throw JobValidationError.multipleInitialPayRates
-            case .duplicatePayRateEffectiveFrom:
-                throw JobValidationError.duplicatePayRateEffectiveFrom
-            case .duplicatePayRateID:
-                throw JobValidationError.duplicatePayRateID
+    static func validate(_ workTypes: [WorkType]) throws(JobValidationError) {
+        guard workTypes.isEmpty == false else {
+            throw JobValidationError.missingWorkTypes
+        }
+
+        var workTypeIDs = Set<UUID>()
+        for workType in workTypes {
+            guard workTypeIDs.insert(workType.id).inserted else {
+                throw JobValidationError.duplicateWorkTypeID
             }
         }
     }
@@ -71,8 +63,8 @@ struct JobValidationChain {
     private let firstHandler: JobValidationHandler
 
     init() {
-        let payRatesHandler = PayRatesValidationHandler()
-        let timeZoneHandler = TimeZoneValidationHandler(next: payRatesHandler)
+        let workTypesHandler = WorkTypesValidationHandler()
+        let timeZoneHandler = TimeZoneValidationHandler(next: workTypesHandler)
         firstHandler = CurrencyValidationHandler(next: timeZoneHandler)
     }
 

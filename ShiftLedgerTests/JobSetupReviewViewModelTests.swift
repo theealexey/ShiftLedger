@@ -97,13 +97,14 @@ struct JobSetupReviewViewModelTests {
         let viewModel = makeViewModel(draft: draft)
         let createdAt = Date(timeIntervalSinceReferenceDate: 20)
         let job = try viewModel.makeJob(createdAt: createdAt)
+        let workType = try #require(job.soleWorkType)
 
-        #expect(job.basePayBasis == .hourly)
+        #expect(workType.basePayBasis == .hourly)
         #expect(job.currencyCode == "RUB")
         #expect(job.timeZoneIdentifier == "Europe/Stockholm")
-        #expect(job.payRates.count == 1)
-        #expect(job.payRates[0].amount == Decimal(500))
-        #expect(job.payRates[0].effectiveFrom == nil)
+        #expect(workType.payRates.count == 1)
+        #expect(workType.payRates[0].amount == Decimal(500))
+        #expect(workType.payRates[0].effectiveFrom == nil)
         #expect(job.payCalculationCycle == .scheduled(.biweekly(anchorDate: try #require(draft.payPeriodAnchorDate))))
         #expect(job.createdAt == createdAt)
     }
@@ -116,10 +117,11 @@ struct JobSetupReviewViewModelTests {
         draft.payCalculationCycleKind = .perShift
 
         let job = try makeViewModel(draft: draft).makeJob()
+        let workType = try #require(job.soleWorkType)
 
-        #expect(job.basePayBasis == .fixedPerShift)
-        #expect(job.payRates[0].amount == Decimal(4000))
-        #expect(job.payRates[0].effectiveFrom == nil)
+        #expect(workType.basePayBasis == .fixedPerShift)
+        #expect(workType.payRates[0].amount == Decimal(4000))
+        #expect(workType.payRates[0].effectiveFrom == nil)
         #expect(job.payCalculationCycle == .perShift)
     }
 

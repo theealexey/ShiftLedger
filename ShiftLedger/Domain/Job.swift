@@ -3,6 +3,8 @@ import Foundation
 enum JobValidationError: Error, Equatable {
     case invalidCurrencyCode
     case invalidTimeZoneIdentifier
+    case missingWorkTypes
+    case duplicateWorkTypeID
     case missingPayRates
     case missingInitialPayRate
     case multipleInitialPayRates
@@ -11,6 +13,7 @@ enum JobValidationError: Error, Equatable {
 }
 
 enum PayRateResolutionError: Error, Equatable {
+    case workTypeAssignmentRequired
     case invalidJobTimeZoneIdentifier
     case localDateConversionFailed(LocalDateConversionError)
     case missingInitialPayRate
@@ -27,19 +30,18 @@ struct Job: Equatable {
     let timeZoneIdentifier: String
     let payCalculationCycle: PayCalculationCycle
     let createdAt: Date
+    let workTypes: [WorkType]
 
-    private let workType: WorkType
-
-    var basePayBasis: BasePayBasis {
-        workType.basePayBasis
+    private struct ValidatedMetadata {
+        let currencyCode: String
+        let timeZoneIdentifier: String
     }
 
-    var workTypeID: UUID {
-        workType.id
-    }
-
-    var payRates: [PayRate] {
-        workType.payRates
+    var soleWorkType: WorkType? {
+        guard workTypes.count == 1 else {
+            return nil
+        }
+        return workTypes[0]
     }
 
     init(
@@ -51,32 +53,86 @@ struct Job: Equatable {
         payRates: [PayRate],
         createdAt: Date = Date()
     ) throws(JobValidationError) {
-        let normalizedCurrencyCode = currencyCode.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
-        let validationContext = JobValidationContext(
-            currencyCode: normalizedCurrencyCode,
-            timeZoneIdentifier: timeZoneIdentifier,
-            payRates: payRates
+        let metadata = try Self.validateMetadata(
+            currencyCode: currencyCode,
+            timeZoneIdentifier: timeZoneIdentifier
         )
-        try JobValidationChain().validate(validationContext)
-
-        self.id = id
-        self.currencyCode = validationContext.currencyCode
-        self.timeZoneIdentifier = timeZoneIdentifier
-        self.payCalculationCycle = payCalculationCycle
-        self.workType = WorkType(
+        let payRateHistory = try Self.makePayRateHistory(from: payRates)
+        let workType = WorkType(
             id: id,
             basePayBasis: basePayBasis,
-            payRateHistory: try PayRatesValidationHandler.makePayRateHistory(from: payRates)
+            payRateHistory: payRateHistory
         )
+
+        try Self.validateWorkTypes([workType])
+        self.init(
+            id: id,
+            metadata: metadata,
+            payCalculationCycle: payCalculationCycle,
+            workTypes: [workType],
+            createdAt: createdAt
+        )
+    }
+
+    init(
+        id: UUID = UUID(),
+        currencyCode: String,
+        timeZoneIdentifier: String,
+        payCalculationCycle: PayCalculationCycle,
+        workTypes: [WorkType],
+        createdAt: Date = Date()
+    ) throws(JobValidationError) {
+        let normalizedCurrencyCode = currencyCode
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .uppercased()
+        let context = JobValidationContext(
+            currencyCode: normalizedCurrencyCode,
+            timeZoneIdentifier: timeZoneIdentifier,
+            workTypes: workTypes
+        )
+        try JobValidationChain().validate(context)
+
+        self.init(
+            id: id,
+            metadata: ValidatedMetadata(
+                currencyCode: normalizedCurrencyCode,
+                timeZoneIdentifier: timeZoneIdentifier
+            ),
+            payCalculationCycle: payCalculationCycle,
+            workTypes: workTypes,
+            createdAt: createdAt
+        )
+    }
+
+    private init(
+        id: UUID,
+        metadata: ValidatedMetadata,
+        payCalculationCycle: PayCalculationCycle,
+        workTypes: [WorkType],
+        createdAt: Date
+    ) {
+        self.id = id
+        self.currencyCode = metadata.currencyCode
+        self.timeZoneIdentifier = metadata.timeZoneIdentifier
+        self.payCalculationCycle = payCalculationCycle
         self.createdAt = createdAt
+        self.workTypes = workTypes.sorted {
+            $0.id.uuidString < $1.id.uuidString
+        }
+    }
+
+    func workType(id: UUID) -> WorkType? {
+        workTypes.first { $0.id == id }
     }
 
     func applicablePayRate(for shift: Shift) throws(PayRateResolutionError) -> PayRate {
+        let workType = try compensationWorkType()
         let localStartDate = try localStartDate(for: shift)
         return workType.applicablePayRate(on: localStartDate)
     }
 
     func basePay(for shift: Shift) throws(PayRateResolutionError) -> Decimal {
+        let workType = try compensationWorkType()
         let localStartDate = try localStartDate(for: shift)
         return workType.basePay(for: shift, on: localStartDate)
     }
@@ -181,16 +237,73 @@ struct Job: Equatable {
     }
 
     private func shiftPayBreakdown(for shift: Shift) throws(PayRateResolutionError) -> ShiftPayBreakdown {
-        let payRate = try applicablePayRate(for: shift)
+        let workType = try compensationWorkType()
+        let localStartDate = try localStartDate(for: shift)
+        let payRate = workType.applicablePayRate(on: localStartDate)
         let amount = workType.basePay(for: shift, using: payRate)
 
         return ShiftPayBreakdown(
             shift: shift,
-            basePayBasis: basePayBasis,
+            basePayBasis: workType.basePayBasis,
             appliedPayRate: payRate,
             paidDuration: shift.paidDuration,
             basePay: amount
         )
+    }
+
+    private func compensationWorkType() throws(PayRateResolutionError) -> WorkType {
+        guard let soleWorkType else {
+            throw PayRateResolutionError.workTypeAssignmentRequired
+        }
+        return soleWorkType
+    }
+
+    private static func validateMetadata(
+        currencyCode: String,
+        timeZoneIdentifier: String
+    ) throws(JobValidationError) -> ValidatedMetadata {
+        let normalizedCurrencyCode = currencyCode
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .uppercased()
+        let context = JobValidationContext(
+            currencyCode: normalizedCurrencyCode,
+            timeZoneIdentifier: timeZoneIdentifier,
+            workTypes: []
+        )
+        let timeZoneHandler = TimeZoneValidationHandler()
+        try CurrencyValidationHandler(next: timeZoneHandler).validate(context)
+
+        return ValidatedMetadata(
+            currencyCode: normalizedCurrencyCode,
+            timeZoneIdentifier: timeZoneIdentifier
+        )
+    }
+
+    private static func validateWorkTypes(
+        _ workTypes: [WorkType]
+    ) throws(JobValidationError) {
+        try WorkTypesValidationHandler.validate(workTypes)
+    }
+
+    private static func makePayRateHistory(
+        from payRates: [PayRate]
+    ) throws(JobValidationError) -> PayRateHistory {
+        do {
+            return try PayRateHistory(payRates: payRates)
+        } catch {
+            switch error {
+            case .missingPayRates:
+                throw JobValidationError.missingPayRates
+            case .missingInitialPayRate:
+                throw JobValidationError.missingInitialPayRate
+            case .multipleInitialPayRates:
+                throw JobValidationError.multipleInitialPayRates
+            case .duplicatePayRateEffectiveFrom:
+                throw JobValidationError.duplicatePayRateEffectiveFrom
+            case .duplicatePayRateID:
+                throw JobValidationError.duplicatePayRateID
+            }
+        }
     }
 
     private func localStartDate(for shift: Shift) throws(PayRateResolutionError) -> LocalDate {

@@ -29,7 +29,7 @@ struct JobStorageTests {
             NSFetchRequest<WorkTypeEntity>(entityName: "WorkTypeEntity")
         )
         #expect(savedWorkTypes.count == 1)
-        #expect(savedWorkTypes.first?.id == job.workTypeID)
+        #expect(savedWorkTypes.first?.id == job.soleWorkType?.id)
         #expect(savedWorkTypes.first?.basePayKind == "fixedPerShift")
 
         try close(stackA)
@@ -39,11 +39,54 @@ struct JobStorageTests {
         let restoredJob = try #require(try JobStorage(stack: stackB).load())
 
         #expect(restoredJob == job)
-        #expect(restoredJob.basePayBasis == .fixedPerShift)
+        #expect(restoredJob.soleWorkType?.basePayBasis == .fixedPerShift)
         #expect(
             try stackB.viewContext.fetch(
                 NSFetchRequest<WorkTypeEntity>(entityName: "WorkTypeEntity")
             ).count == 1
+        )
+    }
+
+    @Test("JobStorage явно отклоняет multi-WorkType Domain Job")
+    func rejectsMultiWorkTypeSave() async throws {
+        let storeURL = try makeTemporaryStoreURL()
+        var stacks: [CoreDataStack] = []
+        defer { removeTemporaryStoreDirectory(for: storeURL, stacks: stacks) }
+
+        let first = WorkType(
+            id: try #require(UUID(uuidString: "01000000-0000-0000-0000-000000000001")),
+            basePayBasis: .hourly,
+            payRateHistory: try PayRateHistory(
+                payRates: [try PayRate(amount: 100, effectiveFrom: nil)]
+            )
+        )
+        let second = WorkType(
+            id: try #require(UUID(uuidString: "02000000-0000-0000-0000-000000000002")),
+            basePayBasis: .fixedPerShift,
+            payRateHistory: try PayRateHistory(
+                payRates: [try PayRate(amount: 500, effectiveFrom: nil)]
+            )
+        )
+        let job = try Job(
+            currencyCode: "EUR",
+            timeZoneIdentifier: "Europe/Stockholm",
+            payCalculationCycle: .perShift,
+            workTypes: [first, second]
+        )
+        let stack = try await CoreDataStack.load(storeURL: storeURL)
+        stacks.append(stack)
+
+        do {
+            try JobStorage(stack: stack).save(job)
+            Issue.record("Multi-WorkType Job была сохранена single-WorkType storage")
+        } catch JobStorageError.multipleWorkTypesNotSupported {
+        } catch {
+            Issue.record("Multi-WorkType Job вернула неверную ошибку")
+        }
+        #expect(
+            try stack.viewContext.fetch(
+                NSFetchRequest<JobEntity>(entityName: "JobEntity")
+            ).isEmpty
         )
     }
 
@@ -219,7 +262,7 @@ struct JobStorageTests {
 
         let restoredJob = try #require(try JobStorage(stack: stack).load())
 
-        #expect(restoredJob.basePayBasis == .fixedPerShift)
+        #expect(restoredJob.soleWorkType?.basePayBasis == .fixedPerShift)
     }
 
     @Test("Job сохраняется в SQLite и восстанавливается новым Core Data stack")
@@ -297,14 +340,14 @@ struct JobStorageTests {
 
         #expect(persistedJobs.count == 1)
         #expect(persistedWorkTypes.count == 1)
-        #expect(persistedWorkType.id == job.workTypeID)
+        #expect(persistedWorkType.id == job.soleWorkType?.id)
         #expect(persistedWorkType.id == persistedJob.id)
         #expect(persistedWorkType.basePayKind == "hourly")
         #expect(persistedWorkType.job.objectID == persistedJob.objectID)
         #expect(persistedJob.basePayKind == "hourly")
         #expect(
             Set(persistedWorkType.payRates?.compactMap { ($0 as? PayRateEntity)?.id } ?? [])
-                == Set(job.payRates.map(\.id))
+                == Set(job.soleWorkType?.payRates.map(\.id) ?? [])
         )
         #expect(
             persistedPayRates.allSatisfy {
@@ -335,8 +378,8 @@ struct JobStorageTests {
         #expect(restoredJob.timeZoneIdentifier == "Europe/Stockholm")
         #expect(restoredJob.payCalculationCycle == .scheduled(.weekly(anchorDate: anchorDate)))
         #expect(restoredJob.createdAt == createdAt)
-        #expect(restoredJob.payRates.count == 3)
-        #expect(restoredJob.payRates == [initialPayRate, earlierPayRate, laterPayRate])
+        #expect(restoredJob.soleWorkType?.payRates.count == 3)
+        #expect(restoredJob.soleWorkType?.payRates == [initialPayRate, earlierPayRate, laterPayRate])
         #expect(
             try stackB.viewContext.fetch(
                 NSFetchRequest<WorkTypeEntity>(entityName: "WorkTypeEntity")

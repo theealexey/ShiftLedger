@@ -41,12 +41,13 @@ struct WorkTypeTests {
         #expect(first != second)
     }
 
-    @Test("Job uses its explicit identity for the current WorkType")
-    func jobProjectsExplicitWorkTypeIdentity() throws {
+    @Test("Legacy Job initializer uses Job identity for its sole WorkType")
+    func legacyJobUsesExplicitIdentityForSoleWorkType() throws {
         let job = try makeJob(id: jobID)
+        let workType = try #require(job.soleWorkType)
 
-        #expect(job.workTypeID == jobID)
-        #expect(job.workTypeID == job.id)
+        #expect(workType.id == jobID)
+        #expect(workType.id == job.id)
     }
 
     @Test("Job default initializer keeps WorkType identity aligned")
@@ -66,7 +67,7 @@ struct WorkTypeTests {
             createdAt: Date(timeIntervalSinceReferenceDate: 0)
         )
 
-        #expect(job.workTypeID == job.id)
+        #expect(job.soleWorkType?.id == job.id)
     }
 
     @Test("WorkType exposes the supplied compensation basis")

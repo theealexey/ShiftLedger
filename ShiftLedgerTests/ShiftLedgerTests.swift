@@ -250,7 +250,7 @@ struct ShiftLedgerTests {
 
         let job = try makeJob(payRates: [datedRate, initialRate])
 
-        #expect(job.payRates == [initialRate, datedRate])
+        #expect(job.soleWorkType?.payRates == [initialRate, datedRate])
     }
 
     @Test("Работа без initial ставки отклоняется")
@@ -317,7 +317,7 @@ struct ShiftLedgerTests {
 
         let job = try makeJob(payRates: [firstPayRate, secondPayRate])
 
-        #expect(job.payRates == [firstPayRate, secondPayRate])
+        #expect(job.soleWorkType?.payRates == [firstPayRate, secondPayRate])
     }
 
     @Test("Две ставки с одинаковой датой начала действия отклоняются")
@@ -388,7 +388,7 @@ struct ShiftLedgerTests {
 
         let job = try makeJob(payRates: [laterRate, initialRate, earlierRate])
 
-        #expect(job.payRates == [initialRate, earlierRate, laterRate])
+        #expect(job.soleWorkType?.payRates == [initialRate, earlierRate, laterRate])
     }
 
     @Test("Положительная ставка принимается")

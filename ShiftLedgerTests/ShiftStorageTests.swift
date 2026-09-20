@@ -29,7 +29,7 @@ struct ShiftStorageTests {
         #expect(persistedJobs.count == 1)
         #expect(persistedWorkTypes.count == 1)
         #expect(persistedShifts.count == 1)
-        #expect(persistedWorkType.id == job.workTypeID)
+        #expect(persistedWorkType.id == job.soleWorkType?.id)
         #expect(persistedWorkType.id == persistedJob.id)
         #expect(persistedShift.workType?.objectID == persistedWorkType.objectID)
         #expect(persistedWorkType.shifts?.contains(persistedShift) == true)

@@ -295,12 +295,13 @@ struct LegacyWorkTypeBackfillTests {
         expectedBasis: BasePayBasis
     ) throws {
         let job = try #require(try JobStorage(stack: stack).load())
+        let workType = try #require(job.soleWorkType)
         let shifts = try ShiftStorage(stack: stack).loadAll()
 
         #expect(job.id == fixture.identifiers.job)
-        #expect(job.workTypeID == job.id)
-        #expect(job.basePayBasis == expectedBasis)
-        #expect(Set(job.payRates.map(\.id)) == [
+        #expect(workType.id == job.id)
+        #expect(workType.basePayBasis == expectedBasis)
+        #expect(Set(workType.payRates.map(\.id)) == [
             fixture.identifiers.initialPayRate,
             fixture.identifiers.earlierPayRate,
             fixture.identifiers.laterPayRate

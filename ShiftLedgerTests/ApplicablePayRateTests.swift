@@ -147,7 +147,7 @@ struct ApplicablePayRateTests {
         let start = try #require(date(year: 2026, month: 10, day: 15, hour: 8, in: stockholm))
         let shift = try Shift(start: start, end: start.addingTimeInterval(8 * hour))
 
-        #expect(job.payRates == [initialRate, septemberRate, octoberRate])
+        #expect(job.soleWorkType?.payRates == [initialRate, septemberRate, octoberRate])
         #expect(try job.applicablePayRate(for: shift) == octoberRate)
     }
 

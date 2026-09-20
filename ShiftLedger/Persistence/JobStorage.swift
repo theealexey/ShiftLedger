@@ -32,6 +32,7 @@ enum JobStorageError: Error {
     }
 
     case jobAlreadyExists
+    case multipleWorkTypesNotSupported
     case multipleJobsFound
     case fetchFailed(underlying: Error)
     case saveFailed(underlying: Error)
@@ -69,9 +70,13 @@ final class JobStorage {
             throw JobStorageError.multipleJobsFound
         }
 
+        guard let workType = job.soleWorkType else {
+            throw JobStorageError.multipleWorkTypesNotSupported
+        }
+
         let timeZone = try makeTimeZone(from: job.timeZoneIdentifier)
         let storedPayPeriod = try encodePayCalculationCycle(job.payCalculationCycle, timeZone: timeZone)
-        let storedPayRates = try job.payRates.map { payRate in
+        let storedPayRates = try workType.payRates.map { payRate in
             (
                 payRate: payRate,
                 effectiveFrom: try payRate.effectiveFrom.map { try $0.startOfDay(in: timeZone) }
@@ -103,7 +108,7 @@ final class JobStorage {
             )
         }
 
-        let storedBasePayKind = encodeBasePayBasis(job.basePayBasis)
+        let storedBasePayKind = encodeBasePayBasis(workType.basePayBasis)
 
         let jobEntity = JobEntity(entity: jobEntityDescription, insertInto: context)
         jobEntity.id = job.id
@@ -118,7 +123,7 @@ final class JobStorage {
             entity: workTypeEntityDescription,
             insertInto: context
         )
-        workTypeEntity.id = job.workTypeID
+        workTypeEntity.id = workType.id
         workTypeEntity.basePayKind = storedBasePayKind.rawValue
         workTypeEntity.job = jobEntity
 
