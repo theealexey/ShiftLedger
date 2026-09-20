@@ -132,24 +132,78 @@ struct LegacyWorkTypeBackfillTests {
             ],
             into: store.stack.viewContext
         )
-        let workType = try insertWorkType(
+        let defaultWorkType = try insertWorkType(
             id: jobID,
             basePayKind: "hourly",
             job: graph.job,
             into: store.stack.viewContext
         )
-        graph.payRates[0].workType = workType
+        let alternateWorkType = try insertWorkType(
+            id: try uuid("41000000-0000-0000-0000-000000000002"),
+            basePayKind: "fixedPerShift",
+            job: graph.job,
+            into: store.stack.viewContext
+        )
+        graph.payRates[0].workType = alternateWorkType
         try store.stack.viewContext.save()
 
         try LegacyWorkTypeBackfill.run(in: store.stack.viewContext)
 
         let workTypes = try fetchWorkTypes(in: store.stack.viewContext)
-        #expect(workTypes.count == 1)
-        #expect(workTypes[0].objectID == workType.objectID)
-        #expect(graph.payRates.allSatisfy { $0.workType?.objectID == workType.objectID })
+        #expect(workTypes.count == 2)
+        #expect(graph.payRates[0].workType?.objectID == alternateWorkType.objectID)
+        #expect(graph.payRates[1].workType?.objectID == defaultWorkType.objectID)
 
         try LegacyWorkTypeBackfill.run(in: store.stack.viewContext)
-        #expect(try fetchWorkTypes(in: store.stack.viewContext).count == 1)
+        #expect(try fetchWorkTypes(in: store.stack.viewContext).count == 2)
+        #expect(graph.payRates[0].workType?.objectID == alternateWorkType.objectID)
+        #expect(graph.payRates[1].workType?.objectID == defaultWorkType.objectID)
+        #expect(store.stack.viewContext.hasChanges == false)
+    }
+
+    @Test("Canonical multi-WorkType graph остаётся полным no-op")
+    @MainActor
+    func preservesFullyCanonicalMultiWorkTypeGraph() async throws {
+        let store = try await makeEmptyStore()
+        defer { removeStore(store) }
+
+        let jobID = try uuid("43000000-0000-0000-0000-000000000001")
+        let graph = try insertJob(
+            id: jobID,
+            basePayKind: "obsoleteCanonicalMetadata",
+            rateIDs: [
+                try uuid("43000000-0000-0000-0000-000000000011"),
+                try uuid("43000000-0000-0000-0000-000000000012")
+            ],
+            into: store.stack.viewContext
+        )
+        let firstWorkType = try insertWorkType(
+            id: try uuid("43000000-0000-0000-0000-000000000021"),
+            basePayKind: "hourly",
+            job: graph.job,
+            into: store.stack.viewContext
+        )
+        let secondWorkType = try insertWorkType(
+            id: try uuid("43000000-0000-0000-0000-000000000022"),
+            basePayKind: "fixedPerShift",
+            job: graph.job,
+            into: store.stack.viewContext
+        )
+        graph.payRates[0].workType = firstWorkType
+        graph.payRates[1].workType = secondWorkType
+        try store.stack.viewContext.save()
+
+        try LegacyWorkTypeBackfill.run(in: store.stack.viewContext)
+
+        let workTypes = try fetchWorkTypes(in: store.stack.viewContext)
+        #expect(workTypes.count == 2)
+        #expect(workTypes.allSatisfy { $0.id != jobID })
+        #expect(graph.job.basePayKind == "obsoleteCanonicalMetadata")
+        #expect(graph.payRates[0].workType?.objectID == firstWorkType.objectID)
+        #expect(graph.payRates[1].workType?.objectID == secondWorkType.objectID)
+        #expect(store.stack.viewContext.hasChanges == false)
+
+        try LegacyWorkTypeBackfill.run(in: store.stack.viewContext)
         #expect(store.stack.viewContext.hasChanges == false)
     }
 
@@ -188,6 +242,65 @@ struct LegacyWorkTypeBackfillTests {
         #expect(second.payRates.allSatisfy { $0.workType?.objectID == secondWorkType.objectID })
         #expect(first.payRates.allSatisfy { $0.workType?.objectID != secondWorkType.objectID })
         #expect(second.payRates.allSatisfy { $0.workType?.objectID != firstWorkType.objectID })
+    }
+
+    @Test("Cross-Job PayRate WorkType отклоняется с rollback")
+    @MainActor
+    func rejectsCrossJobPayRateWorkTypeAndRollsBack() async throws {
+        let store = try await makeEmptyStore()
+        defer { removeStore(store) }
+
+        let earlier = try insertJob(
+            id: try uuid("57000000-0000-0000-0000-000000000001"),
+            basePayKind: "hourly",
+            rateIDs: [try uuid("57000000-0000-0000-0000-000000000011")],
+            into: store.stack.viewContext
+        )
+        let expectedJob = try insertJob(
+            id: try uuid("57000000-0000-0000-0000-000000000002"),
+            basePayKind: "hourly",
+            rateIDs: [try uuid("57000000-0000-0000-0000-000000000012")],
+            into: store.stack.viewContext
+        )
+        let actualJob = try insertJob(
+            id: try uuid("57000000-0000-0000-0000-000000000003"),
+            basePayKind: "hourly",
+            rateIDs: [try uuid("57000000-0000-0000-0000-000000000013")],
+            into: store.stack.viewContext
+        )
+        let crossJobWorkType = try insertWorkType(
+            id: try uuid("57000000-0000-0000-0000-000000000021"),
+            basePayKind: "hourly",
+            job: actualJob.job,
+            into: store.stack.viewContext
+        )
+        expectedJob.payRates[0].workType = crossJobWorkType
+        try store.stack.viewContext.save()
+
+        do {
+            try LegacyWorkTypeBackfill.run(in: store.stack.viewContext)
+            Issue.record("Cross-Job PayRate WorkType был принят")
+        } catch let LegacyWorkTypeBackfillError.invariantViolation(
+            .payRateWorkTypeBelongsToDifferentJob(
+                payRateID,
+                workTypeID,
+                expectedJobID,
+                actualJobID
+            )
+        ) {
+            #expect(payRateID == expectedJob.payRates[0].id)
+            #expect(workTypeID == crossJobWorkType.id)
+            #expect(expectedJobID == expectedJob.job.id)
+            #expect(actualJobID == actualJob.job.id)
+        } catch {
+            Issue.record("Backfill вернул неверную typed error: \(error)")
+        }
+
+        #expect(earlier.job.workTypes?.count == 0)
+        #expect(earlier.payRates[0].workType == nil)
+        #expect(expectedJob.payRates[0].workType?.objectID == crossJobWorkType.objectID)
+        #expect(try fetchWorkTypes(in: store.stack.viewContext).count == 1)
+        #expect(FileManager.default.fileExists(atPath: store.storeURL.path))
     }
 
     @Test("Conflict откатывает все несохранённые backfill-изменения")

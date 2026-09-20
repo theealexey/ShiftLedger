@@ -234,17 +234,17 @@ struct LegacyShiftWorkTypeBackfillTests {
             try LegacyShiftWorkTypeBackfill.run(in: store.container.viewContext)
             Issue.record("Conflicting Shift WorkType был принят")
         } catch let LegacyShiftWorkTypeBackfillError.invariantViolation(
-            .shiftAssignedToDifferentWorkType(
+            .shiftWorkTypeBelongsToDifferentJob(
                 shiftID,
-                jobID,
-                expectedWorkTypeID,
-                actualWorkTypeID
+                workTypeID,
+                expectedJobID,
+                actualJobID
             )
         ) {
             #expect(shiftID == conflictingShiftID)
-            #expect(jobID == first.job.id)
-            #expect(expectedWorkTypeID == first.workType.id)
-            #expect(actualWorkTypeID == second.workType.id)
+            #expect(workTypeID == second.workType.id)
+            #expect(expectedJobID == first.job.id)
+            #expect(actualJobID == second.job.id)
         } catch {
             Issue.record("Backfill вернул неверную typed error: \(error)")
         }
@@ -275,6 +275,11 @@ struct LegacyShiftWorkTypeBackfillTests {
 
         let jobID = try uuid("71000000-0000-0000-0000-000000000001")
         let graph = try insertLegacyJob(id: jobID, into: store.container.viewContext)
+        let alternate = try insertWorkType(
+            id: try uuid("72000000-0000-0000-0000-000000000001"),
+            job: graph.job,
+            into: store.container.viewContext
+        )
         let shiftID = try uuid("73000000-0000-0000-0000-000000000001")
         let shift = try insertShift(
             id: shiftID,
@@ -298,12 +303,13 @@ struct LegacyShiftWorkTypeBackfillTests {
         }
 
         #expect(shift.workType == nil)
-        #expect(try fetchWorkTypes(in: store.container.viewContext).isEmpty)
+        #expect(try fetchWorkTypes(in: store.container.viewContext).count == 1)
+        #expect(alternate.job.objectID == graph.job.objectID)
     }
 
-    @Test("Shift с другим WorkType отклоняется и не перемещается")
+    @Test("Shift с alternate WorkType того же Job остаётся неизменным")
     @MainActor
-    func rejectsWrongExistingWorkType() async throws {
+    func preservesSameJobAlternateWorkType() async throws {
         let store = try await makeExplicitV3Store()
         defer { removeStore(store) }
 
@@ -326,26 +332,62 @@ struct LegacyShiftWorkTypeBackfillTests {
         )
         try store.container.viewContext.save()
 
-        do {
-            try LegacyShiftWorkTypeBackfill.run(in: store.container.viewContext)
-            Issue.record("Wrong WorkType был автоматически заменён")
-        } catch let LegacyShiftWorkTypeBackfillError.invariantViolation(
-            .shiftAssignedToDifferentWorkType(
-                actualShiftID,
-                actualJobID,
-                expectedWorkTypeID,
-                actualWorkTypeID
-            )
-        ) {
-            #expect(actualShiftID == shiftID)
-            #expect(actualJobID == graph.job.id)
-            #expect(expectedWorkTypeID == graph.workType.id)
-            #expect(actualWorkTypeID == alternate.id)
-        } catch {
-            Issue.record("Backfill вернул неверную typed error: \(error)")
-        }
+        try LegacyShiftWorkTypeBackfill.run(in: store.container.viewContext)
 
+        #expect(shift.id == shiftID)
         #expect(shift.workType?.objectID == alternate.objectID)
+        #expect(store.container.viewContext.hasChanges == false)
+
+        try LegacyShiftWorkTypeBackfill.run(in: store.container.viewContext)
+        #expect(shift.workType?.objectID == alternate.objectID)
+        #expect(store.container.viewContext.hasChanges == false)
+    }
+
+    @Test("Canonical multi-WorkType Shift graph без default является no-op")
+    @MainActor
+    func preservesCanonicalMultiWorkTypeGraphWithoutDefault() async throws {
+        let store = try await makeExplicitV3Store()
+        defer { removeStore(store) }
+
+        let jobID = try uuid("84000000-0000-0000-0000-000000000001")
+        let graph = try insertLegacyJob(id: jobID, into: store.container.viewContext)
+        let firstWorkType = try insertWorkType(
+            id: try uuid("84000000-0000-0000-0000-000000000011"),
+            job: graph.job,
+            into: store.container.viewContext
+        )
+        let secondWorkType = try insertWorkType(
+            id: try uuid("84000000-0000-0000-0000-000000000012"),
+            job: graph.job,
+            into: store.container.viewContext
+        )
+        let firstShift = try insertShift(
+            id: try uuid("84000000-0000-0000-0000-000000000021"),
+            job: graph.job,
+            workType: firstWorkType,
+            startOffset: 900,
+            into: store.container.viewContext
+        )
+        let secondShift = try insertShift(
+            id: try uuid("84000000-0000-0000-0000-000000000022"),
+            job: graph.job,
+            workType: secondWorkType,
+            startOffset: 1_000,
+            into: store.container.viewContext
+        )
+        try store.container.viewContext.save()
+
+        try LegacyShiftWorkTypeBackfill.run(in: store.container.viewContext)
+
+        let workTypes = try fetchWorkTypes(in: store.container.viewContext)
+        #expect(workTypes.count == 2)
+        #expect(workTypes.allSatisfy { $0.id != jobID })
+        #expect(firstShift.workType?.objectID == firstWorkType.objectID)
+        #expect(secondShift.workType?.objectID == secondWorkType.objectID)
+        #expect(store.container.viewContext.hasChanges == false)
+
+        try LegacyShiftWorkTypeBackfill.run(in: store.container.viewContext)
+        #expect(store.container.viewContext.hasChanges == false)
     }
 
     @MainActor

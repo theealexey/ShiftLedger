@@ -8,11 +8,11 @@ enum LegacyShiftWorkTypeBackfillError: Error {
         case missingDefaultWorkType(shiftID: UUID, jobID: UUID)
         case duplicateDefaultWorkTypeIdentity(jobID: UUID)
         case defaultWorkTypeBelongsToDifferentJob(jobID: UUID, actualJobID: UUID)
-        case shiftAssignedToDifferentWorkType(
+        case shiftWorkTypeBelongsToDifferentJob(
             shiftID: UUID,
-            jobID: UUID,
-            expectedWorkTypeID: UUID,
-            actualWorkTypeID: UUID
+            workTypeID: UUID,
+            expectedJobID: UUID,
+            actualJobID: UUID
         )
     }
 
@@ -68,6 +68,20 @@ enum LegacyShiftWorkTypeBackfill {
                 throw .invariantViolation(.missingJobRelationship(shiftID: shift.id))
             }
 
+            if let existingWorkType = shift.workType {
+                guard existingWorkType.job.objectID == job.objectID else {
+                    throw .invariantViolation(
+                        .shiftWorkTypeBelongsToDifferentJob(
+                            shiftID: shift.id,
+                            workTypeID: existingWorkType.id,
+                            expectedJobID: job.id,
+                            actualJobID: existingWorkType.job.id
+                        )
+                    )
+                }
+                continue
+            }
+
             let matchingWorkTypes = workTypesByID[job.id, default: []]
             guard !matchingWorkTypes.isEmpty else {
                 throw .invariantViolation(
@@ -90,20 +104,7 @@ enum LegacyShiftWorkTypeBackfill {
                 )
             }
 
-            if let existingWorkType = shift.workType {
-                guard existingWorkType.objectID == defaultWorkType.objectID else {
-                    throw .invariantViolation(
-                        .shiftAssignedToDifferentWorkType(
-                            shiftID: shift.id,
-                            jobID: job.id,
-                            expectedWorkTypeID: defaultWorkType.id,
-                            actualWorkTypeID: existingWorkType.id
-                        )
-                    )
-                }
-            } else {
-                shift.workType = defaultWorkType
-            }
+            shift.workType = defaultWorkType
         }
 
         guard context.hasChanges else {

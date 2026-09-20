@@ -12,10 +12,11 @@ enum LegacyWorkTypeBackfillError: Error {
             expected: String,
             actual: String
         )
-        case payRateAssignedToDifferentWorkType(
+        case payRateWorkTypeBelongsToDifferentJob(
             payRateID: UUID,
-            jobID: UUID,
-            actualWorkTypeID: UUID
+            workTypeID: UUID,
+            expectedJobID: UUID,
+            actualJobID: UUID
         )
         case unknownLegacyBasePayKind(jobID: UUID, rawValue: String)
         case invalidWorkTypesRelationship(jobID: UUID)
@@ -57,7 +58,11 @@ enum LegacyWorkTypeBackfill {
         }
 
         let jobsByID = Dictionary(grouping: jobs, by: \.id)
-        if let duplicateJobID = jobsByID.first(where: { $0.value.count > 1 })?.key {
+        if let duplicateJobID = jobsByID
+            .filter({ $0.value.count > 1 })
+            .map(\.key)
+            .sorted(by: uuidPrecedes)
+            .first {
             throw .invariantViolation(.duplicateJobIdentity(duplicateJobID))
         }
 
@@ -65,8 +70,32 @@ enum LegacyWorkTypeBackfill {
         let sortedJobs = jobs.sorted { $0.id.uuidString < $1.id.uuidString }
 
         for job in sortedJobs {
-            let basePayKind = try canonicalBasePayKind(for: job)
             let relatedWorkTypes = try workTypes(for: job)
+            let relatedPayRates = try payRates(for: job)
+                .sorted { uuidPrecedes($0.id, $1.id) }
+
+            for payRate in relatedPayRates {
+                guard let existingWorkType = payRate.workType else {
+                    continue
+                }
+                guard existingWorkType.job.objectID == job.objectID else {
+                    throw .invariantViolation(
+                        .payRateWorkTypeBelongsToDifferentJob(
+                            payRateID: payRate.id,
+                            workTypeID: existingWorkType.id,
+                            expectedJobID: job.id,
+                            actualJobID: existingWorkType.job.id
+                        )
+                    )
+                }
+            }
+
+            let unassignedPayRates = relatedPayRates.filter { $0.workType == nil }
+            guard relatedWorkTypes.isEmpty || !unassignedPayRates.isEmpty else {
+                continue
+            }
+
+            let basePayKind = try canonicalBasePayKind(for: job)
             let matchingWorkTypes = workTypesByID[job.id, default: []]
 
             guard matchingWorkTypes.count <= 1 else {
@@ -113,20 +142,8 @@ enum LegacyWorkTypeBackfill {
                 )
             }
 
-            for payRate in try payRates(for: job) {
-                if let existingWorkType = payRate.workType {
-                    guard existingWorkType.objectID == defaultWorkType.objectID else {
-                        throw .invariantViolation(
-                            .payRateAssignedToDifferentWorkType(
-                                payRateID: payRate.id,
-                                jobID: job.id,
-                                actualWorkTypeID: existingWorkType.id
-                            )
-                        )
-                    }
-                } else {
-                    payRate.workType = defaultWorkType
-                }
+            for payRate in unassignedPayRates {
+                payRate.workType = defaultWorkType
             }
         }
 
@@ -202,5 +219,9 @@ enum LegacyWorkTypeBackfill {
         workType.basePayKind = basePayKind
         workType.job = job
         return workType
+    }
+
+    private static func uuidPrecedes(_ lhs: UUID, _ rhs: UUID) -> Bool {
+        lhs.uuidString < rhs.uuidString
     }
 }
