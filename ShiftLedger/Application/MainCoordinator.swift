@@ -6,6 +6,7 @@ final class MainCoordinator {
     struct Dependencies {
         let makeOverview: @MainActor (Job) -> OverviewViewController
         let makeAddShift: @MainActor (Job) -> AddShiftViewController
+        let makeAddWorkType: @MainActor (Job) -> AddWorkTypeViewController
         let makeActualGrossEntry: @MainActor (String) -> ActualGrossEntryViewController
         let preparePaycheckComparison: @MainActor (Job, PayCalculationPeriod, ActualGross) throws -> PaycheckComparison
         let makePaycheckResult: @MainActor (PaycheckComparison, Job) -> PaycheckResultViewController
@@ -14,12 +15,13 @@ final class MainCoordinator {
     private enum Route {
         case overview
         case addShift
+        case addWorkType
         case actualGrossEntry(PayCalculationPeriod)
         case paycheckResult(PaycheckComparison)
     }
 
     private let navigationController: UINavigationController
-    private let job: Job
+    private var job: Job
     private let dependencies: Dependencies
     private let overviewViewController: OverviewViewController
 
@@ -45,6 +47,9 @@ final class MainCoordinator {
         overviewViewController.onAddShift = { [weak self] in
             self?.navigate(to: .addShift)
         }
+        overviewViewController.onAddWorkType = { [weak self] in
+            self?.navigate(to: .addWorkType)
+        }
         overviewViewController.onCheckPaycheck = { [weak self] period in
             self?.navigate(to: .actualGrossEntry(period))
         }
@@ -56,6 +61,8 @@ final class MainCoordinator {
             navigationController.setViewControllers([overviewViewController], animated: false)
         case .addShift:
             showAddShift()
+        case .addWorkType:
+            showAddWorkType()
         case let .actualGrossEntry(period):
             showActualGrossEntry(for: period)
         case let .paycheckResult(comparison):
@@ -73,6 +80,20 @@ final class MainCoordinator {
 
     private func completeAddShift(selectingShiftID: UUID) {
         overviewViewController.reload(selectingShiftID: selectingShiftID)
+        navigationController.popToViewController(overviewViewController, animated: true)
+    }
+
+    private func showAddWorkType() {
+        let viewController = dependencies.makeAddWorkType(job)
+        viewController.onSaved = { [weak self] updatedJob in
+            self?.completeAddWorkType(with: updatedJob)
+        }
+        navigationController.pushViewController(viewController, animated: true)
+    }
+
+    private func completeAddWorkType(with updatedJob: Job) {
+        job = updatedJob
+        overviewViewController.reload(job: updatedJob)
         navigationController.popToViewController(overviewViewController, animated: true)
     }
 

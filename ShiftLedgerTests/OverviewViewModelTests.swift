@@ -707,6 +707,50 @@ struct OverviewViewModelTests {
         #expect(content.expandedShiftID == nil)
     }
 
+    @Test("reload(job:) заменяет aggregate и рассчитывает Shift нового WorkType")
+    func reloadJobUsesUpdatedWorkTypes() throws {
+        let initialJob = try makeJob(cycle: .perShift)
+        let secondID = UUID(uuid: (0x73, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1))
+        let second = WorkType(
+            id: secondID,
+            name: "Exams",
+            basePayBasis: .fixedPerShift,
+            payRateHistory: try PayRateHistory(payRates: [
+                try PayRate(
+                    id: UUID(uuid: (0x73, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2)),
+                    amount: 500,
+                    effectiveFrom: nil
+                )
+            ])
+        )
+        let updatedJob = try Job(
+            id: initialJob.id,
+            currencyCode: initialJob.currencyCode,
+            timeZoneIdentifier: initialJob.timeZoneIdentifier,
+            payCalculationCycle: initialJob.payCalculationCycle,
+            workTypes: initialJob.workTypes + [second],
+            createdAt: initialJob.createdAt
+        )
+        let start = try date(year: 2026, month: 9, day: 20, hour: 8)
+        let shift = try Shift(
+            workTypeID: secondID,
+            start: start,
+            end: start.addingTimeInterval(hour)
+        )
+        let viewModel = OverviewViewModel(
+            job: initialJob,
+            loadShifts: { [shift] },
+            currentDate: { start }
+        )
+
+        viewModel.reload(job: updatedJob)
+
+        let content = try requireContent(viewModel.state)
+        #expect(content.expectedBreakdown?.expectedGross == Decimal(500))
+        #expect(content.shiftHistoryBreakdowns.first?.shift.workTypeID == secondID)
+        #expect(content.shiftHistoryBreakdowns.first?.basePayBasis == .fixedPerShift)
+    }
+
     private func makeViewModel(job: Job, shifts: [Shift], now: Date) -> OverviewViewModel {
         OverviewViewModel(
             job: job,

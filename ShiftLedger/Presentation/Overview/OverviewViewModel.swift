@@ -32,7 +32,7 @@ final class OverviewViewModel {
 
     private(set) var state: State = .idle
 
-    private let job: Job
+    private var job: Job
     private let loadShifts: @MainActor () throws -> [Shift]
     private let currentDate: @MainActor () -> Date
 
@@ -61,6 +61,11 @@ final class OverviewViewModel {
 
     func reload(selectingShiftID: UUID) {
         refresh(preservingSelection: true, selectingShiftID: selectingShiftID)
+    }
+
+    func reload(job: Job) {
+        self.job = job
+        refresh(preservingSelection: true)
     }
 
     func navigateToPreviousPeriod() {

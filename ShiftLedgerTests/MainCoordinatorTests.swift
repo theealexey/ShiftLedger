@@ -87,11 +87,38 @@ struct MainCoordinatorTests {
         _ = harness.navigationController.popViewController(animated: false)
         #expect(harness.navigationController.topViewController === harness.overview)
 
+        harness.overview.onAddWorkType?()
+        #expect(harness.navigationController.topViewController is AddWorkTypeViewController)
+        _ = harness.navigationController.popViewController(animated: false)
+        #expect(harness.navigationController.topViewController === harness.overview)
+
         let period = try harness.job.payCalculationPeriod(for: makeShift())
         harness.overview.onCheckPaycheck?(period)
         #expect(harness.navigationController.topViewController is ActualGrossEntryViewController)
         _ = harness.navigationController.popViewController(animated: false)
         #expect(harness.navigationController.topViewController === harness.overview)
+    }
+
+    @Test("Add Work Type обновляет Job, возвращает тот же Overview и передаёт новый aggregate в Add Shift")
+    func addWorkTypeCompletionUpdatesCurrentJob() throws {
+        let harness = try makeHarness(cycle: .perShift)
+        harness.coordinator.start()
+        harness.overview.loadViewIfNeeded()
+        let originalOverview = harness.overview
+
+        harness.overview.onAddWorkType?()
+        let addWorkType = try #require(
+            harness.navigationController.topViewController as? AddWorkTypeViewController
+        )
+        let updatedJob = try makeUpdatedJob(from: harness.job)
+        addWorkType.onSaved?(updatedJob)
+
+        #expect(harness.navigationController.topViewController === originalOverview)
+        #expect(harness.navigationController.viewControllers.count == 1)
+        harness.overview.onAddShift?()
+        let suppliedJob = try #require(harness.metrics.addShiftJobs.last)
+        #expect(suppliedJob == updatedJob)
+        #expect(suppliedJob.workTypes.count == 2)
     }
 
     @Test("Comparison failure remains on Actual Gross with a neutral localized alert")
@@ -148,11 +175,20 @@ struct MainCoordinatorTests {
         let dependencies = MainCoordinator.Dependencies(
             makeOverview: { _ in overview },
             makeAddShift: { job in
-                AddShiftViewController(
+                metrics.addShiftJobs.append(job)
+                return AddShiftViewController(
                     viewModel: AddShiftViewModel(
                         timeZoneIdentifier: job.timeZoneIdentifier,
                         workTypes: job.workTypes,
                         saveShift: { _ in .success(()) }
+                    )
+                )
+            },
+            makeAddWorkType: { job in
+                AddWorkTypeViewController(
+                    viewModel: AddWorkTypeViewModel(
+                        currencyCode: job.currencyCode,
+                        saveWorkType: { _ in .failure(.persistence) }
                     )
                 )
             },
@@ -211,6 +247,29 @@ struct MainCoordinatorTests {
         )
     }
 
+    private func makeUpdatedJob(from job: Job) throws -> Job {
+        let exams = WorkType(
+            id: UUID(uuid: (0x72, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1)),
+            name: "Exams",
+            basePayBasis: .fixedPerShift,
+            payRateHistory: try PayRateHistory(payRates: [
+                try PayRate(
+                    id: UUID(uuid: (0x72, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2)),
+                    amount: 500,
+                    effectiveFrom: nil
+                )
+            ])
+        )
+        return try Job(
+            id: job.id,
+            currencyCode: job.currencyCode,
+            timeZoneIdentifier: job.timeZoneIdentifier,
+            payCalculationCycle: job.payCalculationCycle,
+            workTypes: job.workTypes + [exams],
+            createdAt: job.createdAt
+        )
+    }
+
     private func requireView<View: UIView>(
         _ identifier: String,
         in root: UIView
@@ -258,6 +317,7 @@ private final class Harness {
 private final class Metrics {
     var overviewLoadCount = 0
     var overviewShifts: [Shift] = []
+    var addShiftJobs: [Job] = []
     var preparedPeriods: [PayCalculationPeriod] = []
     var preparedActualGrosses: [ActualGross] = []
 }

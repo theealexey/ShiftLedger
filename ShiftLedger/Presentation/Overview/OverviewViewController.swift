@@ -2,6 +2,7 @@ import UIKit
 
 final class OverviewViewController: UIViewController {
     var onAddShift: (() -> Void)?
+    var onAddWorkType: (() -> Void)?
     var onCheckPaycheck: ((PayCalculationPeriod) -> Void)?
 
     private let viewModel: OverviewViewModel
@@ -35,6 +36,7 @@ final class OverviewViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         title = OverviewStrings.title
+        configureNavigationItem()
         bindView()
         viewModel.load()
         render()
@@ -47,6 +49,23 @@ final class OverviewViewController: UIViewController {
             viewModel.reload()
         }
         render()
+    }
+
+    func reload(job: Job) {
+        viewModel.reload(job: job)
+        render()
+    }
+
+    private func configureNavigationItem() {
+        let addWorkType = UIAction(title: OverviewStrings.addWorkType) { [weak self] _ in
+            self?.onAddWorkType?()
+        }
+        let item = UIBarButtonItem(
+            image: UIImage(systemName: "ellipsis.circle"),
+            menu: UIMenu(children: [addWorkType])
+        )
+        item.accessibilityIdentifier = "overview.more"
+        navigationItem.rightBarButtonItem = item
     }
 
     private func bindView() {

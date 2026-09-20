@@ -868,6 +868,21 @@ struct OverviewViewControllerTests {
         #expect(callCount == 1)
     }
 
+    @Test("Overview устанавливает меню Add work type в navigation bar")
+    func installsAddWorkTypeMenu() throws {
+        let job = try makeJob(cycle: .scheduled(.calendarMonthly))
+        let subject = try makeSubject(job: job, shifts: [])
+
+        subject.viewController.loadViewIfNeeded()
+
+        let item = try #require(subject.viewController.navigationItem.rightBarButtonItem)
+        #expect(item.accessibilityIdentifier == "overview.more")
+        #expect(item.image == UIImage(systemName: "ellipsis.circle"))
+        let menu = try #require(item.menu)
+        #expect(menu.children.count == 1)
+        #expect(menu.children.first?.title == OverviewStrings.addWorkType)
+    }
+
     @Test("Check Paycheck forwards the selected Domain period")
     func checkPaycheckForwardsSelectedPeriod() throws {
         let job = try makeJob(cycle: .scheduled(.calendarMonthly))

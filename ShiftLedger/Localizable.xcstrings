@@ -18,6 +18,104 @@
         }
       }
     },
+    "addWorkType.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Add Work Type" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Добавить вид работы" } }
+      }
+    },
+    "addWorkType.name.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Work type name" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Название вида работы" } }
+      }
+    },
+    "addWorkType.name.placeholder" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "e.g. Lectures" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Например, лекции" } }
+      }
+    },
+    "addWorkType.name.accessibilityHint" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Enter a name that identifies this type of work." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Введите название, по которому вы узнаете этот вид работы." } }
+      }
+    },
+    "addWorkType.payBasis.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Pay basis" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Основа оплаты" } }
+      }
+    },
+    "addWorkType.payBasis.hourly" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Hourly" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Почасовая" } }
+      }
+    },
+    "addWorkType.payBasis.fixedPerShift" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Fixed per shift" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Фиксированная за смену" } }
+      }
+    },
+    "addWorkType.hourlyRate.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Hourly rate" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Ставка в час" } }
+      }
+    },
+    "addWorkType.fixedPerShiftAmount.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Amount per shift" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Сумма за смену" } }
+      }
+    },
+    "addWorkType.amount.accessibilityHint" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Enter the initial amount paid for this work type." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Введите начальную сумму оплаты для этого вида работы." } }
+      }
+    },
+    "addWorkType.currency.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Currency" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Валюта" } }
+      }
+    },
+    "addWorkType.save" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Save" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Сохранить" } }
+      }
+    },
+    "addWorkType.error.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Couldn’t add work type" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Не удалось добавить вид работы" } }
+      }
+    },
+    "addWorkType.error.message" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Your changes weren’t saved. Try again." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Изменения не сохранены. Попробуйте ещё раз." } }
+      }
+    },
     "application.startupError.title" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -868,6 +966,13 @@
       "localizations" : {
         "en" : { "stringUnit" : { "state" : "translated", "value" : "Add shift" } },
         "ru" : { "stringUnit" : { "state" : "translated", "value" : "Добавить смену" } }
+      }
+    },
+    "overview.addWorkType" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Add work type" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Добавить вид работы" } }
       }
     },
     "overview.previousPeriod" : {

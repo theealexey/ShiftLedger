@@ -425,6 +425,65 @@ struct AppCoordinatorTests {
         }
     }
 
+    @Test("Добавление WorkType обновляет текущий Job и сразу передаёт оба вида работы в Add Shift")
+    func addWorkTypePersistsAndUpdatesAddShift() async throws {
+        let originalJob = try makeValidJob()
+
+        try await withOverview(job: originalJob) { stack, navigation, overview in
+            overview.onAddWorkType?()
+            let addWorkType = try #require(
+                navigation.topViewController as? AddWorkTypeViewController
+            )
+            addWorkType.loadViewIfNeeded()
+            let name: UITextField = try requireView("addWorkType.name", in: addWorkType.view)
+            let fixed: UIControl = try requireView(
+                "addWorkType.basis.fixedPerShift",
+                in: addWorkType.view
+            )
+            let amount: UITextField = try requireView("addWorkType.amount", in: addWorkType.view)
+            name.text = "  Exams  "
+            name.sendActions(for: .editingChanged)
+            fixed.sendActions(for: .touchUpInside)
+            amount.text = "500"
+            amount.sendActions(for: .editingChanged)
+
+            try tapBarButtonItem(addWorkType.navigationItem.rightBarButtonItem)
+
+            let persistedJob = try #require(try JobStorage(stack: stack).load())
+            #expect(persistedJob.workTypes.count == 2)
+            #expect(persistedJob.workType(id: testWorkTypeID) == originalJob.soleWorkType)
+            let added = try #require(persistedJob.workTypes.first(where: { $0.name == "Exams" }))
+            #expect(added.basePayBasis == .fixedPerShift)
+            #expect(added.payRates.count == 1)
+            #expect(added.payRates.first?.amount == Decimal(500))
+            #expect(added.payRates.first?.effectiveFrom == nil)
+            #expect(navigation.topViewController === overview)
+            #expect(navigation.viewControllers.count == 1)
+
+            overview.onAddShift?()
+            let addShift = try #require(navigation.topViewController as? AddShiftViewController)
+            addShift.loadViewIfNeeded()
+            let workTypeRow: UIControl = try requireView("addShift.workType", in: addShift.view)
+            #expect(workTypeRow.accessibilityValue == AddShiftStrings.select)
+            #expect(workTypeRow.accessibilityTraits.contains(.button))
+            workTypeRow.sendActions(for: .touchUpInside)
+            let pickerNavigation = try #require(
+                addShift.presentedViewController as? UINavigationController
+            )
+            let picker = try #require(
+                pickerNavigation.topViewController as? WorkTypeSelectionViewController
+            )
+            picker.loadViewIfNeeded()
+            let names = (0..<picker.tableView(picker.tableView, numberOfRowsInSection: 0)).compactMap {
+                picker.tableView(
+                    picker.tableView,
+                    cellForRowAt: IndexPath(row: $0, section: 0)
+                ).textLabel?.text
+            }
+            #expect(Set(names) == Set(["Lectures", "Exams"]))
+        }
+    }
+
     @Test("Check Paycheck uses supplied period, Job currency and persisted Domain comparison")
     func checkPaycheckUsesDomainOutput() async throws {
         let job = try makeValidJob()
@@ -746,6 +805,7 @@ struct AppCoordinatorTests {
             currencyCode: "USD",
             timeZoneIdentifier: "Europe/Stockholm",
             basePayBasis: .hourly,
+            workTypeName: "Lectures",
             payCalculationCycle: cycle,
             payRates: [try PayRate(amount: 100, effectiveFrom: nil)],
             createdAt: Date(timeIntervalSinceReferenceDate: 1_000)

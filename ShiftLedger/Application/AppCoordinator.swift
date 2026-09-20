@@ -150,6 +150,9 @@ final class AppCoordinator {
             makeAddShift: { job in
                 AddShiftAssembly.make(job: job, stack: stack)
             },
+            makeAddWorkType: { job in
+                AddWorkTypeAssembly.make(job: job, stack: stack)
+            },
             makeActualGrossEntry: { currencyCode in
                 ActualGrossEntryAssembly.make(currencyCode: currencyCode)
             },
