@@ -157,6 +157,335 @@ struct ShiftStorageTests {
         #expect(try fetchShifts(in: stackB.viewContext).count == 2)
     }
 
+    @Test("Update изменяет Shift in place, сохраняет exact WorkType и переживает reopen")
+    func updatesShiftInPlaceAndSurvivesReopen() async throws {
+        let storeURL = try makeTemporaryStoreURL()
+        var stacks: [CoreDataStack] = []
+        defer { removeTemporaryStoreDirectory(for: storeURL, stacks: stacks) }
+
+        let stackA = try await makeStack(storeURL: storeURL, stacks: &stacks)
+        try JobStorage(stack: stackA).save(try makeMultiWorkTypeJob())
+        let original = try makeShift(
+            id: "74000000-0000-0000-0000-000000000001",
+            start: 10 * 60 * 60,
+            workTypeID: firstWorkTypeID
+        )
+        let unrelated = try makeShift(
+            id: "74000000-0000-0000-0000-000000000002",
+            start: 50 * 60 * 60,
+            workTypeID: firstWorkTypeID
+        )
+        let storage = ShiftStorage(stack: stackA)
+        try storage.save(original)
+        try storage.save(unrelated)
+
+        let beforeShifts = try fetchShifts(in: stackA.viewContext)
+        let targetBefore = try #require(beforeShifts.first { $0.id == original.id })
+        let unrelatedBefore = try #require(beforeShifts.first { $0.id == unrelated.id })
+        let targetObjectID = targetBefore.objectID
+        let unrelatedObjectID = unrelatedBefore.objectID
+        let workTypesBefore = try fetchWorkTypes(in: stackA.viewContext)
+        let firstWorkTypeObjectID = try #require(
+            workTypesBefore.first { $0.id == firstWorkTypeID }
+        ).objectID
+        let secondWorkTypeObjectID = try #require(
+            workTypesBefore.first { $0.id == secondWorkTypeID }
+        ).objectID
+
+        let updatedStart = Date(timeIntervalSinceReferenceDate: 25 * 60 * 60)
+        let updated = try Shift(
+            id: original.id,
+            workTypeID: secondWorkTypeID,
+            start: updatedStart,
+            end: updatedStart.addingTimeInterval(10 * 60 * 60),
+            unpaidBreak: UnpaidBreak(
+                start: updatedStart.addingTimeInterval(4 * 60 * 60),
+                end: updatedStart.addingTimeInterval(5 * 60 * 60)
+            )
+        )
+
+        try storage.update(updated)
+
+        let afterShifts = try fetchShifts(in: stackA.viewContext)
+        let workTypesAfter = try fetchWorkTypes(in: stackA.viewContext)
+        let targetAfter = try #require(afterShifts.first { $0.id == updated.id })
+        let unrelatedAfter = try #require(afterShifts.first { $0.id == unrelated.id })
+        let persistedJob = try #require(try fetchJobs(in: stackA.viewContext).first)
+        #expect(afterShifts.count == 2)
+        #expect(targetAfter.objectID == targetObjectID)
+        #expect(unrelatedAfter.objectID == unrelatedObjectID)
+        #expect(targetAfter.workType?.objectID == secondWorkTypeObjectID)
+        #expect(targetAfter.job?.objectID == persistedJob.objectID)
+        #expect(targetAfter.start == updated.start)
+        #expect(targetAfter.end == updated.end)
+        #expect(targetAfter.unpaidBreakStart == updated.unpaidBreak?.start)
+        #expect(targetAfter.unpaidBreakEnd == updated.unpaidBreak?.end)
+        #expect(unrelatedAfter.workType?.objectID == firstWorkTypeObjectID)
+        #expect(workTypesAfter.count == 2)
+        #expect(workTypesAfter.map(\.objectID).contains(firstWorkTypeObjectID))
+        #expect(workTypesAfter.map(\.objectID).contains(secondWorkTypeObjectID))
+        #expect(try storage.loadAll() == [updated, unrelated])
+        #expect(stackA.viewContext.hasChanges == false)
+
+        try close(stackA)
+
+        let stackB = try await makeStack(storeURL: storeURL, stacks: &stacks)
+        #expect(try ShiftStorage(stack: stackB).loadAll() == [updated, unrelated])
+        #expect(try fetchShifts(in: stackB.viewContext).count == 2)
+    }
+
+    @Test("Update без изменений не считает Shift пересечением с собой")
+    func unchangedUpdatePreservesObjectIdentity() async throws {
+        let storeURL = try makeTemporaryStoreURL()
+        var stacks: [CoreDataStack] = []
+        defer { removeTemporaryStoreDirectory(for: storeURL, stacks: stacks) }
+
+        let stack = try await makeStack(storeURL: storeURL, stacks: &stacks)
+        try JobStorage(stack: stack).save(try makeJob())
+        let shift = try makeShift(id: "75000000-0000-0000-0000-000000000001")
+        let storage = ShiftStorage(stack: stack)
+        try storage.save(shift)
+        let objectID = try #require(try fetchShifts(in: stack.viewContext).first).objectID
+
+        try storage.update(shift)
+
+        let persisted = try fetchShifts(in: stack.viewContext)
+        #expect(persisted.count == 1)
+        #expect(persisted.first?.objectID == objectID)
+        #expect(try storage.loadAll() == [shift])
+        #expect(stack.viewContext.hasChanges == false)
+    }
+
+    @Test("Update отклоняет Job-wide overlap между разными WorkTypes без мутации target")
+    func updateRejectsCrossWorkTypeOverlapWithoutMutation() async throws {
+        let storeURL = try makeTemporaryStoreURL()
+        var stacks: [CoreDataStack] = []
+        defer { removeTemporaryStoreDirectory(for: storeURL, stacks: stacks) }
+
+        let stack = try await makeStack(storeURL: storeURL, stacks: &stacks)
+        try JobStorage(stack: stack).save(try makeMultiWorkTypeJob())
+        let target = try makeShift(
+            id: "76000000-0000-0000-0000-000000000001",
+            start: 10 * 60 * 60,
+            workTypeID: firstWorkTypeID
+        )
+        let other = try makeShift(
+            id: "76000000-0000-0000-0000-000000000002",
+            start: 20 * 60 * 60,
+            workTypeID: secondWorkTypeID
+        )
+        let storage = ShiftStorage(stack: stack)
+        try storage.save(target)
+        try storage.save(other)
+        let targetObjectID = try #require(
+            try fetchShifts(in: stack.viewContext).first { $0.id == target.id }
+        ).objectID
+        let proposedStart = Date(timeIntervalSinceReferenceDate: 19 * 60 * 60)
+        let proposed = try Shift(
+            id: target.id,
+            workTypeID: firstWorkTypeID,
+            start: proposedStart,
+            end: proposedStart.addingTimeInterval(2 * 60 * 60)
+        )
+
+        do {
+            try storage.update(proposed)
+            Issue.record("Пересекающийся update был сохранён")
+        } catch ShiftStorageError.overlappingShift {
+        }
+
+        let persistedTarget = try #require(
+            try fetchShifts(in: stack.viewContext).first { $0.id == target.id }
+        )
+        #expect(persistedTarget.objectID == targetObjectID)
+        #expect(try storage.loadAll() == [target, other])
+        #expect(stack.viewContext.hasChanges == false)
+    }
+
+    @Test("Update разрешает adjacency к Shift другого WorkType")
+    func updateAllowsAdjacencyAcrossWorkTypes() async throws {
+        let storeURL = try makeTemporaryStoreURL()
+        var stacks: [CoreDataStack] = []
+        defer { removeTemporaryStoreDirectory(for: storeURL, stacks: stacks) }
+
+        let stack = try await makeStack(storeURL: storeURL, stacks: &stacks)
+        try JobStorage(stack: stack).save(try makeMultiWorkTypeJob())
+        let target = try makeShift(
+            id: "77000000-0000-0000-0000-000000000001",
+            start: 10 * 60 * 60,
+            workTypeID: firstWorkTypeID
+        )
+        let other = try makeShift(
+            id: "77000000-0000-0000-0000-000000000002",
+            start: 20 * 60 * 60,
+            workTypeID: secondWorkTypeID
+        )
+        let storage = ShiftStorage(stack: stack)
+        try storage.save(target)
+        try storage.save(other)
+        let adjacentStart = Date(timeIntervalSinceReferenceDate: 12 * 60 * 60)
+        let adjacent = try Shift(
+            id: target.id,
+            workTypeID: firstWorkTypeID,
+            start: adjacentStart,
+            end: other.start
+        )
+
+        try storage.update(adjacent)
+
+        #expect(try storage.loadAll() == [adjacent, other])
+    }
+
+    @Test("Update с неизвестным WorkType отклоняется без изменения target")
+    func updateRejectsUnknownWorkTypeWithoutMutation() async throws {
+        let storeURL = try makeTemporaryStoreURL()
+        var stacks: [CoreDataStack] = []
+        defer { removeTemporaryStoreDirectory(for: storeURL, stacks: stacks) }
+
+        let stack = try await makeStack(storeURL: storeURL, stacks: &stacks)
+        try JobStorage(stack: stack).save(try makeMultiWorkTypeJob())
+        let target = try makeShift(
+            id: "78000000-0000-0000-0000-000000000001",
+            workTypeID: firstWorkTypeID
+        )
+        let storage = ShiftStorage(stack: stack)
+        try storage.save(target)
+        let unknownID = UUID(uuid: (0x78, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 9))
+        let proposed = try Shift(
+            id: target.id,
+            workTypeID: unknownID,
+            start: target.start.addingTimeInterval(60),
+            end: target.end.addingTimeInterval(60)
+        )
+
+        do {
+            try storage.update(proposed)
+            Issue.record("Update с неизвестным WorkType был сохранён")
+        } catch ShiftStorageError.workTypeNotFound(let workTypeID) {
+            #expect(workTypeID == unknownID)
+        }
+
+        #expect(try storage.loadAll() == [target])
+        #expect(stack.viewContext.hasChanges == false)
+    }
+
+    @Test("Update отсутствующего Shift возвращает точный shiftNotFound")
+    func updateRejectsMissingShiftWithoutMutation() async throws {
+        let storeURL = try makeTemporaryStoreURL()
+        var stacks: [CoreDataStack] = []
+        defer { removeTemporaryStoreDirectory(for: storeURL, stacks: stacks) }
+
+        let stack = try await makeStack(storeURL: storeURL, stacks: &stacks)
+        try JobStorage(stack: stack).save(try makeJob())
+        let existing = try makeShift(id: "79000000-0000-0000-0000-000000000001")
+        let storage = ShiftStorage(stack: stack)
+        try storage.save(existing)
+        let missing = try makeShift(id: "79000000-0000-0000-0000-000000000002")
+
+        do {
+            try storage.update(missing)
+            Issue.record("Отсутствующий Shift был обновлён")
+        } catch ShiftStorageError.shiftNotFound(let shiftID) {
+            #expect(shiftID == missing.id)
+        }
+
+        #expect(try storage.loadAll() == [existing])
+        #expect(stack.viewContext.hasChanges == false)
+    }
+
+    @Test("Duplicate persisted Shift ID отклоняется как corruption без выбора target")
+    func updateRejectsDuplicatePersistedShiftIdentity() async throws {
+        let storeURL = try makeTemporaryStoreURL()
+        var stacks: [CoreDataStack] = []
+        defer { removeTemporaryStoreDirectory(for: storeURL, stacks: stacks) }
+
+        let stack = try await makeStack(storeURL: storeURL, stacks: &stacks)
+        try JobStorage(stack: stack).save(try makeJob())
+        let job = try #require(try fetchOnlyJob(in: stack.viewContext))
+        let workType = try onlyWorkType(for: job)
+        let duplicateID = UUID(uuid: (0x7A, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1))
+        let first = try insertShiftEntity(
+            id: duplicateID,
+            job: job,
+            workType: workType,
+            start: Date(timeIntervalSinceReferenceDate: 10 * 60 * 60),
+            end: Date(timeIntervalSinceReferenceDate: 18 * 60 * 60),
+            in: stack.viewContext
+        )
+        let second = try insertShiftEntity(
+            id: duplicateID,
+            job: job,
+            workType: workType,
+            start: Date(timeIntervalSinceReferenceDate: 30 * 60 * 60),
+            end: Date(timeIntervalSinceReferenceDate: 38 * 60 * 60),
+            in: stack.viewContext
+        )
+        try stack.viewContext.save()
+        let firstStart = first.start
+        let secondStart = second.start
+        let proposed = try Shift(
+            id: duplicateID,
+            workTypeID: canonicalWorkTypeID,
+            start: Date(timeIntervalSinceReferenceDate: 50 * 60 * 60),
+            end: Date(timeIntervalSinceReferenceDate: 58 * 60 * 60)
+        )
+
+        do {
+            try ShiftStorage(stack: stack).update(proposed)
+            Issue.record("Один из duplicate Shift был произвольно обновлён")
+        } catch ShiftStorageError.corruptedData(
+            .duplicateShiftIdentity(let shiftID)
+        ) {
+            #expect(shiftID == duplicateID)
+        }
+
+        #expect(first.start == firstStart)
+        #expect(second.start == secondStart)
+        #expect(try fetchShifts(in: stack.viewContext).count == 2)
+        #expect(stack.viewContext.hasChanges == false)
+    }
+
+    @Test("Update не исправляет target с отсутствующим WorkType")
+    func updateRejectsCorruptedTargetWithoutRepair() async throws {
+        let storeURL = try makeTemporaryStoreURL()
+        var stacks: [CoreDataStack] = []
+        defer { removeTemporaryStoreDirectory(for: storeURL, stacks: stacks) }
+
+        let stack = try await makeStack(storeURL: storeURL, stacks: &stacks)
+        try JobStorage(stack: stack).save(try makeJob())
+        let job = try #require(try fetchOnlyJob(in: stack.viewContext))
+        let targetID = UUID(uuid: (0x7B, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1))
+        let target = try insertShiftEntity(
+            id: targetID,
+            job: job,
+            workType: nil,
+            start: Date(timeIntervalSinceReferenceDate: 10 * 60 * 60),
+            end: Date(timeIntervalSinceReferenceDate: 18 * 60 * 60),
+            in: stack.viewContext
+        )
+        try stack.viewContext.save()
+        let originalStart = target.start
+        let proposed = try Shift(
+            id: targetID,
+            workTypeID: canonicalWorkTypeID,
+            start: Date(timeIntervalSinceReferenceDate: 20 * 60 * 60),
+            end: Date(timeIntervalSinceReferenceDate: 28 * 60 * 60)
+        )
+
+        do {
+            try ShiftStorage(stack: stack).update(proposed)
+            Issue.record("Повреждённый target был молча исправлен")
+        } catch ShiftStorageError.corruptedData(
+            .missingShiftWorkType(let shiftID)
+        ) {
+            #expect(shiftID == targetID)
+        }
+
+        #expect(target.start == originalStart)
+        #expect(target.workType == nil)
+        #expect(stack.viewContext.hasChanges == false)
+    }
+
     @Test("Sole WorkType с произвольной identity сохраняет Shift assignment")
     func roundTripsSoleArbitraryWorkTypeAssignment() async throws {
         let storeURL = try makeTemporaryStoreURL()

@@ -6,6 +6,7 @@ enum ShiftStorageError: Error {
         case invalidWorkTypesRelationship
         case missingWorkType
         case duplicateWorkTypeIdentity(workTypeID: UUID)
+        case duplicateShiftIdentity(shiftID: UUID)
         case workTypeBelongsToDifferentJob(
             workTypeID: UUID,
             expectedJobID: UUID,
@@ -31,6 +32,7 @@ enum ShiftStorageError: Error {
     case jobNotFound
     case multipleJobsFound
     case workTypeNotFound(workTypeID: UUID)
+    case shiftNotFound(shiftID: UUID)
     case duplicateShift
     case overlappingShift
     case fetchFailed(underlying: Error)
@@ -94,6 +96,40 @@ final class ShiftStorage {
         }
     }
 
+    func update(_ shift: Shift) throws {
+        let job = try singleJob()
+        let workTypes = try workTypes(for: job)
+        let existingShifts = try fetchShifts()
+        let target = try uniqueShift(id: shift.id, in: existingShifts)
+        let requestedWorkType = try workType(id: shift.workTypeID, in: workTypes)
+
+        for entity in existingShifts {
+            let existingShift = try makeShift(from: entity, job: job)
+
+            guard entity.objectID != target.objectID else {
+                continue
+            }
+
+            if existingShift.overlaps(with: shift) {
+                throw ShiftStorageError.overlappingShift
+            }
+        }
+
+        target.start = shift.start
+        target.end = shift.end
+        target.unpaidBreakStart = shift.unpaidBreak?.start
+        target.unpaidBreakEnd = shift.unpaidBreak?.end
+        target.workType = requestedWorkType
+        target.job = job
+
+        do {
+            try context.save()
+        } catch {
+            context.rollback()
+            throw ShiftStorageError.saveFailed(underlying: error)
+        }
+    }
+
     func loadAll() throws -> [Shift] {
         let job = try singleJob()
         _ = try workTypes(for: job)
@@ -139,6 +175,24 @@ final class ShiftStorage {
             return try context.fetch(request)
         } catch {
             throw ShiftStorageError.fetchFailed(underlying: error)
+        }
+    }
+
+    private func uniqueShift(
+        id: UUID,
+        in shifts: [ShiftEntity]
+    ) throws -> ShiftEntity {
+        let matches = shifts.filter { $0.id == id }
+
+        switch matches.count {
+        case 0:
+            throw ShiftStorageError.shiftNotFound(shiftID: id)
+        case 1:
+            return matches[0]
+        default:
+            throw ShiftStorageError.corruptedData(
+                .duplicateShiftIdentity(shiftID: id)
+            )
         }
     }
 
