@@ -12,25 +12,14 @@ enum AddShiftSaveResult: Equatable {
     case ignored
 }
 
-struct AddShiftWorkTypeOption: Equatable {
-    let id: UUID
-    let name: String?
-}
+typealias AddShiftWorkTypeOption = ShiftFormWorkTypeOption
 
 @MainActor
 final class AddShiftViewModel {
-    private static let validationID = UUID(uuid: (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0))
-
-    private(set) var start: Date?
-    private(set) var end: Date?
-    private(set) var isUnpaidBreakEnabled = false
-    private(set) var breakStart: Date?
-    private(set) var breakEnd: Date?
     private(set) var isSaving = false
-    private(set) var selectedWorkTypeID: UUID?
+    private var formState: ShiftFormState
 
     let timeZoneIdentifier: String
-    let workTypeOptions: [AddShiftWorkTypeOption]
 
     private let saveShift: (Shift) -> Result<Void, AddShiftSaveFailure>
     private let makeID: () -> UUID
@@ -47,126 +36,78 @@ final class AddShiftViewModel {
         makeID: @escaping () -> UUID = UUID.init
     ) {
         self.timeZoneIdentifier = timeZoneIdentifier
-        workTypeOptions = workTypes.map {
-            AddShiftWorkTypeOption(id: $0.id, name: $0.name)
-        }
-        selectedWorkTypeID = workTypes.count == 1 ? workTypes[0].id : nil
-        start = initialStart
-        end = initialEnd
-        isUnpaidBreakEnabled = initialUnpaidBreakEnabled
-        breakStart = initialBreakStart
-        breakEnd = initialBreakEnd
+        formState = ShiftFormState(
+            workTypes: workTypes,
+            selectedWorkTypeID: workTypes.count == 1 ? workTypes[0].id : nil,
+            start: initialStart,
+            end: initialEnd,
+            isUnpaidBreakEnabled: initialUnpaidBreakEnabled,
+            breakStart: initialBreakStart,
+            breakEnd: initialBreakEnd
+        )
         self.saveShift = saveShift
         self.makeID = makeID
     }
 
+    var start: Date? { formState.start }
+    var end: Date? { formState.end }
+    var isUnpaidBreakEnabled: Bool { formState.isUnpaidBreakEnabled }
+    var breakStart: Date? { formState.breakStart }
+    var breakEnd: Date? { formState.breakEnd }
+    var selectedWorkTypeID: UUID? { formState.selectedWorkTypeID }
+    var workTypeOptions: [AddShiftWorkTypeOption] { formState.workTypeOptions }
+    var selectedWorkType: AddShiftWorkTypeOption? { formState.selectedWorkType }
+
     var canSave: Bool {
-        selectedWorkTypeID != nil
-            && validationError == nil
-            && start != nil
-            && end != nil
-            && (!isUnpaidBreakEnabled || (breakStart != nil && breakEnd != nil))
+        formState.canBuildShift
     }
 
     var validationError: ShiftValidationError? {
-        guard let start, let end else { return nil }
-        let unpaidBreak: UnpaidBreak?
-        if isUnpaidBreakEnabled {
-            guard let breakStart, let breakEnd else { return nil }
-            unpaidBreak = UnpaidBreak(start: breakStart, end: breakEnd)
-        } else {
-            unpaidBreak = nil
-        }
-
-        do {
-            guard let selectedWorkTypeID else { return nil }
-            _ = try Shift(
-                id: Self.validationID,
-                workTypeID: selectedWorkTypeID,
-                start: start,
-                end: end,
-                unpaidBreak: unpaidBreak
-            )
-            return nil
-        } catch {
-            return error
-        }
+        formState.validationError
     }
 
     func setStart(_ value: Date?) {
-        start = value
+        formState.setStart(value)
     }
 
     func setEnd(_ value: Date?) {
-        end = value
+        formState.setEnd(value)
     }
 
     func setUnpaidBreakEnabled(_ enabled: Bool) {
-        isUnpaidBreakEnabled = enabled
+        formState.setUnpaidBreakEnabled(enabled)
     }
 
     func setBreakStart(_ value: Date?) {
-        breakStart = value
+        formState.setBreakStart(value)
     }
 
     func setBreakEnd(_ value: Date?) {
-        breakEnd = value
-    }
-
-    var selectedWorkType: AddShiftWorkTypeOption? {
-        guard let selectedWorkTypeID else {
-            return nil
-        }
-        return workTypeOptions.first { $0.id == selectedWorkTypeID }
+        formState.setBreakEnd(value)
     }
 
     func selectWorkType(id: UUID) -> Bool {
-        guard workTypeOptions.contains(where: { $0.id == id }) else {
-            return false
-        }
-
-        selectedWorkTypeID = id
-        return true
+        formState.selectWorkType(id: id)
     }
 
     func reset() {
-        start = nil
-        end = nil
-        isUnpaidBreakEnabled = false
-        breakStart = nil
-        breakEnd = nil
+        let selectedWorkTypeID = workTypeOptions.count == 1 ? workTypeOptions[0].id : nil
+        formState.reset(selectedWorkTypeID: selectedWorkTypeID)
         isSaving = false
-        selectedWorkTypeID = workTypeOptions.count == 1 ? workTypeOptions[0].id : nil
     }
 
     func makeShift(id: UUID) throws(AddShiftValidationError) -> Shift {
-        guard let selectedWorkTypeID else {
-            throw AddShiftValidationError.missingWorkTypeAssignment
-        }
-        guard let start, let end else {
-            throw AddShiftValidationError.incomplete
-        }
-
-        let unpaidBreak: UnpaidBreak?
-        if isUnpaidBreakEnabled {
-            guard let breakStart, let breakEnd else {
-                throw AddShiftValidationError.incomplete
-            }
-            unpaidBreak = UnpaidBreak(start: breakStart, end: breakEnd)
-        } else {
-            unpaidBreak = nil
-        }
-
         do {
-            return try Shift(
-                id: id,
-                workTypeID: selectedWorkTypeID,
-                start: start,
-                end: end,
-                unpaidBreak: unpaidBreak
-            )
+            return try formState.makeShift(id: id)
         } catch {
-            throw .invalidShift(error)
+            switch error {
+            case .missingWorkTypeAssignment:
+                throw AddShiftValidationError.missingWorkTypeAssignment
+            case .incomplete:
+                throw AddShiftValidationError.incomplete
+            case let .invalidShift(error):
+                throw AddShiftValidationError.invalidShift(error)
+            }
         }
     }
 

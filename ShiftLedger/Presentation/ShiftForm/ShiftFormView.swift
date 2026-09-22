@@ -1,6 +1,26 @@
 import UIKit
 
-final class AddShiftView: UIView {
+struct ShiftFormIdentifiers {
+    let screen: String
+    let workType: String
+    let start: String
+    let end: String
+    let unpaidBreak: String
+    let breakStart: String
+    let breakEnd: String
+
+    init(prefix: String) {
+        screen = "\(prefix).screen"
+        workType = "\(prefix).workType"
+        start = "\(prefix).start"
+        end = "\(prefix).end"
+        unpaidBreak = "\(prefix).unpaidBreak"
+        breakStart = "\(prefix).breakStart"
+        breakEnd = "\(prefix).breakEnd"
+    }
+}
+
+final class ShiftFormView: UIView {
     var onWorkTypeTapped: (() -> Void)?
     var onStartTapped: (() -> Void)?
     var onEndTapped: (() -> Void)?
@@ -12,20 +32,42 @@ final class AddShiftView: UIView {
     private let contentView = UIView()
     private let stack = UIStackView()
     private let breakStack = UIStackView()
-    private let workTypeRow = AddShiftValueRow(
-        title: AddShiftStrings.workType,
-        accessibilityIdentifier: "addShift.workType"
-    )
-    private let startRow = AddShiftValueRow(title: AddShiftStrings.start)
-    private let endRow = AddShiftValueRow(title: AddShiftStrings.end)
+    private let workTypeRow: ShiftFormValueRow
+    private let startRow: ShiftFormValueRow
+    private let endRow: ShiftFormValueRow
     private let timeZoneLabel = UILabel()
-    private let breakSwitchRow = AddShiftSwitchRow(title: AddShiftStrings.unpaidBreak)
-    private let breakStartRow = AddShiftValueRow(title: AddShiftStrings.breakStart)
-    private let breakEndRow = AddShiftValueRow(title: AddShiftStrings.breakEnd)
+    private let breakSwitchRow: ShiftFormSwitchRow
+    private let breakStartRow: ShiftFormValueRow
+    private let breakEndRow: ShiftFormValueRow
     private let validationLabel = UILabel()
 
-    override init(frame: CGRect) {
-        super.init(frame: frame)
+    init(identifiers: ShiftFormIdentifiers) {
+        workTypeRow = ShiftFormValueRow(
+            title: AddShiftStrings.workType,
+            accessibilityIdentifier: identifiers.workType
+        )
+        startRow = ShiftFormValueRow(
+            title: AddShiftStrings.start,
+            accessibilityIdentifier: identifiers.start
+        )
+        endRow = ShiftFormValueRow(
+            title: AddShiftStrings.end,
+            accessibilityIdentifier: identifiers.end
+        )
+        breakSwitchRow = ShiftFormSwitchRow(
+            title: AddShiftStrings.unpaidBreak,
+            accessibilityIdentifier: identifiers.unpaidBreak
+        )
+        breakStartRow = ShiftFormValueRow(
+            title: AddShiftStrings.breakStart,
+            accessibilityIdentifier: identifiers.breakStart
+        )
+        breakEndRow = ShiftFormValueRow(
+            title: AddShiftStrings.breakEnd,
+            accessibilityIdentifier: identifiers.breakEnd
+        )
+        super.init(frame: .zero)
+        scrollView.accessibilityIdentifier = identifiers.screen
         configureAppearance()
         configureHierarchy()
         configureLayout()
@@ -61,8 +103,14 @@ final class AddShiftView: UIView {
         endRow.setValue(endText ?? AddShiftStrings.select, accessibilityValue: endAccessibilityText)
         timeZoneLabel.text = timeZoneText
         breakSwitchRow.isOn = breakEnabled
-        breakStartRow.setValue(breakStartText ?? AddShiftStrings.select, accessibilityValue: breakStartAccessibilityText)
-        breakEndRow.setValue(breakEndText ?? AddShiftStrings.select, accessibilityValue: breakEndAccessibilityText)
+        breakStartRow.setValue(
+            breakStartText ?? AddShiftStrings.select,
+            accessibilityValue: breakStartAccessibilityText
+        )
+        breakEndRow.setValue(
+            breakEndText ?? AddShiftStrings.select,
+            accessibilityValue: breakEndAccessibilityText
+        )
         breakStack.isHidden = !breakEnabled
         validationLabel.text = validationMessage
         validationLabel.isHidden = validationMessage == nil
@@ -73,7 +121,6 @@ final class AddShiftView: UIView {
         backgroundColor = ShiftLedgerColors.backgroundPrimary
         scrollView.keyboardDismissMode = .interactive
         scrollView.alwaysBounceVertical = true
-        scrollView.accessibilityIdentifier = "addShift.screen"
 
         stack.axis = .vertical
         stack.alignment = .fill
@@ -97,19 +144,15 @@ final class AddShiftView: UIView {
     }
 
     private func configureHierarchy() {
-        [scrollView, contentView, stack, timeZoneLabel, validationLabel].forEach { $0.translatesAutoresizingMaskIntoConstraints = false }
+        [scrollView, contentView, stack, timeZoneLabel, validationLabel].forEach {
+            $0.translatesAutoresizingMaskIntoConstraints = false
+        }
         addSubview(scrollView)
         scrollView.addSubview(contentView)
         contentView.addSubview(stack)
-        stack.addArrangedSubview(workTypeRow)
-        stack.addArrangedSubview(startRow)
-        stack.addArrangedSubview(endRow)
-        stack.addArrangedSubview(timeZoneLabel)
-        stack.addArrangedSubview(breakSwitchRow)
-        stack.addArrangedSubview(breakStack)
-        stack.addArrangedSubview(validationLabel)
-        breakStack.addArrangedSubview(breakStartRow)
-        breakStack.addArrangedSubview(breakEndRow)
+        [workTypeRow, startRow, endRow, timeZoneLabel, breakSwitchRow, breakStack, validationLabel]
+            .forEach(stack.addArrangedSubview)
+        [breakStartRow, breakEndRow].forEach(breakStack.addArrangedSubview)
         stack.setCustomSpacing(8, after: endRow)
         stack.setCustomSpacing(16, after: timeZoneLabel)
         stack.setCustomSpacing(8, after: breakSwitchRow)
@@ -130,7 +173,7 @@ final class AddShiftView: UIView {
             stack.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 24),
             stack.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -24),
             stack.topAnchor.constraint(equalTo: contentView.topAnchor),
-            stack.bottomAnchor.constraint(equalTo: contentView.bottomAnchor),
+            stack.bottomAnchor.constraint(equalTo: contentView.bottomAnchor)
         ])
     }
 
@@ -144,16 +187,15 @@ final class AddShiftView: UIView {
     }
 }
 
-private final class AddShiftValueRow: UIControl {
-    private let titleLabel: UILabel
+private final class ShiftFormValueRow: UIControl {
+    private let titleLabel = UILabel()
     private let valueLabel = UILabel()
     private let chevron = UIImageView(image: UIImage(systemName: "chevron.right"))
-    private let separator = AddShiftSeparator()
+    private let separator = ShiftFormSeparator()
     private var valueToChevronConstraint: NSLayoutConstraint?
     private var valueToEdgeConstraint: NSLayoutConstraint?
 
-    init(title: String, accessibilityIdentifier: String? = nil) {
-        titleLabel = UILabel()
+    init(title: String, accessibilityIdentifier: String) {
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
         titleLabel.text = title
@@ -168,7 +210,10 @@ private final class AddShiftValueRow: UIControl {
         valueLabel.textAlignment = .right
         chevron.tintColor = ShiftLedgerColors.textTertiary
         chevron.isAccessibilityElement = false
-        [titleLabel, valueLabel, chevron, separator].forEach { $0.translatesAutoresizingMaskIntoConstraints = false; addSubview($0) }
+        [titleLabel, valueLabel, chevron, separator].forEach {
+            $0.translatesAutoresizingMaskIntoConstraints = false
+            addSubview($0)
+        }
         titleLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
         valueLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         heightAnchor.constraint(greaterThanOrEqualToConstant: 56).isActive = true
@@ -201,7 +246,9 @@ private final class AddShiftValueRow: UIControl {
 
     func setValue(_ value: String, accessibilityValue: String?) {
         valueLabel.text = value
-        valueLabel.textColor = value == AddShiftStrings.select ? ShiftLedgerColors.textTertiary : ShiftLedgerColors.textSecondary
+        valueLabel.textColor = value == AddShiftStrings.select
+            ? ShiftLedgerColors.textTertiary
+            : ShiftLedgerColors.textSecondary
         self.accessibilityValue = accessibilityValue ?? value
     }
 
@@ -215,14 +262,17 @@ private final class AddShiftValueRow: UIControl {
     }
 }
 
-private final class AddShiftSwitchRow: UIControl {
+private final class ShiftFormSwitchRow: UIControl {
     private let titleLabel = UILabel()
     private let toggle = UISwitch()
-    private let separator = AddShiftSeparator()
+    private let separator = ShiftFormSeparator()
     var onChanged: ((Bool) -> Void)?
-    var isOn: Bool { get { toggle.isOn } set { toggle.setOn(newValue, animated: false) } }
+    var isOn: Bool {
+        get { toggle.isOn }
+        set { toggle.setOn(newValue, animated: false) }
+    }
 
-    init(title: String) {
+    init(title: String, accessibilityIdentifier: String) {
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
         titleLabel.text = title
@@ -232,9 +282,15 @@ private final class AddShiftSwitchRow: UIControl {
         titleLabel.numberOfLines = 0
         toggle.onTintColor = ShiftLedgerColors.accentPrimary
         toggle.accessibilityLabel = title
-        toggle.addAction(UIAction { [weak self] _ in self?.onChanged?(self?.toggle.isOn ?? false) }, for: .valueChanged)
+        toggle.accessibilityIdentifier = accessibilityIdentifier
+        toggle.addAction(UIAction { [weak self] _ in
+            self?.onChanged?(self?.toggle.isOn ?? false)
+        }, for: .valueChanged)
         isAccessibilityElement = false
-        [titleLabel, toggle, separator].forEach { $0.translatesAutoresizingMaskIntoConstraints = false; addSubview($0) }
+        [titleLabel, toggle, separator].forEach {
+            $0.translatesAutoresizingMaskIntoConstraints = false
+            addSubview($0)
+        }
         heightAnchor.constraint(greaterThanOrEqualToConstant: 56).isActive = true
         NSLayoutConstraint.activate([
             titleLabel.leadingAnchor.constraint(equalTo: leadingAnchor),
@@ -253,7 +309,7 @@ private final class AddShiftSwitchRow: UIControl {
     required init?(coder: NSCoder) { nil }
 }
 
-private final class AddShiftSeparator: UIView {
+private final class ShiftFormSeparator: UIView {
     override init(frame: CGRect) {
         super.init(frame: frame)
         translatesAutoresizingMaskIntoConstraints = false

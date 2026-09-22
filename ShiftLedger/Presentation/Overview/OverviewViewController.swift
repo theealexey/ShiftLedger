@@ -4,6 +4,7 @@ final class OverviewViewController: UIViewController {
     var onAddShift: (() -> Void)?
     var onAddWorkType: (() -> Void)?
     var onCheckPaycheck: ((PayCalculationPeriod) -> Void)?
+    var onEditShift: ((Shift) -> Void)?
 
     private let viewModel: OverviewViewModel
     private let currencyCode: String
@@ -84,6 +85,18 @@ final class OverviewViewController: UIViewController {
         overviewView.onShiftCardTapped = { [weak self] id in
             self?.viewModel.toggleShiftExpansion(with: id)
             self?.render()
+        }
+        overviewView.onEditShiftTapped = { [weak self] id in
+            guard
+                let self,
+                case let .content(content) = viewModel.state,
+                let shift = content.shiftHistoryBreakdowns.first(where: {
+                    $0.shift.id == id
+                })?.shift
+            else {
+                return
+            }
+            onEditShift?(shift)
         }
         overviewView.onAddShiftTapped = { [weak self] in
             self?.onAddShift?()

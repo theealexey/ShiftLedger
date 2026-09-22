@@ -587,6 +587,61 @@ struct OverviewViewControllerTests {
         #expect(visibleFrontCardIdentifiers(in: subject.viewController.view) == [older.id])
     }
 
+    @Test("Expanded Shift exposes one Edit action without changing card tap behavior")
+    func expandedShiftEditActionPreservesCardInteraction() throws {
+        let job = try makeJob(cycle: .scheduled(.calendarMonthly))
+        let shift = try makeShift(id: 1, month: 9, day: 20)
+        let subject = try makeSubject(job: job, shifts: [shift])
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+        window.rootViewController = subject.viewController
+        window.isHidden = false
+        defer { window.isHidden = true }
+        subject.viewController.loadViewIfNeeded()
+        window.layoutIfNeeded()
+
+        let card: UIControl = try requireView(
+            identifier: "overview.shift.\(shift.id.uuidString)",
+            in: subject.viewController.view
+        )
+        let editButton: UIButton = try requireView(
+            identifier: "overview.shift.\(shift.id.uuidString).edit",
+            in: subject.viewController.view
+        )
+        #expect(editButton.isHidden)
+        #expect(card.accessibilityCustomActions?.isEmpty != false)
+
+        card.sendActions(for: .touchUpInside)
+        window.layoutIfNeeded()
+        #expect(editButton.isHidden == false)
+        #expect(editButton.configuration?.title == OverviewStrings.editShift)
+        #expect(editButton.bounds.height >= 44)
+        #expect(card.accessibilityCustomActions?.map(\.name) == [OverviewStrings.editShift])
+
+        var receivedShift: Shift?
+        subject.viewController.onEditShift = { receivedShift = $0 }
+        let editAction = try #require(card.accessibilityCustomActions?.first)
+        let editActionTarget = try #require(editAction.target as? NSObject)
+        _ = editActionTarget.perform(editAction.selector)
+        #expect(receivedShift == shift)
+        #expect(editButton.isHidden == false)
+
+        receivedShift = nil
+        editButton.sendActions(for: .touchUpInside)
+        #expect(receivedShift == shift)
+        #expect(isEffectivelyHidden(editButton) == false)
+
+        let buttonCenter = editButton.convert(
+            CGPoint(x: editButton.bounds.midX, y: editButton.bounds.midY),
+            to: card
+        )
+        #expect(card.hitTest(buttonCenter, with: nil) === editButton)
+        let ordinaryPoint = CGPoint(x: card.bounds.midX, y: 12)
+        #expect(card.hitTest(ordinaryPoint, with: nil) === card)
+
+        card.sendActions(for: .touchUpInside)
+        #expect(editButton.isHidden)
+    }
+
     @Test("Covered Shift strips resolve hit testing to their own card before making it front")
     func coveredShiftStripsReceiveTouches() throws {
         let job = try makeJob(cycle: .scheduled(.calendarMonthly))

@@ -1,17 +1,17 @@
 import UIKit
 
-final class AddShiftViewController: UIViewController {
+final class EditShiftViewController: UIViewController {
     var onSaved: ((Shift) -> Void)?
 
-    private let viewModel: AddShiftViewModel
+    private let viewModel: EditShiftViewModel
     private let displayLocale: Locale
     private let dateFormattingLocale: Locale
-    private let addShiftView = ShiftFormView(
-        identifiers: ShiftFormIdentifiers(prefix: "addShift")
+    private let editShiftView = ShiftFormView(
+        identifiers: ShiftFormIdentifiers(prefix: "editShift")
     )
 
     init(
-        viewModel: AddShiftViewModel,
+        viewModel: EditShiftViewModel,
         displayLocale: Locale = CurrencySelectionItem.applicationDisplayLocale,
         dateFormattingLocale: Locale = .autoupdatingCurrent
     ) {
@@ -24,34 +24,48 @@ final class AddShiftViewController: UIViewController {
     @available(*, unavailable)
     required init?(coder: NSCoder) { nil }
 
-    override func loadView() { view = addShiftView }
+    override func loadView() {
+        view = editShiftView
+    }
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        title = AddShiftStrings.title
+        title = EditShiftStrings.title
         navigationItem.largeTitleDisplayMode = .never
-        navigationItem.rightBarButtonItem = UIBarButtonItem(title: AddShiftStrings.save, style: .done, target: self, action: #selector(saveTapped))
+        let saveItem = UIBarButtonItem(
+            title: EditShiftStrings.save,
+            style: .done,
+            target: self,
+            action: #selector(saveTapped)
+        )
+        saveItem.accessibilityIdentifier = "editShift.save"
+        navigationItem.rightBarButtonItem = saveItem
         bindView()
         render()
     }
 
     private func bindView() {
-        addShiftView.onWorkTypeTapped = { [weak self] in self?.presentWorkTypePicker() }
-        addShiftView.onStartTapped = { [weak self] in self?.presentPicker(for: .start) }
-        addShiftView.onEndTapped = { [weak self] in self?.presentPicker(for: .end) }
-        addShiftView.onBreakStartTapped = { [weak self] in self?.presentPicker(for: .breakStart) }
-        addShiftView.onBreakEndTapped = { [weak self] in self?.presentPicker(for: .breakEnd) }
-        addShiftView.onBreakEnabledChanged = { [weak self] enabled in
+        editShiftView.onWorkTypeTapped = { [weak self] in self?.presentWorkTypePicker() }
+        editShiftView.onStartTapped = { [weak self] in self?.presentPicker(for: .start) }
+        editShiftView.onEndTapped = { [weak self] in self?.presentPicker(for: .end) }
+        editShiftView.onBreakStartTapped = { [weak self] in self?.presentPicker(for: .breakStart) }
+        editShiftView.onBreakEndTapped = { [weak self] in self?.presentPicker(for: .breakEnd) }
+        editShiftView.onBreakEnabledChanged = { [weak self] enabled in
             self?.viewModel.setUnpaidBreakEnabled(enabled)
             self?.render()
         }
     }
 
     private func render() {
-        let timeZoneText = "\(AddShiftStrings.timeZonePrefix) \(TimeZoneDisplayName.value(for: viewModel.timeZoneIdentifier, locale: displayLocale))"
-        addShiftView.render(
+        let timeZoneName = TimeZoneDisplayName.value(
+            for: viewModel.timeZoneIdentifier,
+            locale: displayLocale
+        )
+        let timeZoneText = "\(AddShiftStrings.timeZonePrefix) \(timeZoneName)"
+
+        editShiftView.render(
             workTypeText: selectedWorkTypeText,
-            canSelectWorkType: viewModel.workTypeOptions.count > 1,
+            canSelectWorkType: canSelectWorkType,
             startText: formatted(viewModel.start),
             startAccessibilityText: accessibilityFormatted(viewModel.start),
             endText: formatted(viewModel.end),
@@ -64,7 +78,8 @@ final class AddShiftViewController: UIViewController {
             breakEndAccessibilityText: accessibilityFormatted(viewModel.breakEnd),
             validationMessage: validationMessage
         )
-        navigationItem.rightBarButtonItem?.isEnabled = viewModel.canSave && viewModel.isSaving == false
+
+        navigationItem.rightBarButtonItem?.isEnabled = viewModel.canSave
     }
 
     private var selectedWorkTypeText: String {
@@ -74,29 +89,20 @@ final class AddShiftViewController: UIViewController {
         return selectedWorkType.name ?? AddShiftStrings.unnamedWorkType
     }
 
-    private func presentWorkTypePicker() {
-        guard viewModel.workTypeOptions.count > 1 else {
-            return
-        }
+    private var canSelectWorkType: Bool {
+        viewModel.workTypeOptions.count > 1 || viewModel.selectedWorkTypeID == nil
+    }
 
+    private func presentWorkTypePicker() {
+        guard canSelectWorkType else { return }
         let picker = WorkTypeSelectionViewController(
             options: viewModel.workTypeOptions,
             selectedWorkTypeID: viewModel.selectedWorkTypeID
         ) { [weak self] workTypeID in
-            guard let self, viewModel.selectWorkType(id: workTypeID) else {
-                return
-            }
+            guard let self, viewModel.selectWorkType(id: workTypeID) else { return }
             render()
         }
-        let navigationController = UINavigationController(rootViewController: picker)
-        navigationController.modalPresentationStyle = .pageSheet
-        navigationController.view.tintColor = ShiftLedgerColors.accentPrimary
-        if let sheet = navigationController.sheetPresentationController {
-            sheet.detents = [.medium(), .large()]
-            sheet.selectedDetentIdentifier = .medium
-            sheet.prefersGrabberVisible = true
-        }
-        present(navigationController, animated: true)
+        presentSheet(picker)
     }
 
     private var validationMessage: String? {
@@ -118,15 +124,28 @@ final class AddShiftViewController: UIViewController {
 
     private func formatted(_ date: Date?) -> String? {
         guard let date else { return nil }
-        return AddShiftDateFormatting.string(for: date, timeZoneIdentifier: viewModel.timeZoneIdentifier, locale: dateFormattingLocale)
+        return AddShiftDateFormatting.string(
+            for: date,
+            timeZoneIdentifier: viewModel.timeZoneIdentifier,
+            locale: dateFormattingLocale
+        )
     }
 
     private func accessibilityFormatted(_ date: Date?) -> String? {
         guard let date else { return nil }
-        return AddShiftDateFormatting.accessibilityString(for: date, timeZoneIdentifier: viewModel.timeZoneIdentifier, locale: dateFormattingLocale)
+        return AddShiftDateFormatting.accessibilityString(
+            for: date,
+            timeZoneIdentifier: viewModel.timeZoneIdentifier,
+            locale: dateFormattingLocale
+        )
     }
 
-    private enum PickerField { case start, end, breakStart, breakEnd }
+    private enum PickerField {
+        case start
+        case end
+        case breakStart
+        case breakEnd
+    }
 
     private func presentPicker(for field: PickerField) {
         guard let timeZone = TimeZone(identifier: viewModel.timeZoneIdentifier) else { return }
@@ -154,7 +173,11 @@ final class AddShiftViewController: UIViewController {
             }
             render()
         }
-        let navigationController = UINavigationController(rootViewController: picker)
+        presentSheet(picker)
+    }
+
+    private func presentSheet(_ viewController: UIViewController) {
+        let navigationController = UINavigationController(rootViewController: viewController)
         navigationController.modalPresentationStyle = .pageSheet
         navigationController.view.tintColor = ShiftLedgerColors.accentPrimary
         if let sheet = navigationController.sheetPresentationController {
@@ -176,32 +199,23 @@ final class AddShiftViewController: UIViewController {
 
     private func minimumDate(for field: PickerField) -> Date? {
         switch field {
-        case .breakStart, .breakEnd:
-            return viewModel.start
-        case .start, .end:
-            return nil
+        case .breakStart, .breakEnd: viewModel.start
+        case .start, .end: nil
         }
     }
 
     private func maximumDate(for field: PickerField) -> Date? {
         switch field {
-        case .end:
-            return viewModel.start?.addingTimeInterval(48 * 60 * 60)
-        case .breakStart, .breakEnd:
-            return viewModel.end
-        case .start:
-            return nil
+        case .end: viewModel.start?.addingTimeInterval(48 * 60 * 60)
+        case .breakStart, .breakEnd: viewModel.end
+        case .start: nil
         }
     }
 
     @objc private func saveTapped() {
         switch viewModel.save() {
         case let .saved(shift):
-            viewModel.reset()
-            render()
             onSaved?(shift)
-            presentSaveSuccessIfVisible()
-            return
         case let .failed(failure):
             presentSaveError(failure)
         case .invalid, .ignored:
@@ -210,31 +224,15 @@ final class AddShiftViewController: UIViewController {
         render()
     }
 
-    private func presentSaveSuccessIfVisible() {
-        guard viewIfLoaded?.window != nil else { return }
-        guard presentedViewController == nil else { return }
-        if let navigationController, navigationController.topViewController !== self {
-            return
-        }
-
-        let alert = UIAlertController(
-            title: AddShiftStrings.saveSuccessTitle,
-            message: nil,
-            preferredStyle: .alert
-        )
-        alert.addAction(UIAlertAction(title: AddShiftStrings.alertOK, style: .default))
-        present(alert, animated: true)
-    }
-
-    private func presentSaveError(_ failure: AddShiftSaveFailure) {
+    private func presentSaveError(_ failure: EditShiftSaveFailure) {
         guard viewIfLoaded?.window != nil else { return }
         let isOverlap = failure == .overlap
         let alert = UIAlertController(
-            title: isOverlap ? AddShiftStrings.overlapTitle : AddShiftStrings.genericErrorTitle,
-            message: isOverlap ? AddShiftStrings.overlapMessage : AddShiftStrings.genericErrorMessage,
+            title: isOverlap ? EditShiftStrings.overlapTitle : EditShiftStrings.genericErrorTitle,
+            message: isOverlap ? EditShiftStrings.overlapMessage : EditShiftStrings.genericErrorMessage,
             preferredStyle: .alert
         )
-        alert.addAction(UIAlertAction(title: AddShiftStrings.alertOK, style: .default))
+        alert.addAction(UIAlertAction(title: EditShiftStrings.alertOK, style: .default))
         present(alert, animated: true)
     }
 }

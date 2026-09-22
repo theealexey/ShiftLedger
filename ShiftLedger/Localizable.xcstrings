@@ -646,6 +646,48 @@
         "ru" : { "stringUnit" : { "state" : "translated", "value" : "Понятно" } }
       }
     },
+    "editShift.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Edit Shift" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Редактировать смену" } }
+      }
+    },
+    "editShift.save" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Save" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Сохранить" } }
+      }
+    },
+    "editShift.error.overlap.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Shift overlaps another shift" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Смена пересекается с другой" } }
+      }
+    },
+    "editShift.error.overlap.message" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Adjust the start or end time and try again." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Измените время начала или окончания и попробуйте снова." } }
+      }
+    },
+    "editShift.error.generic.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Couldn’t save shift" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Не удалось сохранить смену" } }
+      }
+    },
+    "editShift.error.generic.message" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Your changes weren’t saved. Try again." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Изменения не сохранены. Попробуйте ещё раз." } }
+      }
+    },
     "addShift.title" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -973,6 +1015,13 @@
       "localizations" : {
         "en" : { "stringUnit" : { "state" : "translated", "value" : "Add work type" } },
         "ru" : { "stringUnit" : { "state" : "translated", "value" : "Добавить вид работы" } }
+      }
+    },
+    "overview.editShift" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Edit shift" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Редактировать смену" } }
       }
     },
     "overview.previousPeriod" : {

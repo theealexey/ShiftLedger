@@ -385,6 +385,43 @@ struct OverviewViewModelTests {
         #expect(content.shiftHistoryBreakdowns.map(\.shift) == [historical, current])
     }
 
+    @Test("Reload follows an edited Shift with the same ID into its historical period")
+    func reloadSelectingEditedShiftMovesToHistoricalPeriod() throws {
+        let job = try makeJob(cycle: .scheduled(.calendarMonthly))
+        let original = try makeShift(id: 1, month: 9, day: 20)
+        let editedStart = try date(year: 2026, month: 8, day: 20, hour: 8)
+        let edited = try Shift(
+            id: original.id,
+            workTypeID: original.workTypeID,
+            start: editedStart,
+            end: editedStart.addingTimeInterval(4 * hour)
+        )
+        let now = try date(year: 2026, month: 9, day: 18, hour: 12)
+        var loadCalls = 0
+        let viewModel = OverviewViewModel(
+            job: job,
+            loadShifts: {
+                loadCalls += 1
+                return loadCalls == 1 ? [original] : [edited]
+            },
+            currentDate: { now }
+        )
+        viewModel.load()
+
+        viewModel.reload(selectingShiftID: original.id)
+
+        let content = try requireContent(viewModel.state)
+        #expect(content.selectedPeriod == .scheduled(PayPeriod(
+            start: try localDate(year: 2026, month: 8, day: 1),
+            endExclusive: try localDate(year: 2026, month: 9, day: 1)
+        )))
+        #expect(content.selectedShiftID == original.id)
+        #expect(content.expandedShiftID == original.id)
+        #expect(content.shiftHistoryBreakdowns.map(\.shift) == [edited])
+        #expect(content.expectedBreakdown?.shiftBreakdowns.map(\.shift) == [edited])
+        #expect(content.expectedBreakdown?.expectedGross == Decimal(80))
+    }
+
     @Test("Reload selecting a saved Shift uses its persisted per-shift period")
     func reloadSelectingSavedShiftUsesPersistedPerShiftPeriod() throws {
         let job = try makeJob(cycle: .perShift)

@@ -7,6 +7,7 @@ final class MainCoordinator {
         let makeOverview: @MainActor (Job) -> OverviewViewController
         let makeAddShift: @MainActor (Job) -> AddShiftViewController
         let makeAddWorkType: @MainActor (Job) -> AddWorkTypeViewController
+        let makeEditShift: @MainActor (Job, Shift) -> EditShiftViewController
         let makeActualGrossEntry: @MainActor (String) -> ActualGrossEntryViewController
         let preparePaycheckComparison: @MainActor (Job, PayCalculationPeriod, ActualGross) throws -> PaycheckComparison
         let makePaycheckResult: @MainActor (PaycheckComparison, Job) -> PaycheckResultViewController
@@ -16,6 +17,7 @@ final class MainCoordinator {
         case overview
         case addShift
         case addWorkType
+        case editShift(Shift)
         case actualGrossEntry(PayCalculationPeriod)
         case paycheckResult(PaycheckComparison)
     }
@@ -50,6 +52,9 @@ final class MainCoordinator {
         overviewViewController.onAddWorkType = { [weak self] in
             self?.navigate(to: .addWorkType)
         }
+        overviewViewController.onEditShift = { [weak self] shift in
+            self?.navigate(to: .editShift(shift))
+        }
         overviewViewController.onCheckPaycheck = { [weak self] period in
             self?.navigate(to: .actualGrossEntry(period))
         }
@@ -63,6 +68,8 @@ final class MainCoordinator {
             showAddShift()
         case .addWorkType:
             showAddWorkType()
+        case let .editShift(shift):
+            showEditShift(shift)
         case let .actualGrossEntry(period):
             showActualGrossEntry(for: period)
         case let .paycheckResult(comparison):
@@ -94,6 +101,19 @@ final class MainCoordinator {
     private func completeAddWorkType(with updatedJob: Job) {
         job = updatedJob
         overviewViewController.reload(job: updatedJob)
+        navigationController.popToViewController(overviewViewController, animated: true)
+    }
+
+    private func showEditShift(_ shift: Shift) {
+        let viewController = dependencies.makeEditShift(job, shift)
+        viewController.onSaved = { [weak self] updatedShift in
+            self?.completeEditShift(updatedShift)
+        }
+        navigationController.pushViewController(viewController, animated: true)
+    }
+
+    private func completeEditShift(_ shift: Shift) {
+        overviewViewController.reload(selectingShiftID: shift.id)
         navigationController.popToViewController(overviewViewController, animated: true)
     }
 

@@ -27,6 +27,7 @@ final class OverviewView: UIView, UIScrollViewDelegate {
     var onNextPeriodTapped: (() -> Void)?
     var onPeriodTapped: ((PayCalculationPeriod) -> Void)?
     var onShiftCardTapped: ((UUID) -> Void)?
+    var onEditShiftTapped: ((UUID) -> Void)?
     var onCheckPaycheckTapped: (() -> Void)?
     var onAddShiftTapped: (() -> Void)?
     var onRetryTapped: (() -> Void)?
@@ -521,7 +522,11 @@ final class OverviewView: UIView, UIScrollViewDelegate {
     }
 
     private func renderShiftHistory(_ cards: [ShiftCard]) {
-        shiftStack.render(cards, onCardTapped: onShiftCardTapped)
+        shiftStack.render(
+            cards,
+            onCardTapped: onShiftCardTapped,
+            onEditTapped: onEditShiftTapped
+        )
 
         shiftHistoryEmptyLabel.isHidden = cards.isEmpty == false
     }
@@ -652,7 +657,8 @@ private final class OverviewShiftStackView: UIView {
 
     func render(
         _ cards: [OverviewView.ShiftCard],
-        onCardTapped: ((UUID) -> Void)?
+        onCardTapped: ((UUID) -> Void)?,
+        onEditTapped: ((UUID) -> Void)?
     ) {
         let previousIDs = Set(self.cards.map(\.id))
         self.cards = cards
@@ -669,13 +675,15 @@ private final class OverviewShiftStackView: UIView {
                 view.update(
                     with: card,
                     surfaceRole: surfaceRole,
-                    isDeckFront: isDeckFront
+                    isDeckFront: isDeckFront,
+                    onEditTapped: onEditTapped
                 )
             } else {
                 let view = OverviewShiftCardView(
                     card: card,
                     surfaceRole: surfaceRole,
-                    isDeckFront: isDeckFront
+                    isDeckFront: isDeckFront,
+                    onEditTapped: onEditTapped
                 )
                 view.addAction(UIAction { _ in onCardTapped?(card.id) }, for: .touchUpInside)
                 view.translatesAutoresizingMaskIntoConstraints = false
@@ -706,7 +714,8 @@ private final class OverviewShiftStackView: UIView {
         for (index, view) in views.enumerated() {
             guard visibleRegion(for: view, at: index, in: views).contains(point) else { continue }
 
-            return view
+            let pointInCard = convert(point, to: view)
+            return view.hitTest(pointInCard, with: event)
         }
 
         return nil
@@ -845,10 +854,13 @@ private final class OverviewShiftCardView: UIControl {
     private let unpaidBreakDetailGroup = UIStackView()
     private let rateDetailGroup = UIStackView()
     private let payBasisDetailGroup = UIStackView()
+    private let editButton = UIButton(type: .system)
+    private var onEditTapped: (() -> Void)?
     init(
         card: OverviewView.ShiftCard,
         surfaceRole: ShiftSurfaceRole,
-        isDeckFront: Bool
+        isDeckFront: Bool,
+        onEditTapped: ((UUID) -> Void)?
     ) {
         super.init(frame: .zero)
         configureHierarchy()
@@ -856,7 +868,8 @@ private final class OverviewShiftCardView: UIControl {
         update(
             with: card,
             surfaceRole: surfaceRole,
-            isDeckFront: isDeckFront
+            isDeckFront: isDeckFront,
+            onEditTapped: onEditTapped
         )
     }
 
@@ -870,11 +883,26 @@ private final class OverviewShiftCardView: UIControl {
         updateHeaderAxis()
     }
 
+    override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+        guard isUserInteractionEnabled, !isHidden, alpha > 0.01, bounds.contains(point) else {
+            return nil
+        }
+        if editButton.isHidden == false {
+            let buttonPoint = editButton.convert(point, from: self)
+            if editButton.point(inside: buttonPoint, with: event) {
+                return editButton.hitTest(buttonPoint, with: event) ?? editButton
+            }
+        }
+        return self
+    }
+
     func update(
         with card: OverviewView.ShiftCard,
         surfaceRole: ShiftSurfaceRole,
-        isDeckFront: Bool
+        isDeckFront: Bool,
+        onEditTapped: ((UUID) -> Void)?
     ) {
+        self.onEditTapped = { onEditTapped?(card.id) }
         backgroundColor = ShiftLedgerColors.shiftSurface(for: surfaceRole)
         layer.cornerCurve = .continuous
         layer.cornerRadius = 28
@@ -895,6 +923,13 @@ private final class OverviewShiftCardView: UIControl {
         accessibilityHint = card.isExpanded ? OverviewStrings.collapseShift : OverviewStrings.expandShift
         accessibilityTraits = card.isSelected ? [.button, .selected] : .button
         accessibilityValue = card.isExpanded ? OverviewStrings.expanded : OverviewStrings.collapsed
+        accessibilityCustomActions = card.isExpanded
+            ? [UIAccessibilityCustomAction(
+                name: OverviewStrings.editShift,
+                target: self,
+                selector: #selector(editAccessibilityAction)
+            )]
+            : nil
 
         let foreground = ShiftLedgerColors.shiftForeground(for: surfaceRole)
         let secondaryForeground = foreground.withAlphaComponent(0.78)
@@ -995,11 +1030,13 @@ private final class OverviewShiftCardView: UIControl {
         payBasisDetailLabel.accessibilityIdentifier = "overview.shift.\(card.id.uuidString).detail.payBasis"
         unpaidBreakDetailGroup.isHidden = card.unpaidBreak == nil
         detailStack.isHidden = card.isExpanded == false
+        editButton.isHidden = card.isExpanded == false
+        editButton.accessibilityIdentifier = "overview.shift.\(card.id.uuidString).edit"
     }
 
     private func configureHierarchy() {
         contentStack.axis = .vertical
-        contentStack.isUserInteractionEnabled = false
+        contentStack.isUserInteractionEnabled = true
         contentStack.spacing = 12
         contentStack.translatesAutoresizingMaskIntoConstraints = false
 
@@ -1054,11 +1091,26 @@ private final class OverviewShiftCardView: UIControl {
         [paidTimeDetailGroup, unpaidBreakDetailGroup, rateDetailGroup, payBasisDetailGroup]
             .forEach(detailStack.addArrangedSubview)
 
+        var editConfiguration = UIButton.Configuration.plain()
+        editConfiguration.title = OverviewStrings.editShift
+        editConfiguration.image = UIImage(systemName: "pencil")
+        editConfiguration.imagePlacement = .leading
+        editConfiguration.imagePadding = 8
+        editConfiguration.baseForegroundColor = ShiftLedgerColors.accentPrimary
+        editConfiguration.contentInsets = .zero
+        editButton.configuration = editConfiguration
+        editButton.contentHorizontalAlignment = .leading
+        editButton.titleLabel?.adjustsFontForContentSizeCategory = true
+        editButton.heightAnchor.constraint(greaterThanOrEqualToConstant: 44).isActive = true
+        editButton.addAction(UIAction { [weak self] _ in self?.onEditTapped?() }, for: .touchUpInside)
+
         addSubview(contentStack)
-        [headerStack, frontContentStack, metadataStack, detailStack].forEach(contentStack.addArrangedSubview)
+        [headerStack, frontContentStack, metadataStack, detailStack, editButton]
+            .forEach(contentStack.addArrangedSubview)
         contentStack.setCustomSpacing(Layout.headerToMetadataSpacing, after: headerStack)
         contentStack.setCustomSpacing(Layout.headerToMetadataSpacing, after: frontContentStack)
         contentStack.setCustomSpacing(18, after: metadataStack)
+        contentStack.setCustomSpacing(18, after: detailStack)
     }
 
     private func configureLayout() {
@@ -1118,6 +1170,11 @@ private final class OverviewShiftCardView: UIControl {
             CGPoint(x: region.midX, y: region.midY),
             to: nil
         )
+    }
+
+    @objc private func editAccessibilityAction() -> Bool {
+        onEditTapped?()
+        return true
     }
 }
 

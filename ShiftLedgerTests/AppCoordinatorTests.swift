@@ -484,6 +484,78 @@ struct AppCoordinatorTests {
         }
     }
 
+    @Test("Редактирование Shift сохраняет exact WorkType и время через реальный persistence path")
+    func editShiftPersistsAndReturnsToSameOverview() async throws {
+        let job = try makeMultiWorkTypeJob()
+        let firstWorkType = try #require(job.workTypes.first)
+        let secondWorkType = try #require(job.workTypes.dropFirst().first)
+        let original = try makeShift(day: 20, workTypeID: firstWorkType.id)
+        let edited = try makeShift(day: 23, workTypeID: secondWorkType.id)
+
+        try await withOverview(job: job) { stack, navigation, overview in
+            try ShiftStorage(stack: stack).save(original)
+            overview.reload(selectingShiftID: original.id)
+            let originalOverview = overview
+            let editButton: UIButton = try requireView(
+                "overview.shift.\(original.id.uuidString).edit",
+                in: overview.view
+            )
+            #expect(editButton.isHidden == false)
+
+            editButton.sendActions(for: .touchUpInside)
+            let editShift = try #require(
+                navigation.topViewController as? EditShiftViewController
+            )
+            editShift.loadViewIfNeeded()
+            let workTypeRow: UIControl = try requireView("editShift.workType", in: editShift.view)
+            #expect(workTypeRow.accessibilityValue == firstWorkType.name)
+
+            try await selectWorkType(at: 1, in: editShift)
+            try await selectDate(
+                edited.start,
+                in: editShift,
+                rowWithAccessibilityLabel: AddShiftStrings.start
+            )
+            try await selectDate(
+                edited.end,
+                in: editShift,
+                rowWithAccessibilityLabel: AddShiftStrings.end
+            )
+            try tapBarButtonItem(editShift.navigationItem.rightBarButtonItem)
+
+            let persistedShifts = try ShiftStorage(stack: stack).loadAll()
+            let persisted = try #require(persistedShifts.first)
+            #expect(persistedShifts.count == 1)
+            #expect(persisted.id == original.id)
+            #expect(persisted.workTypeID == secondWorkType.id)
+            #expect(persisted.start == edited.start)
+            #expect(persisted.end == edited.end)
+            #expect(navigation.topViewController === originalOverview)
+            #expect(navigation.viewControllers.count == 1)
+            #expect(navigation.viewControllers.first === originalOverview)
+
+            let card: UIView = try requireView(
+                "overview.shift.\(original.id.uuidString)",
+                in: overview.view
+            )
+            #expect(card.accessibilityTraits.contains(.selected))
+            let reloadedEditButton: UIButton = try requireView(
+                "overview.shift.\(original.id.uuidString).edit",
+                in: overview.view
+            )
+            #expect(reloadedEditButton.isHidden == false)
+            let expectedGross: UILabel = try requireView(
+                "overview.expectedGross.amount",
+                in: overview.view
+            )
+            #expect(expectedGross.text == OverviewFormatting.heroAmount(
+                Decimal(500),
+                currencyCode: job.currencyCode,
+                locale: CurrencySelectionItem.applicationDisplayLocale
+            ))
+        }
+    }
+
     @Test("Check Paycheck uses supplied period, Job currency and persisted Domain comparison")
     func checkPaycheckUsesDomainOutput() async throws {
         let job = try makeValidJob()
@@ -660,6 +732,54 @@ struct AppCoordinatorTests {
         picker.loadViewIfNeeded()
         picker.tableView(picker.tableView, didSelectRowAt: IndexPath(row: row, section: 0))
         try await waitUntil { addShift.presentedViewController == nil }
+    }
+
+    private func selectDate(
+        _ date: Date,
+        in editShift: EditShiftViewController,
+        rowWithAccessibilityLabel accessibilityLabel: String
+    ) async throws {
+        let row = try requireControl(
+            accessibilityLabel: accessibilityLabel,
+            in: editShift.view
+        )
+        row.sendActions(for: .touchUpInside)
+
+        let pickerNavigationController = try #require(
+            editShift.presentedViewController as? UINavigationController
+        )
+        let pickerViewController = try #require(
+            pickerNavigationController.topViewController as? ShiftDateTimePickerViewController
+        )
+        pickerViewController.loadViewIfNeeded()
+        let picker: UIDatePicker = try requireFirstDescendant(
+            of: UIDatePicker.self,
+            in: pickerViewController.view
+        )
+        picker.date = date
+        try tapBarButtonItem(pickerViewController.navigationItem.rightBarButtonItem)
+        try await waitUntil { editShift.presentedViewController == nil }
+    }
+
+    private func selectWorkType(
+        at row: Int,
+        in editShift: EditShiftViewController
+    ) async throws {
+        let workTypeRow = try requireControl(
+            accessibilityLabel: AddShiftStrings.workType,
+            in: editShift.view
+        )
+        workTypeRow.sendActions(for: .touchUpInside)
+
+        let pickerNavigationController = try #require(
+            editShift.presentedViewController as? UINavigationController
+        )
+        let picker = try #require(
+            pickerNavigationController.topViewController as? WorkTypeSelectionViewController
+        )
+        picker.loadViewIfNeeded()
+        picker.tableView(picker.tableView, didSelectRowAt: IndexPath(row: row, section: 0))
+        try await waitUntil { editShift.presentedViewController == nil }
     }
 
     private func tapBarButtonItem(_ item: UIBarButtonItem?) throws {

@@ -119,6 +119,39 @@ struct MainCoordinatorTests {
         let suppliedJob = try #require(harness.metrics.addShiftJobs.last)
         #expect(suppliedJob == updatedJob)
         #expect(suppliedJob.workTypes.count == 2)
+
+        let existingShift = try makeShift()
+        harness.overview.onEditShift?(existingShift)
+        #expect(harness.metrics.editShiftJobs.last == updatedJob)
+        #expect(harness.metrics.editedShifts.last == existingShift)
+    }
+
+    @Test("Edit Shift push, native Back и successful completion сохраняют Overview root")
+    func editShiftNavigationUsesStableOverview() throws {
+        let harness = try makeHarness(cycle: .perShift)
+        harness.coordinator.start()
+        harness.overview.loadViewIfNeeded()
+        let shift = try makeShift()
+        harness.metrics.overviewShifts = [shift]
+        harness.overview.reload(selectingShiftID: shift.id)
+
+        harness.overview.onEditShift?(shift)
+        let edit = try #require(
+            harness.navigationController.topViewController as? EditShiftViewController
+        )
+        _ = harness.navigationController.popViewController(animated: false)
+        #expect(harness.navigationController.topViewController === harness.overview)
+
+        harness.overview.onEditShift?(shift)
+        let pushedAgain = try #require(
+            harness.navigationController.topViewController as? EditShiftViewController
+        )
+        #expect(pushedAgain !== edit)
+        pushedAgain.onSaved?(shift)
+
+        #expect(harness.navigationController.topViewController === harness.overview)
+        #expect(harness.navigationController.viewControllers.count == 1)
+        #expect(harness.metrics.overviewLoadCount == 3)
     }
 
     @Test("Comparison failure remains on Actual Gross with a neutral localized alert")
@@ -189,6 +222,18 @@ struct MainCoordinatorTests {
                     viewModel: AddWorkTypeViewModel(
                         currencyCode: job.currencyCode,
                         saveWorkType: { _ in .failure(.persistence) }
+                    )
+                )
+            },
+            makeEditShift: { job, shift in
+                metrics.editShiftJobs.append(job)
+                metrics.editedShifts.append(shift)
+                return EditShiftViewController(
+                    viewModel: EditShiftViewModel(
+                        timeZoneIdentifier: job.timeZoneIdentifier,
+                        workTypes: job.workTypes,
+                        shift: shift,
+                        saveShift: { _ in .success(()) }
                     )
                 )
             },
@@ -318,6 +363,8 @@ private final class Metrics {
     var overviewLoadCount = 0
     var overviewShifts: [Shift] = []
     var addShiftJobs: [Job] = []
+    var editShiftJobs: [Job] = []
+    var editedShifts: [Shift] = []
     var preparedPeriods: [PayCalculationPeriod] = []
     var preparedActualGrosses: [ActualGross] = []
 }

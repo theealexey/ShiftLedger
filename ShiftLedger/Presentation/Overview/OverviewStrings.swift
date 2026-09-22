@@ -26,6 +26,7 @@ enum OverviewStrings {
     static var checkPaycheck: String { String(localized: "overview.checkPaycheck", table: "Localizable") }
     static var addShift: String { String(localized: "overview.addShift", table: "Localizable") }
     static var addWorkType: String { String(localized: "overview.addWorkType", table: "Localizable") }
+    static var editShift: String { String(localized: "overview.editShift", table: "Localizable") }
     static var previousPeriod: String { String(localized: "overview.previousPeriod", table: "Localizable") }
     static var nextPeriod: String { String(localized: "overview.nextPeriod", table: "Localizable") }
     static var emptyTitle: String { String(localized: "overview.empty.title", table: "Localizable") }
