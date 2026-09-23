@@ -65,11 +65,11 @@ final class AppCoordinator {
                 if let job = resolution.job {
                     installMainFlow(
                         job: job,
-                        stack: resolution.stack
+                        composition: resolution.composition
                     )
                 } else {
                     installOnboardingFlow(
-                        stack: resolution.stack
+                        composition: resolution.composition
                     )
                 }
 
@@ -93,13 +93,13 @@ final class AppCoordinator {
         initialFlowResolutionTask = nil
     }
 
-    private func installOnboardingFlow(stack: CoreDataStack) {
+    private func installOnboardingFlow(composition: AppFlowComposition) {
         let navigationController = makeNavigationController()
         let coordinator = OnboardingCoordinator(
             navigationController: navigationController,
-            dependencies: makeOnboardingDependencies(stack: stack),
+            dependencies: composition.makeOnboardingDependencies(),
             onFinished: { [weak self] job in
-                self?.installMainFlow(job: job, stack: stack)
+                self?.installMainFlow(job: job, composition: composition)
             }
         )
 
@@ -108,74 +108,17 @@ final class AppCoordinator {
         installRoot(navigationController)
     }
 
-    private func installMainFlow(job: Job, stack: CoreDataStack) {
+    private func installMainFlow(job: Job, composition: AppFlowComposition) {
         let navigationController = makeNavigationController()
         let coordinator = MainCoordinator(
             navigationController: navigationController,
             job: job,
-            dependencies: makeMainDependencies(stack: stack)
+            dependencies: composition.makeMainDependencies()
         )
 
         coordinator.start()
         activeFlow = .main(coordinator)
         installRoot(navigationController)
-    }
-
-    private func makeOnboardingDependencies(
-        stack: CoreDataStack
-    ) -> OnboardingCoordinator.Dependencies {
-        OnboardingCoordinator.Dependencies(
-            makeJobSetup: {
-                JobSetupAssembly.makeStart(
-                    initialCurrencyCode: Locale.autoupdatingCurrent.currency?.identifier ?? "USD",
-                    initialTimeZoneIdentifier: TimeZone.autoupdatingCurrent.identifier
-                )
-            },
-            makePayPeriod: { draft in
-                JobSetupAssembly.makePayPeriod(draft: draft)
-            },
-            makeReview: { draft in
-                JobSetupAssembly.makeReview(draft: draft, stack: stack)
-            }
-        )
-    }
-
-    private func makeMainDependencies(
-        stack: CoreDataStack
-    ) -> MainCoordinator.Dependencies {
-        MainCoordinator.Dependencies(
-            makeOverview: { job in
-                OverviewAssembly.make(job: job, stack: stack)
-            },
-            makeAddShift: { job in
-                AddShiftAssembly.make(job: job, stack: stack)
-            },
-            makeAddWorkType: { job in
-                AddWorkTypeAssembly.make(job: job, stack: stack)
-            },
-            makeEditShift: { job, shift in
-                EditShiftAssembly.make(job: job, shift: shift, stack: stack)
-            },
-            makeActualGrossEntry: { currencyCode in
-                ActualGrossEntryAssembly.make(currencyCode: currencyCode)
-            },
-            preparePaycheckComparison: { job, period, actualGross in
-                let shifts = try ShiftStorage(stack: stack).loadAll()
-                return try job.paycheckComparison(
-                    for: period,
-                    actualGross: actualGross,
-                    from: shifts
-                )
-            },
-            makePaycheckResult: { comparison, job in
-                PaycheckResultAssembly.make(
-                    comparison: comparison,
-                    currencyCode: job.currencyCode,
-                    timeZoneIdentifier: job.timeZoneIdentifier,
-                    workTypes: job.workTypes
-                )
-            }
-        )
     }
 
     private func installStartupFailureState() {

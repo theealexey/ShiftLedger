@@ -60,7 +60,7 @@ struct AppCoordinatorTests {
             }
 
             return AppLaunchResolution(
-                stack: stack,
+                composition: AppFlowComposition(stack: stack),
                 job: nil
             )
         }
@@ -153,7 +153,7 @@ struct AppCoordinatorTests {
             secondLoadStarted?.resume()
 
             return AppLaunchResolution(
-                stack: stack,
+                composition: AppFlowComposition(stack: stack),
                 job: nil
             )
         }
@@ -193,7 +193,7 @@ struct AppCoordinatorTests {
                 loadCallCount += 1
 
                 return AppLaunchResolution(
-                    stack: stack,
+                    composition: AppFlowComposition(stack: stack),
                     job: nil
                 )
             }
@@ -223,7 +223,7 @@ struct AppCoordinatorTests {
             loaderCallCount += 1
 
             return AppLaunchResolution(
-                stack: stack,
+                composition: AppFlowComposition(stack: stack),
                 job: job
             )
         }
@@ -258,7 +258,7 @@ struct AppCoordinatorTests {
             window: window,
             resolveLaunch: {
                 AppLaunchResolution(
-                    stack: stack,
+                    composition: AppFlowComposition(stack: stack),
                     job: nil
                 )
             },
@@ -674,7 +674,7 @@ struct AppCoordinatorTests {
             window: window,
             resolveLaunch: {
                 AppLaunchResolution(
-                    stack: stack,
+                    composition: AppFlowComposition(stack: stack),
                     job: job
                 )
             },

@@ -24,7 +24,6 @@ struct AppLaunchResolverTests {
 
         let resolution = try await resolver.resolve()
 
-        #expect(resolution.stack === stack)
         #expect(resolution.job == nil)
     }
 
@@ -50,7 +49,6 @@ struct AppLaunchResolverTests {
         let resolution = try await resolver.resolve()
         let resolvedJob = try #require(resolution.job)
 
-        #expect(resolution.stack === stack)
         #expect(resolvedJob.id == job.id)
     }
 

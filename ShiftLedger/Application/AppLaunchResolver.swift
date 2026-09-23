@@ -2,7 +2,7 @@ import Foundation
 
 @MainActor
 struct AppLaunchResolution {
-    let stack: CoreDataStack
+    let composition: AppFlowComposition
     let job: Job?
 }
 
@@ -27,7 +27,7 @@ final class AppLaunchResolver {
         let job = try loadInitialJob(from: stack)
 
         return AppLaunchResolution(
-            stack: stack,
+            composition: AppFlowComposition(stack: stack),
             job: job
         )
     }
