@@ -11,6 +11,7 @@ struct PaycheckResultFormattingTests {
             comparison: try comparison(expected: decimal("1234.56"), actual: decimal("1200")),
             currencyCode: "EUR",
             timeZoneIdentifier: "Europe/Stockholm",
+            workTypes: [try workType(name: "Lectures")],
             locale: locale
         )
 
@@ -24,6 +25,7 @@ struct PaycheckResultFormattingTests {
             comparison: try comparison(expected: decimal("1200"), actual: decimal("1234.56")),
             currencyCode: "EUR",
             timeZoneIdentifier: "Europe/Stockholm",
+            workTypes: [try workType(name: "Lectures")],
             locale: locale
         )
 
@@ -327,6 +329,69 @@ struct PaycheckResultFormattingTests {
 
         #expect(value.contains("¥"))
         #expect(value.contains(".00") == false)
+    }
+
+    @Test("Breakdown uses the matching WorkType's exact name")
+    func namedWorkTypeIsRendered() throws {
+        let model = PaycheckResultFormatting.renderModel(
+            comparison: try comparison(expected: 160, actual: 150, breakdowns: [breakdown()]),
+            currencyCode: "EUR",
+            timeZoneIdentifier: "Europe/Stockholm",
+            workTypes: [try workType(name: "Lectures")],
+            locale: locale
+        )
+
+        #expect(model.breakdownRows.first?.workTypeName == "Lectures")
+    }
+
+    @Test("Unnamed WorkType uses the localized presentation fallback")
+    func unnamedWorkTypeUsesFallback() throws {
+        let model = PaycheckResultFormatting.renderModel(
+            comparison: try comparison(expected: 160, actual: 150, breakdowns: [breakdown()]),
+            currencyCode: "EUR",
+            timeZoneIdentifier: "Europe/Stockholm",
+            workTypes: [try workType(name: nil)],
+            locale: locale
+        )
+
+        #expect(model.breakdownRows.first?.workTypeName == PaycheckResultStrings.unnamedWorkType)
+    }
+
+    @Test("A missing WorkType lookup remains safe")
+    func missingWorkTypeUsesFallback() throws {
+        let differentID = try #require(UUID(uuidString: "00000000-0000-0000-0000-000000000099"))
+        let model = PaycheckResultFormatting.renderModel(
+            comparison: try comparison(expected: 160, actual: 150, breakdowns: [breakdown()]),
+            currencyCode: "EUR",
+            timeZoneIdentifier: "Europe/Stockholm",
+            workTypes: [try workType(id: differentID, name: "Exams")],
+            locale: locale
+        )
+
+        #expect(model.breakdownRows.first?.workTypeName == PaycheckResultStrings.unnamedWorkType)
+    }
+
+    private func breakdown() throws -> ShiftPayBreakdown {
+        let rate = try PayRate(amount: 20, effectiveFrom: nil)
+        return ShiftPayBreakdown(
+            shift: try makeShift(
+                start: date(timeZone: "Europe/Stockholm", day: 20, hour: 8),
+                end: date(timeZone: "Europe/Stockholm", day: 20, hour: 16)
+            ),
+            basePayBasis: .hourly,
+            appliedPayRate: rate,
+            paidDuration: 8 * 3_600,
+            basePay: 160
+        )
+    }
+
+    private func workType(id: UUID = testWorkTypeID, name: String?) throws -> WorkType {
+        WorkType(
+            id: id,
+            name: name,
+            basePayBasis: .hourly,
+            payRateHistory: try PayRateHistory(payRates: [PayRate(amount: 20, effectiveFrom: nil)])
+        )
     }
 
     private func comparison(

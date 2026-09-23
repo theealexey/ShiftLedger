@@ -171,7 +171,8 @@ final class AppCoordinator {
                 PaycheckResultAssembly.make(
                     comparison: comparison,
                     currencyCode: job.currencyCode,
-                    timeZoneIdentifier: job.timeZoneIdentifier
+                    timeZoneIdentifier: job.timeZoneIdentifier,
+                    workTypes: job.workTypes
                 )
             }
         )

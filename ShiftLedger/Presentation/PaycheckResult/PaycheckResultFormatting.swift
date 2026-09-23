@@ -133,10 +133,13 @@ enum PaycheckResultFormatting {
         comparison: PaycheckComparison,
         currencyCode: String,
         timeZoneIdentifier: String,
+        workTypes: [WorkType],
         locale: Locale
     ) -> PaycheckResultView.RenderModel {
         let rows = comparison.expected.shiftBreakdowns.map { breakdown in
             PaycheckResultView.BreakdownRow(
+                workTypeName: workTypes.first(where: { $0.id == breakdown.shift.workTypeID })?.name
+                    ?? PaycheckResultStrings.unnamedWorkType,
                 date: shiftDateTime(
                     breakdown.shift,
                     timeZoneIdentifier: timeZoneIdentifier,

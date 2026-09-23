@@ -13,6 +13,7 @@ struct PaycheckResultViewControllerTests {
             comparison: comparison,
             currencyCode: "EUR",
             timeZoneIdentifier: "Europe/Stockholm",
+            workTypes: [try workType()],
             displayLocale: locale
         )
         viewController.loadViewIfNeeded()
@@ -31,7 +32,7 @@ struct PaycheckResultViewControllerTests {
     @Test("Reported gross renders from ActualGross")
     func actualGrossRenders() throws {
         let comparison = try makeComparison(expected: 160, actual: 150)
-        let viewController = makeViewController(comparison)
+        let viewController = try makeViewController(comparison)
         viewController.loadViewIfNeeded()
 
         let label: UILabel = try requireView(
@@ -44,7 +45,7 @@ struct PaycheckResultViewControllerTests {
     @Test("Difference renders from PaycheckComparison difference")
     func differenceRenders() throws {
         let comparison = try makeComparison(expected: 160, actual: 150)
-        let viewController = makeViewController(comparison)
+        let viewController = try makeViewController(comparison)
         viewController.loadViewIfNeeded()
 
         let label: UILabel = try requireView(
@@ -60,7 +61,7 @@ struct PaycheckResultViewControllerTests {
 
     @Test("Negative difference renders lower explanation")
     func negativeExplanationRenders() throws {
-        let viewController = makeViewController(try makeComparison(expected: 160, actual: 150))
+        let viewController = try makeViewController(try makeComparison(expected: 160, actual: 150))
         viewController.loadViewIfNeeded()
 
         let label: UILabel = try requireView(
@@ -72,7 +73,7 @@ struct PaycheckResultViewControllerTests {
 
     @Test("Exact equality renders matching explanation")
     func equalityExplanationRenders() throws {
-        let viewController = makeViewController(try makeComparison(expected: 160, actual: 160))
+        let viewController = try makeViewController(try makeComparison(expected: 160, actual: 160))
         viewController.loadViewIfNeeded()
 
         let label: UILabel = try requireView(
@@ -84,7 +85,7 @@ struct PaycheckResultViewControllerTests {
 
     @Test("Positive difference renders higher explanation")
     func positiveExplanationRenders() throws {
-        let viewController = makeViewController(try makeComparison(expected: 150, actual: 160))
+        let viewController = try makeViewController(try makeComparison(expected: 150, actual: 160))
         viewController.loadViewIfNeeded()
 
         let label: UILabel = try requireView(
@@ -96,8 +97,8 @@ struct PaycheckResultViewControllerTests {
 
     @Test("Difference and explanation do not use sign-based status colors")
     func signDoesNotChangeColors() throws {
-        let negativeController = makeViewController(try makeComparison(expected: 160, actual: 150))
-        let positiveController = makeViewController(try makeComparison(expected: 150, actual: 160))
+        let negativeController = try makeViewController(try makeComparison(expected: 160, actual: 150))
+        let positiveController = try makeViewController(try makeComparison(expected: 150, actual: 160))
         negativeController.loadViewIfNeeded()
         positiveController.loadViewIfNeeded()
 
@@ -131,7 +132,7 @@ struct PaycheckResultViewControllerTests {
             hourlyBreakdown(day: 21, rate: 25, basePay: 200)
         ]
         let comparison = try makeComparison(expected: 360, actual: 350, breakdowns: breakdowns)
-        let viewController = makeViewController(comparison)
+        let viewController = try makeViewController(comparison)
         viewController.loadViewIfNeeded()
 
         #expect(renderedRowCount(in: viewController.view) == comparison.expected.shiftBreakdowns.count)
@@ -141,7 +142,7 @@ struct PaycheckResultViewControllerTests {
     func breakdownOrderIsPreserved() throws {
         let later = try hourlyBreakdown(day: 21, rate: 25, basePay: 200)
         let earlier = try hourlyBreakdown(day: 20, rate: 20, basePay: 160)
-        let viewController = makeViewController(try makeComparison(
+        let viewController = try makeViewController(try makeComparison(
             expected: 360,
             actual: 350,
             breakdowns: [later, earlier]
@@ -163,7 +164,7 @@ struct PaycheckResultViewControllerTests {
     @Test("Hourly row renders local shift date and time")
     func hourlyRowRendersDateTime() throws {
         let breakdown = try hourlyBreakdown(day: 20, rate: 20, basePay: 160)
-        let viewController = makeViewController(try makeComparison(
+        let viewController = try makeViewController(try makeComparison(
             expected: 160,
             actual: 150,
             breakdowns: [breakdown]
@@ -179,6 +180,59 @@ struct PaycheckResultViewControllerTests {
         #expect(label.text?.contains("8:00") == true)
     }
 
+    @Test("Breakdown shows the WorkType name above the existing Shift details")
+    func breakdownShowsWorkTypeIdentity() throws {
+        let breakdown = try hourlyBreakdown(day: 20, rate: 20, basePay: 160)
+        let viewController = try makeViewController(try makeComparison(
+            expected: 160,
+            actual: 150,
+            breakdowns: [breakdown]
+        ))
+        viewController.loadViewIfNeeded()
+
+        let workType: UILabel = try requireView(
+            identifier: "paycheckResult.breakdown.row.0.workType",
+            in: viewController.view
+        )
+        #expect(workType.text == "Lectures")
+        for identifier in ["date", "duration", "rate", "amount"] {
+            #expect(descendant(
+                identifier: "paycheckResult.breakdown.row.0.\(identifier)",
+                in: viewController.view
+            ) != nil)
+        }
+    }
+
+    @Test("Long WorkType name remains flexible in accessibility layout")
+    func workTypeNameSupportsAccessibilityLayout() throws {
+        let name = "Lectures and supervised examination preparation"
+        let fixture = try makeHostedResultViewController(
+            contentSizeCategory: .accessibilityExtraExtraLarge,
+            workTypeName: name
+        )
+        let workType: UILabel = try requireView(
+            identifier: "paycheckResult.breakdown.row.0.workType",
+            in: fixture.result.view
+        )
+        let date: UILabel = try requireView(
+            identifier: "paycheckResult.breakdown.row.0.date",
+            in: fixture.result.view
+        )
+        let card: UIView = try requireView(
+            identifier: "paycheckResult.breakdown.row.0",
+            in: fixture.result.view
+        )
+        let scrollView = try #require(firstDescendant(of: UIScrollView.self, in: fixture.result.view))
+
+        #expect(workType.text == name)
+        #expect(workType.adjustsFontForContentSizeCategory)
+        #expect(workType.numberOfLines == 0)
+        let layoutEpsilon: CGFloat = 0.001
+        #expect(workType.frame.maxY <= date.frame.minY + layoutEpsilon)
+        #expect(workType.bounds.width <= card.bounds.width)
+        #expect(scrollView.contentSize.width <= scrollView.bounds.width + 1)
+    }
+
     @Test("Hourly row renders canonical paid duration")
     func hourlyRowRendersPaidDuration() throws {
         let breakdown = try hourlyBreakdown(
@@ -187,7 +241,7 @@ struct PaycheckResultViewControllerTests {
             paidDuration: 7.5 * 3_600,
             basePay: 150
         )
-        let viewController = makeViewController(try makeComparison(
+        let viewController = try makeViewController(try makeComparison(
             expected: 150,
             actual: 150,
             breakdowns: [breakdown]
@@ -209,7 +263,7 @@ struct PaycheckResultViewControllerTests {
             paidDuration: 54.974985003471375,
             basePay: 1
         )
-        let viewController = makeViewController(try makeComparison(
+        let viewController = try makeViewController(try makeComparison(
             expected: 1,
             actual: 1,
             breakdowns: [breakdown]
@@ -232,7 +286,7 @@ struct PaycheckResultViewControllerTests {
             paidDuration: 60,
             basePay: 1
         )
-        let viewController = makeViewController(try makeComparison(
+        let viewController = try makeViewController(try makeComparison(
             expected: 1,
             actual: 1,
             breakdowns: [breakdown]
@@ -293,7 +347,8 @@ struct PaycheckResultViewControllerTests {
         let durationTitle = try #require(durationRow.arrangedSubviews.first as? UILabel)
         let rateRow = try requireMetricRow(identifier: "rate", in: fixture.result.view)
 
-        #expect(duration.frame.minY >= durationTitle.frame.maxY + 4)
+        let layoutEpsilon: CGFloat = 0.001
+        #expect(duration.frame.minY + layoutEpsilon >= durationTitle.frame.maxY)
         #expect(duration.bounds.width > duration.font.lineHeight)
         #expect(duration.bounds.height <= duration.font.lineHeight * 1.5)
         #expect(duration.frame.maxY < rateRow.frame.minY)
@@ -302,7 +357,7 @@ struct PaycheckResultViewControllerTests {
     @Test("Hourly row renders applied rate")
     func hourlyRowRendersAppliedRate() throws {
         let breakdown = try hourlyBreakdown(day: 20, rate: 20, basePay: 160)
-        let viewController = makeViewController(try makeComparison(
+        let viewController = try makeViewController(try makeComparison(
             expected: 160,
             actual: 150,
             breakdowns: [breakdown]
@@ -324,7 +379,7 @@ struct PaycheckResultViewControllerTests {
     @Test("Hourly row renders canonical base pay")
     func hourlyRowRendersBasePay() throws {
         let breakdown = try hourlyBreakdown(day: 20, rate: 20, basePay: 160)
-        let viewController = makeViewController(try makeComparison(
+        let viewController = try makeViewController(try makeComparison(
             expected: 160,
             actual: 150,
             breakdowns: [breakdown]
@@ -345,7 +400,7 @@ struct PaycheckResultViewControllerTests {
     @Test("Fixed-per-shift row labels rate per shift")
     func fixedRowUsesShiftRateUnit() throws {
         let breakdown = try fixedBreakdown()
-        let viewController = makeViewController(try makeComparison(
+        let viewController = try makeViewController(try makeComparison(
             expected: 175,
             actual: 170,
             breakdowns: [breakdown]
@@ -362,7 +417,7 @@ struct PaycheckResultViewControllerTests {
     @Test("Fixed-per-shift row uses canonical breakdown base pay")
     func fixedRowUsesCanonicalBasePay() throws {
         let breakdown = try fixedBreakdown()
-        let viewController = makeViewController(try makeComparison(
+        let viewController = try makeViewController(try makeComparison(
             expected: 175,
             actual: 170,
             breakdowns: [breakdown]
@@ -383,7 +438,7 @@ struct PaycheckResultViewControllerTests {
 
     @Test("Zero-shift comparison renders empty breakdown message")
     func zeroShiftComparisonRendersEmptyBreakdown() throws {
-        let viewController = makeViewController(try makeComparison(expected: .zero, actual: 50))
+        let viewController = try makeViewController(try makeComparison(expected: .zero, actual: 50))
         viewController.loadViewIfNeeded()
 
         let label: UILabel = try requireView(
@@ -397,7 +452,7 @@ struct PaycheckResultViewControllerTests {
 
     @Test("Zero-shift comparison still renders the summary")
     func zeroShiftComparisonRendersSummary() throws {
-        let viewController = makeViewController(try makeComparison(expected: .zero, actual: 50))
+        let viewController = try makeViewController(try makeComparison(expected: .zero, actual: 50))
         viewController.loadViewIfNeeded()
 
         let expected: UILabel = try requireView(
@@ -419,7 +474,7 @@ struct PaycheckResultViewControllerTests {
 
     @Test("Done action invokes callback exactly once")
     func doneInvokesCallbackOnce() throws {
-        let viewController = makeViewController(try makeComparison(expected: 160, actual: 150))
+        let viewController = try makeViewController(try makeComparison(expected: 160, actual: 150))
         var callCount = 0
         viewController.onDone = { callCount += 1 }
         viewController.loadViewIfNeeded()
@@ -436,7 +491,7 @@ struct PaycheckResultViewControllerTests {
     @Test("Required accessibility identifiers exist")
     func accessibilityIdentifiersExist() throws {
         let breakdown = try hourlyBreakdown(day: 20, rate: 20, basePay: 160)
-        let viewController = makeViewController(try makeComparison(
+        let viewController = try makeViewController(try makeComparison(
             expected: 160,
             actual: 150,
             breakdowns: [breakdown]
@@ -471,7 +526,7 @@ struct PaycheckResultViewControllerTests {
     @Test("All result labels and Done support Dynamic Type")
     func contentSupportsDynamicType() throws {
         let breakdown = try hourlyBreakdown(day: 20, rate: 20, basePay: 160)
-        let viewController = makeViewController(try makeComparison(
+        let viewController = try makeViewController(try makeComparison(
             expected: 160,
             actual: 150,
             breakdowns: [breakdown]
@@ -487,6 +542,7 @@ struct PaycheckResultViewControllerTests {
             "paycheckResult.difference.value",
             "paycheckResult.explanation",
             "paycheckResult.breakdown.title",
+            "paycheckResult.breakdown.row.0.workType",
             "paycheckResult.breakdown.row.0.date",
             "paycheckResult.breakdown.row.0.duration",
             "paycheckResult.breakdown.row.0.rate",
@@ -502,7 +558,7 @@ struct PaycheckResultViewControllerTests {
     @Test("Flexible labels do not use fixed heights")
     func labelsHaveFlexibleHeight() throws {
         let breakdown = try hourlyBreakdown(day: 20, rate: 20, basePay: 160)
-        let viewController = makeViewController(try makeComparison(
+        let viewController = try makeViewController(try makeComparison(
             expected: 160,
             actual: 150,
             breakdowns: [breakdown]
@@ -514,6 +570,7 @@ struct PaycheckResultViewControllerTests {
             "paycheckResult.actual.value",
             "paycheckResult.difference.value",
             "paycheckResult.explanation",
+            "paycheckResult.breakdown.row.0.workType",
             "paycheckResult.breakdown.row.0.date",
             "paycheckResult.breakdown.row.0.duration",
             "paycheckResult.breakdown.row.0.rate",
@@ -527,7 +584,7 @@ struct PaycheckResultViewControllerTests {
 
     @Test("Scroll view keeps large result content reachable")
     func scrollViewSupportsLargeContent() throws {
-        let viewController = makeViewController(try makeComparison(expected: 160, actual: 150))
+        let viewController = try makeViewController(try makeComparison(expected: 160, actual: 150))
         viewController.loadViewIfNeeded()
 
         let scrollView = try #require(firstDescendant(of: UIScrollView.self, in: viewController.view))
@@ -535,23 +592,28 @@ struct PaycheckResultViewControllerTests {
         #expect(scrollView.alwaysBounceVertical)
     }
 
-    private func makeViewController(_ comparison: PaycheckComparison) -> PaycheckResultViewController {
+    private func makeViewController(
+        _ comparison: PaycheckComparison,
+        workTypeName: String? = "Lectures"
+    ) throws -> PaycheckResultViewController {
         PaycheckResultViewController(
             comparison: comparison,
             currencyCode: "EUR",
             timeZoneIdentifier: "Europe/Stockholm",
+            workTypes: [try workType(name: workTypeName)],
             displayLocale: locale
         )
     }
 
     private func makeHostedResultViewController(
-        contentSizeCategory: UIContentSizeCategory
+        contentSizeCategory: UIContentSizeCategory,
+        workTypeName: String? = "Lectures"
     ) throws -> (host: UIViewController, result: PaycheckResultViewController) {
-        let result = makeViewController(try makeComparison(
+        let result = try makeViewController(try makeComparison(
             expected: 1,
             actual: 1,
             breakdowns: [try hourlyBreakdown(day: 20, rate: 20, paidDuration: 60, basePay: 1)]
-        ))
+        ), workTypeName: workTypeName)
         let host = UIViewController()
         host.loadViewIfNeeded()
         host.addChild(result)
@@ -625,6 +687,15 @@ struct PaycheckResultViewControllerTests {
             appliedPayRate: try PayRate(amount: 175, effectiveFrom: nil),
             paidDuration: shift.paidDuration,
             basePay: 175
+        )
+    }
+
+    private func workType(name: String? = "Lectures") throws -> WorkType {
+        WorkType(
+            id: testWorkTypeID,
+            name: name,
+            basePayBasis: .hourly,
+            payRateHistory: try PayRateHistory(payRates: [PayRate(amount: 20, effectiveFrom: nil)])
         )
     }
 

@@ -799,6 +799,7 @@ struct AppCoordinatorTests {
             comparison: comparison,
             currencyCode: job.currencyCode,
             timeZoneIdentifier: job.timeZoneIdentifier,
+            workTypes: job.workTypes,
             locale: CurrencySelectionItem.applicationDisplayLocale
         )
         for (identifier, text) in [

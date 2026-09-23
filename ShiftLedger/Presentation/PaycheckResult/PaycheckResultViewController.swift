@@ -6,6 +6,7 @@ final class PaycheckResultViewController: UIViewController {
     private let comparison: PaycheckComparison
     private let currencyCode: String
     private let timeZoneIdentifier: String
+    private let workTypes: [WorkType]
     private let displayLocale: Locale
     private let paycheckResultView = PaycheckResultView(frame: .zero)
 
@@ -13,11 +14,13 @@ final class PaycheckResultViewController: UIViewController {
         comparison: PaycheckComparison,
         currencyCode: String,
         timeZoneIdentifier: String,
+        workTypes: [WorkType],
         displayLocale: Locale
     ) {
         self.comparison = comparison
         self.currencyCode = currencyCode
         self.timeZoneIdentifier = timeZoneIdentifier
+        self.workTypes = workTypes
         self.displayLocale = displayLocale
         super.init(nibName: nil, bundle: nil)
     }
@@ -41,6 +44,7 @@ final class PaycheckResultViewController: UIViewController {
             comparison: comparison,
             currencyCode: currencyCode,
             timeZoneIdentifier: timeZoneIdentifier,
+            workTypes: workTypes,
             locale: displayLocale
         ))
     }

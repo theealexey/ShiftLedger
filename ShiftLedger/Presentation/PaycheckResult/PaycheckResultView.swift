@@ -2,6 +2,7 @@ import UIKit
 
 final class PaycheckResultView: UIView {
     struct BreakdownRow {
+        let workTypeName: String
         let date: String
         let duration: String
         let rate: String
@@ -233,6 +234,13 @@ final class PaycheckResultView: UIView {
         stack.spacing = 10
         stack.translatesAutoresizingMaskIntoConstraints = false
         card.addSubview(stack)
+
+        let workTypeLabel = UILabel()
+        configureLabel(workTypeLabel, font: ShiftLedgerTypography.callout, color: ShiftLedgerColors.textSecondary)
+        workTypeLabel.text = row.workTypeName
+        workTypeLabel.accessibilityIdentifier = "paycheckResult.breakdown.row.\(index).workType"
+        stack.addArrangedSubview(workTypeLabel)
+        stack.setCustomSpacing(4, after: workTypeLabel)
 
         let dateLabel = UILabel()
         configureLabel(dateLabel, font: ShiftLedgerTypography.headline, color: ShiftLedgerColors.textPrimary)

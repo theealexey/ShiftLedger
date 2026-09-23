@@ -1185,6 +1185,13 @@
         "ru" : { "stringUnit" : { "state" : "translated", "value" : "Ожидаемо" } }
       }
     },
+    "paycheckResult.shift.unnamedWorkType" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Unnamed work type" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Вид работы без названия" } }
+      }
+    },
     "paycheckResult.rate.hour" : {
       "extractionState" : "manual",
       "localizations" : {

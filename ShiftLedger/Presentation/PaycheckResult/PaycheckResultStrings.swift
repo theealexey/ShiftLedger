@@ -19,6 +19,9 @@ enum PaycheckResultStrings {
     static var shiftExpected: String {
         String(localized: "paycheckResult.shift.expected", table: "Localizable")
     }
+    static var unnamedWorkType: String {
+        String(localized: "paycheckResult.shift.unnamedWorkType", table: "Localizable")
+    }
     static var rateHour: String { String(localized: "paycheckResult.rate.hour", table: "Localizable") }
     static var rateShift: String { String(localized: "paycheckResult.rate.shift", table: "Localizable") }
     static var durationHour: String {
