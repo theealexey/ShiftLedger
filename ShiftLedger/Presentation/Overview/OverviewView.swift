@@ -78,6 +78,7 @@ final class OverviewView: UIView, UIScrollViewDelegate {
         configureInteractions()
         registerForTraitChanges([UITraitPreferredContentSizeCategory.self]) { (self: Self, _) in
             self.updatePeriodRailForContentSizeCategory()
+            self.updateActionButtonsForContentSizeCategory()
         }
         renderIdle()
     }
@@ -234,6 +235,7 @@ final class OverviewView: UIView, UIScrollViewDelegate {
         navigationStack.distribution = .fill
         navigationStack.spacing = 4
         periodRailContainer.axis = .vertical
+        periodRailContainer.spacing = 8
         periodRailScrollView.showsHorizontalScrollIndicator = false
         periodRailScrollView.alwaysBounceHorizontal = true
         periodRailScrollView.delegate = self
@@ -255,6 +257,7 @@ final class OverviewView: UIView, UIScrollViewDelegate {
         )
         configureLabel(periodLabel, font: ShiftLedgerTypography.callout, color: ShiftLedgerColors.textSecondary)
         periodLabel.textAlignment = .center
+        periodLabel.lineBreakMode = .byWordWrapping
         periodLabel.accessibilityIdentifier = "overview.period.label"
         periodLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         periodLabel.setContentHuggingPriority(.defaultLow, for: .horizontal)
@@ -354,10 +357,10 @@ final class OverviewView: UIView, UIScrollViewDelegate {
         [periodRailContainer, contentCard, shiftHistoryStack, checkPaycheckButton, emptyCard, errorCard, addShiftButton]
             .forEach(mainStack.addArrangedSubview)
 
+        periodRailContainer.addArrangedSubview(periodLabel)
         periodRailContainer.addArrangedSubview(navigationStack)
         navigationStack.addArrangedSubview(previousButton)
         navigationStack.addArrangedSubview(periodRailScrollView)
-        navigationStack.addArrangedSubview(periodLabel)
         navigationStack.addArrangedSubview(nextButton)
         periodRailScrollView.addSubview(periodRailStack)
 
@@ -491,6 +494,9 @@ final class OverviewView: UIView, UIScrollViewDelegate {
         button.tintColor = ShiftLedgerColors.accentPrimary
         button.titleLabel?.font = ShiftLedgerTypography.button
         button.titleLabel?.adjustsFontForContentSizeCategory = true
+        button.titleLabel?.numberOfLines = 0
+        button.titleLabel?.lineBreakMode = .byWordWrapping
+        button.titleLabel?.textAlignment = .center
         button.accessibilityLabel = title
         button.accessibilityIdentifier = identifier
     }
@@ -594,8 +600,22 @@ final class OverviewView: UIView, UIScrollViewDelegate {
         let usesAccessibilityLayout = traitCollection.preferredContentSizeCategory.isAccessibilityCategory
         periodRailScrollView.isHidden = usesAccessibilityLayout
         periodLabel.isHidden = !usesAccessibilityLayout
+        navigationStack.distribution = usesAccessibilityLayout ? .equalSpacing : .fill
         shiftStack.usesAccessibleListLayout = usesAccessibilityLayout
         needsPeriodCentering = true
+        setNeedsLayout()
+    }
+
+    private func updateActionButtonsForContentSizeCategory() {
+        [checkPaycheckButton, addShiftButton, retryButton].forEach { button in
+            button.titleLabel?.numberOfLines = 0
+            button.titleLabel?.lineBreakMode = .byWordWrapping
+            button.titleLabel?.textAlignment = .center
+            button.titleLabel?.invalidateIntrinsicContentSize()
+            button.invalidateIntrinsicContentSize()
+            button.setNeedsLayout()
+        }
+        mainStack.setNeedsLayout()
         setNeedsLayout()
     }
 }
@@ -865,6 +885,9 @@ private final class OverviewShiftCardView: UIControl {
         super.init(frame: .zero)
         configureHierarchy()
         configureLayout()
+        registerForTraitChanges([UITraitPreferredContentSizeCategory.self]) { (self: Self, _) in
+            self.updateEditButtonForContentSizeCategory()
+        }
         update(
             with: card,
             surfaceRole: surfaceRole,
@@ -942,6 +965,7 @@ private final class OverviewShiftCardView: UIControl {
 
         coveredDateLabel.text = card.frontDate
         configureLabel(coveredDateLabel, font: ShiftLedgerTypography.headline, color: secondaryForeground)
+        coveredDateLabel.numberOfLines = 1
         coveredDateLabel.accessibilityIdentifier = "overview.shift.\(card.id.uuidString).date"
         coveredDateLabel.isAccessibilityElement = false
         coveredDateLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
@@ -958,6 +982,7 @@ private final class OverviewShiftCardView: UIControl {
 
         frontDateLabel.text = card.frontDate
         configureLabel(frontDateLabel, font: ShiftLedgerTypography.headline, color: secondaryForeground)
+        frontDateLabel.numberOfLines = 1
         frontDateLabel.accessibilityIdentifier = "overview.shift.\(card.id.uuidString).frontDate"
         frontDateLabel.isAccessibilityElement = false
         frontDateLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
@@ -1101,6 +1126,8 @@ private final class OverviewShiftCardView: UIControl {
         editButton.configuration = editConfiguration
         editButton.contentHorizontalAlignment = .leading
         editButton.titleLabel?.adjustsFontForContentSizeCategory = true
+        editButton.titleLabel?.numberOfLines = 0
+        editButton.titleLabel?.lineBreakMode = .byWordWrapping
         editButton.heightAnchor.constraint(greaterThanOrEqualToConstant: 44).isActive = true
         editButton.addAction(UIAction { [weak self] _ in self?.onEditTapped?() }, for: .touchUpInside)
 
@@ -1145,7 +1172,7 @@ private final class OverviewShiftCardView: UIControl {
         let topRowAxis: NSLayoutConstraint.Axis = usesVerticalTopRow ? .vertical : .horizontal
         if headerTopRow.axis != topRowAxis {
             headerTopRow.axis = topRowAxis
-            headerTopRow.alignment = usesVerticalTopRow ? .leading : .firstBaseline
+            headerTopRow.alignment = usesVerticalTopRow ? .fill : .firstBaseline
             headerTopRow.spacing = usesVerticalTopRow ? 4 : 12
         }
         headerSpacer.isHidden = usesVerticalTopRow
@@ -1158,10 +1185,20 @@ private final class OverviewShiftCardView: UIControl {
         let frontHeaderAxis: NSLayoutConstraint.Axis = usesVerticalFrontHeader ? .vertical : .horizontal
         if frontHeaderRow.axis != frontHeaderAxis {
             frontHeaderRow.axis = frontHeaderAxis
-            frontHeaderRow.alignment = usesVerticalFrontHeader ? .leading : .firstBaseline
+            frontHeaderRow.alignment = usesVerticalFrontHeader ? .fill : .firstBaseline
             frontHeaderRow.spacing = usesVerticalFrontHeader ? 4 : Layout.frontHeaderSpacing
         }
         frontHeaderSpacer.isHidden = usesVerticalFrontHeader
+    }
+
+    private func updateEditButtonForContentSizeCategory() {
+        editButton.titleLabel?.numberOfLines = 0
+        editButton.titleLabel?.lineBreakMode = .byWordWrapping
+        editButton.titleLabel?.invalidateIntrinsicContentSize()
+        editButton.invalidateIntrinsicContentSize()
+        editButton.setNeedsLayout()
+        contentStack.setNeedsLayout()
+        setNeedsLayout()
     }
 
     func updateAccessibilityFrame(for region: CGRect, in container: UIView) {

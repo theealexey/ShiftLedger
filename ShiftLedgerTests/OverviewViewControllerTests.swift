@@ -15,9 +15,9 @@ struct OverviewViewControllerTests {
         window.isHidden = false
         defer { window.isHidden = true }
         window.layoutIfNeeded()
-        subject.viewController.view.layoutIfNeeded()
-        let fallback: UILabel = try requireView(identifier: "overview.period.label", in: subject.viewController.view)
-        let rail: UIScrollView = try requireView(identifier: "overview.period.rail", in: subject.viewController.view)
+        try requireRootView(subject.viewController).layoutIfNeeded()
+        let fallback: UILabel = try requireView(identifier: "overview.period.label", in: try requireRootView(subject.viewController))
+        let rail: UIScrollView = try requireView(identifier: "overview.period.rail", in: try requireRootView(subject.viewController))
         #expect(isEffectivelyHidden(fallback))
         #expect(!isEffectivelyHidden(rail))
         let previous: UIControl = try requireView(identifier: "overview.period.item.0", in: rail)
@@ -32,13 +32,68 @@ struct OverviewViewControllerTests {
         }
     }
 
+    @Test("Accessibility period uses full-width text above navigation and reverses with traits")
+    func accessibilityPeriodLayoutReverses() throws {
+        let job = try makeJob(cycle: .scheduled(.calendarMonthly))
+        let subject = try makeSubject(job: job, shifts: [])
+        subject.viewController.traitOverrides.preferredContentSizeCategory = .large
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+        window.rootViewController = subject.viewController
+        window.isHidden = false
+        defer { window.isHidden = true }
+        window.layoutIfNeeded()
+
+        let root = try requireRootView(subject.viewController)
+        let period: UILabel = try requireView(identifier: "overview.period.label", in: root)
+        let rail: UIScrollView = try requireView(identifier: "overview.period.rail", in: root)
+        let previous: UIButton = try requireView(identifier: "overview.period.previous", in: root)
+        let next: UIButton = try requireView(identifier: "overview.period.next", in: root)
+        #expect(isEffectivelyHidden(period))
+        #expect(isEffectivelyHidden(rail) == false)
+
+        subject.viewController.traitOverrides.preferredContentSizeCategory = .accessibilityExtraExtraExtraLarge
+        window.layoutIfNeeded()
+        root.layoutIfNeeded()
+        #expect(isEffectivelyHidden(rail))
+        #expect(isEffectivelyHidden(period) == false)
+        let content = try requireContent(subject.viewModel.state)
+        guard case let .scheduled(selectedPeriod)? = content.selectedPeriod else {
+            throw OverviewControllerTestError.contentUnavailable
+        }
+        #expect(period.text == OverviewFormatting.scheduledPeriod(
+            selectedPeriod,
+            timeZoneIdentifier: job.timeZoneIdentifier,
+            locale: displayLocale
+        ))
+        #expect(period.numberOfLines == 0)
+        #expect(period.lineBreakMode == .byWordWrapping)
+        let periodFrame = period.convert(period.bounds, to: window)
+        let previousFrame = previous.convert(previous.bounds, to: window)
+        let nextFrame = next.convert(next.bounds, to: window)
+        let sectionWidth = try #require(period.superview?.bounds.width)
+        #expect(period.bounds.width >= sectionWidth - 1)
+        #expect(previousFrame.minY >= periodFrame.maxY)
+        #expect(nextFrame.minY >= periodFrame.maxY)
+        #expect(abs(previousFrame.midY - nextFrame.midY) < 1)
+        #expect(previousFrame.maxX < nextFrame.minX)
+        #expect(previous.bounds.width >= 44 && previous.bounds.height >= 44)
+        #expect(next.bounds.width >= 44 && next.bounds.height >= 44)
+
+        subject.viewController.traitOverrides.preferredContentSizeCategory = .large
+        window.layoutIfNeeded()
+        root.layoutIfNeeded()
+        #expect(isEffectivelyHidden(period))
+        #expect(isEffectivelyHidden(rail) == false)
+        #expect(previous.isEnabled)
+    }
+
     @Test("Hero currency context and the single Shift heading are explicit")
     func heroAndShiftHeadingHaveOneHierarchy() throws {
         let subject = try makeSubject(job: makeJob(cycle: .scheduled(.calendarMonthly)), shifts: [makeShift(id: 1, month: 9, day: 10)])
         subject.viewController.loadViewIfNeeded()
-        let context: UILabel = try requireView(identifier: "overview.expectedGross.label", in: subject.viewController.view)
-        let amount: UILabel = try requireView(identifier: "overview.expectedGross.amount", in: subject.viewController.view)
-        let heading: UIStackView = try requireView(identifier: "overview.shiftHistory.title", in: subject.viewController.view)
+        let context: UILabel = try requireView(identifier: "overview.expectedGross.label", in: try requireRootView(subject.viewController))
+        let amount: UILabel = try requireView(identifier: "overview.expectedGross.amount", in: try requireRootView(subject.viewController))
+        let heading: UIStackView = try requireView(identifier: "overview.shiftHistory.title", in: try requireRootView(subject.viewController))
         #expect(context.text == OverviewStrings.expectedGrossContext(currencyCode: "EUR"))
         #expect(amount.text == OverviewFormatting.heroAmount(160, currencyCode: "EUR", locale: displayLocale))
         #expect(heading.isAccessibilityElement)
@@ -56,7 +111,7 @@ struct OverviewViewControllerTests {
 
         let label: UILabel = try requireView(
             identifier: "overview.expectedGross.amount",
-            in: subject.viewController.view
+            in: try requireRootView(subject.viewController)
         )
         #expect(label.text?.contains("160") == true)
         #expect(label.font.pointSize == ShiftLedgerTypography.expectedGrossDisplay.pointSize)
@@ -73,7 +128,7 @@ struct OverviewViewControllerTests {
         subject.viewController.loadViewIfNeeded()
         let railItem: UIControl = try requireView(
             identifier: "overview.period.item.0",
-            in: subject.viewController.view
+            in: try requireRootView(subject.viewController)
         )
 
         railItem.sendActions(for: .touchUpInside)
@@ -84,15 +139,15 @@ struct OverviewViewControllerTests {
             endExclusive: try LocalDate(year: 2026, month: 9, day: 1)
         )))
         #expect(content.expectedBreakdown?.shiftBreakdowns.map(\.shift) == [august])
-        #expect(shiftCardIdentifiers(in: subject.viewController.view) == [september.id, august.id])
+        #expect(shiftCardIdentifiers(in: try requireRootView(subject.viewController)) == [september.id, august.id])
         let selectedRailItem: UIControl = try requireView(
             identifier: "overview.period.item.1",
-            in: subject.viewController.view
+            in: try requireRootView(subject.viewController)
         )
         #expect(selectedRailItem.accessibilityTraits.contains(.selected))
         let checkPaycheck: UIButton = try requireView(
             identifier: "overview.checkPaycheck",
-            in: subject.viewController.view
+            in: try requireRootView(subject.viewController)
         )
         checkPaycheck.sendActions(for: .touchUpInside)
         #expect(receivedPeriod == content.selectedPeriod)
@@ -107,7 +162,7 @@ struct OverviewViewControllerTests {
 
         let label: UILabel = try requireView(
             identifier: "overview.period.label",
-            in: subject.viewController.view
+            in: try requireRootView(subject.viewController)
         )
         #expect(label.text?.contains("Sep") == true)
         #expect(label.text?.contains("30") == true)
@@ -124,7 +179,7 @@ struct OverviewViewControllerTests {
 
         let label: UILabel = try requireView(
             identifier: "overview.shiftCount.value",
-            in: subject.viewController.view
+            in: try requireRootView(subject.viewController)
         )
         #expect(label.text == "2")
         let content = try requireContent(subject.viewModel.state)
@@ -141,31 +196,31 @@ struct OverviewViewControllerTests {
 
         subject.viewController.loadViewIfNeeded()
 
-        #expect(shiftCardIdentifiers(in: subject.viewController.view) == [newer.id, older.id])
+        #expect(shiftCardIdentifiers(in: try requireRootView(subject.viewController)) == [newer.id, older.id])
 
         let frontDate: UILabel = try requireView(
             identifier: "overview.shift.\(newer.id.uuidString).frontDate",
-            in: subject.viewController.view
+            in: try requireRootView(subject.viewController)
         )
         let amount: UILabel = try requireView(
             identifier: "overview.shift.\(newer.id.uuidString).frontExpected",
-            in: subject.viewController.view
+            in: try requireRootView(subject.viewController)
         )
         let duration: UILabel = try requireView(
             identifier: "overview.shift.\(newer.id.uuidString).duration",
-            in: subject.viewController.view
+            in: try requireRootView(subject.viewController)
         )
         let endpoints: UIView = try requireView(
             identifier: "overview.shift.\(newer.id.uuidString).endpoints",
-            in: subject.viewController.view
+            in: try requireRootView(subject.viewController)
         )
         let endpointsStart: UILabel = try requireView(
             identifier: "overview.shift.\(newer.id.uuidString).endpoints.start",
-            in: subject.viewController.view
+            in: try requireRootView(subject.viewController)
         )
         let endpointsEnd: UILabel = try requireView(
             identifier: "overview.shift.\(newer.id.uuidString).endpoints.end",
-            in: subject.viewController.view
+            in: try requireRootView(subject.viewController)
         )
         #expect(frontDate.text == OverviewFormatting.frontShiftDate(
             newer,
@@ -186,7 +241,7 @@ struct OverviewViewControllerTests {
         #expect(endpointsStart.text == expectedEndpoints.startTime)
         #expect(endpointsEnd.text == expectedEndpoints.endTime)
         #expect(endpoints.isAccessibilityElement == false)
-        #expect(descendant(identifier: "overview.shift.\(newer.id.uuidString).dateBadge", in: subject.viewController.view) == nil)
+        #expect(descendant(identifier: "overview.shift.\(newer.id.uuidString).dateBadge", in: try requireRootView(subject.viewController)) == nil)
     }
 
     @Test("A covered Shift exposes its date, time, and expected contribution in the dedicated header")
@@ -204,31 +259,31 @@ struct OverviewViewControllerTests {
 
         let header: UIView = try requireView(
             identifier: "overview.shift.\(older.id.uuidString).header",
-            in: subject.viewController.view
+            in: try requireRootView(subject.viewController)
         )
         let card: UIView = try requireView(
             identifier: "overview.shift.\(older.id.uuidString)",
-            in: subject.viewController.view
+            in: try requireRootView(subject.viewController)
         )
         let time: UILabel = try requireView(
             identifier: "overview.shift.\(older.id.uuidString).time",
-            in: subject.viewController.view
+            in: try requireRootView(subject.viewController)
         )
         let amount: UILabel = try requireView(
             identifier: "overview.shift.\(older.id.uuidString).expected",
-            in: subject.viewController.view
+            in: try requireRootView(subject.viewController)
         )
         let duration: UILabel = try requireView(
             identifier: "overview.shift.\(older.id.uuidString).duration",
-            in: subject.viewController.view
+            in: try requireRootView(subject.viewController)
         )
         let rate: UILabel = try requireView(
             identifier: "overview.shift.\(older.id.uuidString).detail.rate",
-            in: subject.viewController.view
+            in: try requireRootView(subject.viewController)
         )
         let date: UILabel = try requireView(
             identifier: "overview.shift.\(older.id.uuidString).date",
-            in: subject.viewController.view
+            in: try requireRootView(subject.viewController)
         )
 
         let headerFrame = header.convert(header.bounds, to: card)
@@ -243,14 +298,17 @@ struct OverviewViewControllerTests {
         ))
         #expect(duration.isDescendant(of: header) == false)
         #expect(rate.isDescendant(of: header) == false)
-        #expect(descendant(identifier: "overview.shift.\(older.id.uuidString).dateBadge", in: subject.viewController.view) == nil)
+        #expect(descendant(identifier: "overview.shift.\(older.id.uuidString).dateBadge", in: try requireRootView(subject.viewController)) == nil)
         let coveredEndpoints = descendant(
             identifier: "overview.shift.\(older.id.uuidString).endpoints",
-            in: subject.viewController.view
+            in: try requireRootView(subject.viewController)
         )
         #expect(coveredEndpoints == nil)
-        for label in [date, time, amount] {
+        #expect(date.numberOfLines == 1)
+        for label in [time, amount] {
             #expect(label.numberOfLines == 0)
+        }
+        for label in [date, time, amount] {
             #expect(label.bounds.height + 0.5 >= label.sizeThatFits(
                 CGSize(width: label.bounds.width, height: CGFloat.greatestFiniteMagnitude)
             ).height)
@@ -267,19 +325,19 @@ struct OverviewViewControllerTests {
 
         let frontEndpoints: UIView = try requireView(
             identifier: "overview.shift.\(newer.id.uuidString).endpoints",
-            in: subject.viewController.view
+            in: try requireRootView(subject.viewController)
         )
         let coveredEndpoints = descendant(
             identifier: "overview.shift.\(older.id.uuidString).endpoints",
-            in: subject.viewController.view
+            in: try requireRootView(subject.viewController)
         )
         let frontHeader: UIView = try requireView(
             identifier: "overview.shift.\(newer.id.uuidString).frontContent",
-            in: subject.viewController.view
+            in: try requireRootView(subject.viewController)
         )
         let coveredHeader: UIView = try requireView(
             identifier: "overview.shift.\(older.id.uuidString).header",
-            in: subject.viewController.view
+            in: try requireRootView(subject.viewController)
         )
 
         #expect(isEffectivelyHidden(frontEndpoints) == false)
@@ -313,14 +371,14 @@ struct OverviewViewControllerTests {
         window.layoutIfNeeded()
 
         let prefix = "overview.shift.\(shift.id.uuidString)"
-        let endpoints: UIView = try requireView(identifier: "\(prefix).endpoints", in: subject.viewController.view)
+        let endpoints: UIView = try requireView(identifier: "\(prefix).endpoints", in: try requireRootView(subject.viewController))
         let startTime: UILabel = try requireView(identifier: "\(prefix).endpoints.start", in: endpoints)
         let endTime: UILabel = try requireView(identifier: "\(prefix).endpoints.end", in: endpoints)
         let startDate: UILabel = try requireView(identifier: "\(prefix).endpoints.startDate", in: endpoints)
         let endDate: UILabel = try requireView(identifier: "\(prefix).endpoints.endDate", in: endpoints)
-        let duration: UILabel = try requireView(identifier: "\(prefix).duration", in: subject.viewController.view)
-        let unpaidBreak: UILabel = try requireView(identifier: "\(prefix).break", in: subject.viewController.view)
-        let card: UIControl = try requireView(identifier: prefix, in: subject.viewController.view)
+        let duration: UILabel = try requireView(identifier: "\(prefix).duration", in: try requireRootView(subject.viewController))
+        let unpaidBreak: UILabel = try requireView(identifier: "\(prefix).break", in: try requireRootView(subject.viewController))
+        let card: UIControl = try requireView(identifier: prefix, in: try requireRootView(subject.viewController))
 
         #expect(descendant(identifier: "\(prefix).timeline", in: card) == nil)
         #expect(endpoints.accessibilityElementsHidden)
@@ -367,11 +425,11 @@ struct OverviewViewControllerTests {
 
         let startTime: UILabel = try requireView(
             identifier: "overview.shift.\(overnight.id.uuidString).endpoints.start",
-            in: subject.viewController.view
+            in: try requireRootView(subject.viewController)
         )
         let endTime: UILabel = try requireView(
             identifier: "overview.shift.\(overnight.id.uuidString).endpoints.end",
-            in: subject.viewController.view
+            in: try requireRootView(subject.viewController)
         )
         let expectedEndpoints = try #require(OverviewFormatting.shiftEndpoints(
             overnight,
@@ -382,11 +440,11 @@ struct OverviewViewControllerTests {
         #expect(endTime.text == expectedEndpoints.endTime)
         let startDate: UILabel = try requireView(
             identifier: "overview.shift.\(overnight.id.uuidString).endpoints.startDate",
-            in: subject.viewController.view
+            in: try requireRootView(subject.viewController)
         )
         let endDate: UILabel = try requireView(
             identifier: "overview.shift.\(overnight.id.uuidString).endpoints.endDate",
-            in: subject.viewController.view
+            in: try requireRootView(subject.viewController)
         )
         #expect(startDate.text == expectedEndpoints.startDate)
         #expect(endDate.text == expectedEndpoints.endDate)
@@ -394,7 +452,7 @@ struct OverviewViewControllerTests {
         #expect(isEffectivelyHidden(endDate) == false)
         let card: UIControl = try requireView(
             identifier: "overview.shift.\(overnight.id.uuidString)",
-            in: subject.viewController.view
+            in: try requireRootView(subject.viewController)
         )
         let fullDate = try #require(OverviewFormatting.shiftDate(
             overnight,
@@ -446,10 +504,10 @@ struct OverviewViewControllerTests {
         let subject = try makeSubject(job: job, shifts: [older, newer])
         subject.viewController.loadViewIfNeeded()
 
-        #expect(shiftCardIdentifiers(in: subject.viewController.view) == [newer.id, older.id])
+        #expect(shiftCardIdentifiers(in: try requireRootView(subject.viewController)) == [newer.id, older.id])
         let firstPeriod: UIControl = try requireView(
             identifier: "overview.period.item.0",
-            in: subject.viewController.view
+            in: try requireRootView(subject.viewController)
         )
         firstPeriod.sendActions(for: .touchUpInside)
 
@@ -457,10 +515,10 @@ struct OverviewViewControllerTests {
         #expect(content.selectedPeriod == .perShift(shiftID: older.id))
         #expect(content.expectedBreakdown?.shiftBreakdowns.map(\.shift) == [older])
         #expect(content.shiftHistoryBreakdowns.map(\.shift) == [older, newer])
-        #expect(shiftCardIdentifiers(in: subject.viewController.view) == [newer.id, older.id])
+        #expect(shiftCardIdentifiers(in: try requireRootView(subject.viewController)) == [newer.id, older.id])
         let count: UILabel = try requireView(
             identifier: "overview.shiftCount.value",
-            in: subject.viewController.view
+            in: try requireRootView(subject.viewController)
         )
         #expect(count.text == "2")
     }
@@ -486,11 +544,11 @@ struct OverviewViewControllerTests {
 
         let breakLabel: UILabel = try requireView(
             identifier: "overview.shift.\(withBreak.id.uuidString).break",
-            in: subject.viewController.view
+            in: try requireRootView(subject.viewController)
         )
         let absentBreakLabel: UILabel = try requireView(
             identifier: "overview.shift.\(withoutBreak.id.uuidString).break",
-            in: subject.viewController.view
+            in: try requireRootView(subject.viewController)
         )
         #expect(breakLabel.isHidden == false)
         #expect(breakLabel.text?.contains(OverviewFormatting.duration(30 * 60)) == true)
@@ -508,7 +566,7 @@ struct OverviewViewControllerTests {
 
         let card: UIView = try requireView(
             identifier: "overview.shift.\(shift.id.uuidString)",
-            in: subject.viewController.view
+            in: try requireRootView(subject.viewController)
         )
         #expect(card.accessibilityTraits.contains(.selected))
         #expect(hasFixedHeight(card) == false)
@@ -525,57 +583,57 @@ struct OverviewViewControllerTests {
 
         let newerFront: UIView = try requireView(
             identifier: "overview.shift.\(newer.id.uuidString).frontContent",
-            in: subject.viewController.view
+            in: try requireRootView(subject.viewController)
         )
         #expect(isEffectivelyHidden(newerFront) == false)
-        #expect(visibleFrontCardIdentifiers(in: subject.viewController.view) == [newer.id])
+        #expect(visibleFrontCardIdentifiers(in: try requireRootView(subject.viewController)) == [newer.id])
 
         let middleCard: UIControl = try requireView(
             identifier: "overview.shift.\(middle.id.uuidString)",
-            in: subject.viewController.view
+            in: try requireRootView(subject.viewController)
         )
         middleCard.sendActions(for: .touchUpInside)
 
         let middleFront: UIView = try requireView(
             identifier: "overview.shift.\(middle.id.uuidString).frontContent",
-            in: subject.viewController.view
+            in: try requireRootView(subject.viewController)
         )
         let newerCovered: UIView = try requireView(
             identifier: "overview.shift.\(newer.id.uuidString).header",
-            in: subject.viewController.view
+            in: try requireRootView(subject.viewController)
         )
         let middleDetail: UIView = try requireView(
             identifier: "overview.shift.\(middle.id.uuidString).detail.paidTime",
-            in: subject.viewController.view
+            in: try requireRootView(subject.viewController)
         )
         #expect(isEffectivelyHidden(middleFront) == false)
         #expect(isEffectivelyHidden(newerCovered) == false)
         #expect(isEffectivelyHidden(middleDetail) == false)
-        #expect(visibleFrontCardIdentifiers(in: subject.viewController.view) == [middle.id])
+        #expect(visibleFrontCardIdentifiers(in: try requireRootView(subject.viewController)) == [middle.id])
 
         let olderCard: UIControl = try requireView(
             identifier: "overview.shift.\(older.id.uuidString)",
-            in: subject.viewController.view
+            in: try requireRootView(subject.viewController)
         )
         olderCard.sendActions(for: .touchUpInside)
 
         let olderFront: UIView = try requireView(
             identifier: "overview.shift.\(older.id.uuidString).frontContent",
-            in: subject.viewController.view
+            in: try requireRootView(subject.viewController)
         )
         let newerCard: UIControl = try requireView(
             identifier: "overview.shift.\(newer.id.uuidString)",
-            in: subject.viewController.view
+            in: try requireRootView(subject.viewController)
         )
         #expect(isEffectivelyHidden(olderFront) == false)
-        #expect(visibleFrontCardIdentifiers(in: subject.viewController.view) == [older.id])
+        #expect(visibleFrontCardIdentifiers(in: try requireRootView(subject.viewController)) == [older.id])
         #expect(olderCard.accessibilityTraits.contains(.selected))
         #expect(newerCard.accessibilityTraits.contains(.selected) == false)
-        #expect(shiftCardIdentifiers(in: subject.viewController.view) == [newer.id, middle.id, older.id])
+        #expect(shiftCardIdentifiers(in: try requireRootView(subject.viewController)) == [newer.id, middle.id, older.id])
 
         let olderDetail: UIView = try requireView(
             identifier: "overview.shift.\(older.id.uuidString).detail.paidTime",
-            in: subject.viewController.view
+            in: try requireRootView(subject.viewController)
         )
 
         #expect(isEffectivelyHidden(olderDetail) == false)
@@ -584,7 +642,7 @@ struct OverviewViewControllerTests {
 
         #expect(isEffectivelyHidden(olderDetail))
         #expect(olderCard.accessibilityTraits.contains(.selected))
-        #expect(visibleFrontCardIdentifiers(in: subject.viewController.view) == [older.id])
+        #expect(visibleFrontCardIdentifiers(in: try requireRootView(subject.viewController)) == [older.id])
     }
 
     @Test("Expanded Shift exposes one Edit action without changing card tap behavior")
@@ -601,11 +659,11 @@ struct OverviewViewControllerTests {
 
         let card: UIControl = try requireView(
             identifier: "overview.shift.\(shift.id.uuidString)",
-            in: subject.viewController.view
+            in: try requireRootView(subject.viewController)
         )
         let editButton: UIButton = try requireView(
             identifier: "overview.shift.\(shift.id.uuidString).edit",
-            in: subject.viewController.view
+            in: try requireRootView(subject.viewController)
         )
         #expect(editButton.isHidden)
         #expect(card.accessibilityCustomActions?.isEmpty != false)
@@ -656,14 +714,14 @@ struct OverviewViewControllerTests {
         subject.viewController.loadViewIfNeeded()
         window.layoutIfNeeded()
 
-        let deck: UIView = try requireView(identifier: "overview.shiftStack", in: subject.viewController.view)
+        let deck: UIView = try requireView(identifier: "overview.shiftStack", in: try requireRootView(subject.viewController))
         let middleCard: UIControl = try requireView(
             identifier: "overview.shift.\(middle.id.uuidString)",
-            in: subject.viewController.view
+            in: try requireRootView(subject.viewController)
         )
         let oldestCard: UIControl = try requireView(
             identifier: "overview.shift.\(oldest.id.uuidString)",
-            in: subject.viewController.view
+            in: try requireRootView(subject.viewController)
         )
 
         let middleHits = visibleSlicePoints(for: middleCard, in: deck).map {
@@ -673,7 +731,7 @@ struct OverviewViewControllerTests {
         #expect(middleHits.allSatisfy { $0 === middleCard })
         middleCard.sendActions(for: .touchUpInside)
         window.layoutIfNeeded()
-        #expect(visibleFrontCardIdentifiers(in: subject.viewController.view) == [middle.id])
+        #expect(visibleFrontCardIdentifiers(in: try requireRootView(subject.viewController)) == [middle.id])
 
         let oldestHits = visibleSlicePoints(for: oldestCard, in: deck).map {
             deck.hitTest($0, with: nil)
@@ -682,7 +740,7 @@ struct OverviewViewControllerTests {
         #expect(oldestHits.allSatisfy { $0 === oldestCard })
         oldestCard.sendActions(for: .touchUpInside)
         window.layoutIfNeeded()
-        #expect(visibleFrontCardIdentifiers(in: subject.viewController.view) == [oldest.id])
+        #expect(visibleFrontCardIdentifiers(in: try requireRootView(subject.viewController)) == [oldest.id])
     }
 
     @Test("Normal Shift history is a static deck while accessibility size remains a vertical accordion")
@@ -703,15 +761,107 @@ struct OverviewViewControllerTests {
         window.layoutIfNeeded()
 
         let cards: [UIView] = try shifts.reversed().map {
-            try requireView(identifier: "overview.shift.\($0.id.uuidString)", in: subject.viewController.view)
+            try requireView(identifier: "overview.shift.\($0.id.uuidString)", in: try requireRootView(subject.viewController))
         }
-        let deck: UIView = try requireView(identifier: "overview.shiftStack", in: subject.viewController.view)
+        let deck: UIView = try requireView(identifier: "overview.shiftStack", in: try requireRootView(subject.viewController))
         expectBackgroundDeck(cards, in: deck, window: window)
 
         subject.viewController.traitOverrides.preferredContentSizeCategory = .accessibilityExtraExtraExtraLarge
         window.layoutIfNeeded()
-        subject.viewController.view.layoutIfNeeded()
+        try requireRootView(subject.viewController).layoutIfNeeded()
         expectAccessibleDocumentOrder(cards, in: window)
+    }
+
+    @Test("Accessibility Shift dates fill card headers without character wrapping")
+    func accessibilityShiftHeadersUseFullWidth() throws {
+        let older = try makeShift(id: 1, month: 9, day: 10)
+        let newer = try makeShift(id: 2, month: 9, day: 20)
+        let subject = try makeSubject(
+            job: makeJob(cycle: .scheduled(.calendarMonthly)),
+            shifts: [older, newer]
+        )
+        subject.viewController.traitOverrides.preferredContentSizeCategory = .accessibilityExtraExtraExtraLarge
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+        window.rootViewController = subject.viewController
+        window.isHidden = false
+        defer { window.isHidden = true }
+        window.layoutIfNeeded()
+
+        let root = try requireRootView(subject.viewController)
+        let olderCard: UIView = try requireView(identifier: "overview.shift.\(older.id.uuidString)", in: root)
+        let newerCard: UIView = try requireView(identifier: "overview.shift.\(newer.id.uuidString)", in: root)
+        expectAccessibleDocumentOrder([newerCard, olderCard], in: window)
+        let coveredDate: UILabel = try requireView(
+            identifier: "overview.shift.\(older.id.uuidString).date", in: root
+        )
+        let frontDate: UILabel = try requireView(
+            identifier: "overview.shift.\(newer.id.uuidString).frontDate", in: root
+        )
+        let coveredAmount: UILabel = try requireView(
+            identifier: "overview.shift.\(older.id.uuidString).expected", in: root
+        )
+        let frontAmount: UILabel = try requireView(
+            identifier: "overview.shift.\(newer.id.uuidString).frontExpected", in: root
+        )
+        for (date, amount) in [(coveredDate, coveredAmount), (frontDate, frontAmount)] {
+            #expect(date.numberOfLines == 1)
+            #expect(date.bounds.width > 0)
+            #expect(date.bounds.width + 0.5 >= date.intrinsicContentSize.width)
+            #expect(date.bounds.width >= amount.bounds.width - 1)
+            let dateFrame = date.convert(date.bounds, to: window)
+            let amountFrame = amount.convert(amount.bounds, to: window)
+            #expect(dateFrame.maxY <= amountFrame.minY)
+        }
+    }
+
+    @Test("Accessibility Overview actions wrap and expanded Edit remains usable")
+    func accessibilityActionsAndEditRemainReachable() throws {
+        let shift = try makeShift(id: 1, month: 9, day: 20)
+        let subject = try makeSubject(
+            job: makeJob(cycle: .scheduled(.calendarMonthly)),
+            shifts: [shift]
+        )
+        subject.viewController.traitOverrides.preferredContentSizeCategory = .large
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+        window.rootViewController = subject.viewController
+        window.isHidden = false
+        defer { window.isHidden = true }
+        window.layoutIfNeeded()
+
+        let root = try requireRootView(subject.viewController)
+        let check: UIButton = try requireView(identifier: "overview.checkPaycheck", in: root)
+        let add: UIButton = try requireView(identifier: "overview.addShift", in: root)
+        let card: UIControl = try requireView(identifier: "overview.shift.\(shift.id.uuidString)", in: root)
+        let edit: UIButton = try requireView(identifier: "overview.shift.\(shift.id.uuidString).edit", in: root)
+
+        subject.viewController.traitOverrides.preferredContentSizeCategory = .accessibilityExtraExtraExtraLarge
+        window.layoutIfNeeded()
+        root.layoutIfNeeded()
+        for (button, title) in [(check, OverviewStrings.checkPaycheck), (add, OverviewStrings.addShift)] {
+            let titleLabel = try #require(button.titleLabel)
+            #expect(button.configuration?.title == title)
+            #expect(titleLabel.numberOfLines == 0)
+            #expect(titleLabel.lineBreakMode == .byWordWrapping)
+            #expect(button.bounds.height >= 50)
+            #expect(button.bounds.contains(titleLabel.convert(titleLabel.bounds, to: button)))
+        }
+
+        card.sendActions(for: .touchUpInside)
+        window.layoutIfNeeded()
+        #expect(isEffectivelyHidden(edit) == false)
+        #expect(edit.configuration?.title == OverviewStrings.editShift)
+        #expect(edit.titleLabel?.numberOfLines == 0)
+        #expect(edit.titleLabel?.lineBreakMode == .byWordWrapping)
+        #expect(edit.bounds.height >= 44)
+        let editTitleLabel = try #require(edit.titleLabel)
+        #expect(edit.bounds.contains(editTitleLabel.convert(editTitleLabel.bounds, to: edit)))
+        #expect(card.accessibilityCustomActions?.map(\.name) == [OverviewStrings.editShift])
+        let editFrame = edit.convert(edit.bounds, to: card)
+        #expect(card.bounds.contains(editFrame))
+        var receivedShift: Shift?
+        subject.viewController.onEditShift = { receivedShift = $0 }
+        edit.sendActions(for: .touchUpInside)
+        #expect(receivedShift == shift)
     }
 
     @Test("One Shift stays full while two and three Shifts layer background tops above a lower front card")
@@ -820,7 +970,7 @@ struct OverviewViewControllerTests {
 
         let label: UILabel = try requireView(
             identifier: "overview.shiftHistory.empty",
-            in: subject.viewController.view
+            in: try requireRootView(subject.viewController)
         )
         #expect(isEffectivelyHidden(label) == false)
         #expect(label.text == OverviewStrings.shiftHistoryEmpty)
@@ -835,7 +985,7 @@ struct OverviewViewControllerTests {
 
         let button: UIButton = try requireView(
             identifier: "overview.period.previous",
-            in: subject.viewController.view
+            in: try requireRootView(subject.viewController)
         )
         #expect(button.isEnabled)
     }
@@ -849,7 +999,7 @@ struct OverviewViewControllerTests {
 
         let button: UIButton = try requireView(
             identifier: "overview.period.next",
-            in: subject.viewController.view
+            in: try requireRootView(subject.viewController)
         )
         #expect(button.isEnabled == false)
     }
@@ -861,12 +1011,12 @@ struct OverviewViewControllerTests {
         subject.viewController.loadViewIfNeeded()
         let label: UILabel = try requireView(
             identifier: "overview.period.label",
-            in: subject.viewController.view
+            in: try requireRootView(subject.viewController)
         )
         let initialText = label.text
         let button: UIButton = try requireView(
             identifier: "overview.period.previous",
-            in: subject.viewController.view
+            in: try requireRootView(subject.viewController)
         )
 
         button.sendActions(for: .touchUpInside)
@@ -875,7 +1025,7 @@ struct OverviewViewControllerTests {
         #expect(label.text?.contains("Aug") == true)
         let nextButton: UIButton = try requireView(
             identifier: "overview.period.next",
-            in: subject.viewController.view
+            in: try requireRootView(subject.viewController)
         )
         #expect(nextButton.isEnabled)
     }
@@ -887,16 +1037,16 @@ struct OverviewViewControllerTests {
         subject.viewController.loadViewIfNeeded()
         let label: UILabel = try requireView(
             identifier: "overview.period.label",
-            in: subject.viewController.view
+            in: try requireRootView(subject.viewController)
         )
         let initialText = label.text
         let previousButton: UIButton = try requireView(
             identifier: "overview.period.previous",
-            in: subject.viewController.view
+            in: try requireRootView(subject.viewController)
         )
         let nextButton: UIButton = try requireView(
             identifier: "overview.period.next",
-            in: subject.viewController.view
+            in: try requireRootView(subject.viewController)
         )
         previousButton.sendActions(for: .touchUpInside)
 
@@ -915,7 +1065,7 @@ struct OverviewViewControllerTests {
         subject.viewController.loadViewIfNeeded()
         let button: UIButton = try requireView(
             identifier: "overview.addShift",
-            in: subject.viewController.view
+            in: try requireRootView(subject.viewController)
         )
 
         button.sendActions(for: .touchUpInside)
@@ -948,7 +1098,7 @@ struct OverviewViewControllerTests {
         let expectedPeriod = try requireContent(subject.viewModel.state).selectedPeriod
         let button: UIButton = try requireView(
             identifier: "overview.checkPaycheck",
-            in: subject.viewController.view
+            in: try requireRootView(subject.viewController)
         )
 
         button.sendActions(for: .touchUpInside)
@@ -965,7 +1115,7 @@ struct OverviewViewControllerTests {
 
         let button: UIButton = try requireView(
             identifier: "overview.checkPaycheck",
-            in: subject.viewController.view
+            in: try requireRootView(subject.viewController)
         )
         #expect(isEffectivelyHidden(button) == false)
         #expect(button.isEnabled)
@@ -980,15 +1130,15 @@ struct OverviewViewControllerTests {
 
         let container: UIView = try requireView(
             identifier: "overview.empty.container",
-            in: subject.viewController.view
+            in: try requireRootView(subject.viewController)
         )
         let title: UILabel = try requireView(
             identifier: "overview.empty.title",
-            in: subject.viewController.view
+            in: try requireRootView(subject.viewController)
         )
         let addButton: UIButton = try requireView(
             identifier: "overview.addShift",
-            in: subject.viewController.view
+            in: try requireRootView(subject.viewController)
         )
         #expect(isEffectivelyHidden(container) == false)
         #expect(title.text == OverviewStrings.emptyTitle)
@@ -1004,7 +1154,7 @@ struct OverviewViewControllerTests {
 
         let button: UIButton = try requireView(
             identifier: "overview.addShift",
-            in: subject.viewController.view
+            in: try requireRootView(subject.viewController)
         )
         #expect(button.configuration?.baseBackgroundColor == ShiftLedgerColors.accentPrimary)
         #expect(button.configuration?.cornerStyle == .large)
@@ -1019,11 +1169,11 @@ struct OverviewViewControllerTests {
 
         let checkPaycheck: UIButton = try requireView(
             identifier: "overview.checkPaycheck",
-            in: subject.viewController.view
+            in: try requireRootView(subject.viewController)
         )
         let addShift: UIButton = try requireView(
             identifier: "overview.addShift",
-            in: subject.viewController.view
+            in: try requireRootView(subject.viewController)
         )
         #expect(checkPaycheck.configuration?.baseBackgroundColor == ShiftLedgerColors.accentPrimary)
         #expect(addShift.configuration?.background.backgroundColor == ShiftLedgerColors.backgroundSecondary)
@@ -1039,7 +1189,7 @@ struct OverviewViewControllerTests {
 
         let button: UIButton = try requireView(
             identifier: "overview.checkPaycheck",
-            in: subject.viewController.view
+            in: try requireRootView(subject.viewController)
         )
         #expect(isEffectivelyHidden(button))
     }
@@ -1056,11 +1206,11 @@ struct OverviewViewControllerTests {
 
         let title: UILabel = try requireView(
             identifier: "overview.error.title",
-            in: subject.viewController.view
+            in: try requireRootView(subject.viewController)
         )
         let message: UILabel = try requireView(
             identifier: "overview.error.message",
-            in: subject.viewController.view
+            in: try requireRootView(subject.viewController)
         )
         #expect(title.text == OverviewStrings.loadingErrorTitle)
         #expect(message.text == OverviewStrings.loadingErrorMessage)
@@ -1079,11 +1229,11 @@ struct OverviewViewControllerTests {
 
         let title: UILabel = try requireView(
             identifier: "overview.error.title",
-            in: subject.viewController.view
+            in: try requireRootView(subject.viewController)
         )
         let message: UILabel = try requireView(
             identifier: "overview.error.message",
-            in: subject.viewController.view
+            in: try requireRootView(subject.viewController)
         )
         #expect(title.text == OverviewStrings.calculationErrorTitle)
         #expect(message.text == OverviewStrings.calculationErrorMessage)
@@ -1106,18 +1256,18 @@ struct OverviewViewControllerTests {
         subject.viewController.loadViewIfNeeded()
         let retryButton: UIButton = try requireView(
             identifier: "overview.error.retry",
-            in: subject.viewController.view
+            in: try requireRootView(subject.viewController)
         )
 
         retryButton.sendActions(for: .touchUpInside)
 
         let errorContainer: UIView = try requireView(
             identifier: "overview.error.container",
-            in: subject.viewController.view
+            in: try requireRootView(subject.viewController)
         )
         let amount: UILabel = try requireView(
             identifier: "overview.expectedGross.amount",
-            in: subject.viewController.view
+            in: try requireRootView(subject.viewController)
         )
         #expect(loadCalls == 2)
         #expect(isEffectivelyHidden(errorContainer))
@@ -1139,7 +1289,7 @@ struct OverviewViewControllerTests {
         subject.viewController.loadViewIfNeeded()
         let countLabel: UILabel = try requireView(
             identifier: "overview.shiftCount.value",
-            in: subject.viewController.view
+            in: try requireRootView(subject.viewController)
         )
         #expect(countLabel.text == "0")
 
@@ -1159,23 +1309,23 @@ struct OverviewViewControllerTests {
         window.isHidden = false
         defer { window.isHidden = true }
         subject.viewController.loadViewIfNeeded()
-        subject.viewController.view.setNeedsLayout()
+        try requireRootView(subject.viewController).setNeedsLayout()
         window.layoutIfNeeded()
-        subject.viewController.view.layoutIfNeeded()
+        try requireRootView(subject.viewController).layoutIfNeeded()
         let amount: UILabel = try requireView(
             identifier: "overview.expectedGross.amount",
-            in: subject.viewController.view
+            in: try requireRootView(subject.viewController)
         )
         let period: UILabel = try requireView(
             identifier: "overview.period.label",
-            in: subject.viewController.view
+            in: try requireRootView(subject.viewController)
         )
 
         #expect(amount.adjustsFontForContentSizeCategory)
         #expect(period.adjustsFontForContentSizeCategory)
         #expect(amount.numberOfLines == 0)
         #expect(period.numberOfLines == 0)
-        let rail: UIScrollView = try requireView(identifier: "overview.period.rail", in: subject.viewController.view)
+        let rail: UIScrollView = try requireView(identifier: "overview.period.rail", in: try requireRootView(subject.viewController))
         #expect(isEffectivelyHidden(rail))
         for label in [amount, period] {
             #expect(label.traitCollection.preferredContentSizeCategory == .accessibilityExtraExtraExtraLarge)
@@ -1197,19 +1347,19 @@ struct OverviewViewControllerTests {
         subject.viewController.loadViewIfNeeded()
         let previous: UIButton = try requireView(
             identifier: "overview.period.previous",
-            in: subject.viewController.view
+            in: try requireRootView(subject.viewController)
         )
         let next: UIButton = try requireView(
             identifier: "overview.period.next",
-            in: subject.viewController.view
+            in: try requireRootView(subject.viewController)
         )
         let check: UIButton = try requireView(
             identifier: "overview.checkPaycheck",
-            in: subject.viewController.view
+            in: try requireRootView(subject.viewController)
         )
         let add: UIButton = try requireView(
             identifier: "overview.addShift",
-            in: subject.viewController.view
+            in: try requireRootView(subject.viewController)
         )
 
         #expect(previous.accessibilityLabel == OverviewStrings.previousPeriod)
@@ -1304,6 +1454,13 @@ struct OverviewViewControllerTests {
         in rootView: UIView
     ) throws -> View {
         try #require(descendant(identifier: identifier, in: rootView) as? View)
+    }
+
+    private func requireRootView(
+        _ viewController: UIViewController
+    ) throws -> UIView {
+        viewController.loadViewIfNeeded()
+        return try #require(viewController.view)
     }
 
     private func descendant(identifier: String, in view: UIView) -> UIView? {
