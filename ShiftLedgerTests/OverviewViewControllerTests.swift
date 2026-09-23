@@ -6,30 +6,59 @@ import Testing
 struct OverviewViewControllerTests {
     private let displayLocale = Locale(identifier: "en_US_POSIX")
 
-    @Test("Normal rail replaces fallback and exposes real neighbour context")
+    @Test("Normal rail centers real periods without partial neighboring titles")
     func normalRailHasNoDuplicatePeriod() throws {
-        let subject = try makeSubject(job: makeJob(cycle: .perShift), shifts: [makeShift(id: 1, month: 9, day: 10), makeShift(id: 2, month: 9, day: 11)])
+        let subject = try makeSubject(
+            job: makeJob(cycle: .perShift),
+            shifts: [
+                makeShift(id: 1, month: 9, day: 10),
+                makeShift(id: 2, month: 9, day: 11),
+                makeShift(id: 3, month: 9, day: 12)
+            ]
+        )
         subject.viewController.traitOverrides.preferredContentSizeCategory = .large
         let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
         window.rootViewController = subject.viewController
         window.isHidden = false
         defer { window.isHidden = true }
-        window.layoutIfNeeded()
-        try requireRootView(subject.viewController).layoutIfNeeded()
-        let fallback: UILabel = try requireView(identifier: "overview.period.label", in: try requireRootView(subject.viewController))
-        let rail: UIScrollView = try requireView(identifier: "overview.period.rail", in: try requireRootView(subject.viewController))
+        let root = try requireRootView(subject.viewController)
+        let fallback: UILabel = try requireView(identifier: "overview.period.label", in: root)
         #expect(isEffectivelyHidden(fallback))
-        #expect(!isEffectivelyHidden(rail))
-        let previous: UIControl = try requireView(identifier: "overview.period.item.0", in: rail)
-        let selected: UIControl = try requireView(identifier: "overview.period.item.1", in: rail)
-        #expect(selected.accessibilityTraits.contains(.selected))
-        #expect(abs(selected.convert(selected.bounds, to: rail).midX - rail.bounds.midX) < 1)
-        #expect(previous.convert(previous.bounds, to: rail).intersection(rail.bounds).width > 0)
-        #expect(selected.bounds.width < rail.bounds.width)
-        for item in [previous, selected] {
-            let title: UILabel = try requireView(identifier: "overview.period.item.title", in: item)
-            #expect(title.bounds.height + 0.5 >= title.sizeThatFits(CGSize(width: title.bounds.width, height: CGFloat.greatestFiniteMagnitude)).height)
+
+        func expectRail(selectedIndex: Int) throws {
+            window.layoutIfNeeded()
+            root.layoutIfNeeded()
+            let rail: UIScrollView = try requireView(identifier: "overview.period.rail", in: root)
+            #expect(!isEffectivelyHidden(rail))
+            let layoutEpsilon: CGFloat = 1
+            for index in 0..<3 {
+                let item: UIControl = try requireView(identifier: "overview.period.item.\(index)", in: rail)
+                let title: UILabel = try requireView(identifier: "overview.period.item.title", in: item)
+                let visibleTitleWidth = title.convert(title.bounds, to: rail)
+                    .intersection(rail.bounds).width
+                if index == selectedIndex {
+                    #expect(item.accessibilityTraits.contains(.selected))
+                    #expect(abs(item.convert(item.bounds, to: rail).midX - rail.bounds.midX) < layoutEpsilon)
+                    #expect(visibleTitleWidth + layoutEpsilon >= title.bounds.width)
+                } else {
+                    #expect(!item.accessibilityTraits.contains(.selected))
+                    #expect(
+                        visibleTitleWidth <= layoutEpsilon
+                            || visibleTitleWidth + layoutEpsilon >= title.bounds.width
+                    )
+                }
+            }
         }
+
+        let previous: UIButton = try requireView(identifier: "overview.period.previous", in: root)
+        let next: UIButton = try requireView(identifier: "overview.period.next", in: root)
+        previous.sendActions(for: .touchUpInside)
+        previous.sendActions(for: .touchUpInside)
+        try expectRail(selectedIndex: 0)
+        next.sendActions(for: .touchUpInside)
+        try expectRail(selectedIndex: 1)
+        next.sendActions(for: .touchUpInside)
+        try expectRail(selectedIndex: 2)
     }
 
     @Test("Accessibility period uses full-width text above navigation and reverses with traits")

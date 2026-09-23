@@ -44,8 +44,11 @@ final class OverviewView: UIView, UIScrollViewDelegate {
     private let mainStack = UIStackView()
 
     private let periodRailContainer = UIStackView()
+    private let periodRailViewport = UIView()
     private let periodRailScrollView = UIScrollView()
     private let periodRailStack = UIStackView()
+    private lazy var periodRailViewportWidthConstraint =
+        periodRailScrollView.widthAnchor.constraint(equalToConstant: 0)
     private var needsPeriodCentering = false
     private let contentCard = UIView()
     private let contentStack = UIStackView()
@@ -133,7 +136,7 @@ final class OverviewView: UIView, UIScrollViewDelegate {
     override func layoutSubviews() {
         super.layoutSubviews()
         periodRailContainer.layoutIfNeeded()
-        periodRailScrollView.layoutIfNeeded()
+        periodRailViewport.layoutIfNeeded()
         periodRailStack.layoutIfNeeded()
         if !periodRailScrollView.isHidden,
            !periodRailScrollView.isDragging,
@@ -141,6 +144,14 @@ final class OverviewView: UIView, UIScrollViewDelegate {
            let selected = periodRailStack.arrangedSubviews.first(where: {
                $0.accessibilityTraits.contains(.selected)
            }) as? OverviewPeriodRailItem {
+            let viewportWidth = min(selected.bounds.width, periodRailViewport.bounds.width)
+            if viewportWidth > 0,
+               abs(periodRailViewportWidthConstraint.constant - viewportWidth) > 0.5 {
+                periodRailViewportWidthConstraint.constant = viewportWidth
+                needsPeriodCentering = true
+                periodRailViewport.layoutIfNeeded()
+            }
+            periodRailScrollView.layoutIfNeeded()
             let inset = max(0, (periodRailScrollView.bounds.width - selected.bounds.width) / 2)
             let changed = periodRailScrollView.contentInset.left != inset
             periodRailScrollView.contentInset = UIEdgeInsets(top: 0, left: inset, bottom: 0, right: inset)
@@ -347,6 +358,7 @@ final class OverviewView: UIView, UIScrollViewDelegate {
             contentView,
             mainStack,
             periodRailContainer,
+            periodRailViewport,
             periodRailScrollView,
             periodRailStack,
             contentStack,
@@ -367,8 +379,9 @@ final class OverviewView: UIView, UIScrollViewDelegate {
         periodRailContainer.addArrangedSubview(periodLabel)
         periodRailContainer.addArrangedSubview(navigationStack)
         navigationStack.addArrangedSubview(previousButton)
-        navigationStack.addArrangedSubview(periodRailScrollView)
+        navigationStack.addArrangedSubview(periodRailViewport)
         navigationStack.addArrangedSubview(nextButton)
+        periodRailViewport.addSubview(periodRailScrollView)
         periodRailScrollView.addSubview(periodRailStack)
 
         contentCard.addSubview(contentStack)
@@ -415,6 +428,10 @@ final class OverviewView: UIView, UIScrollViewDelegate {
             contentStack.trailingAnchor.constraint(equalTo: contentCard.trailingAnchor, constant: -24),
             contentStack.bottomAnchor.constraint(equalTo: contentCard.bottomAnchor, constant: -24),
 
+            periodRailScrollView.topAnchor.constraint(equalTo: periodRailViewport.topAnchor),
+            periodRailScrollView.bottomAnchor.constraint(equalTo: periodRailViewport.bottomAnchor),
+            periodRailScrollView.centerXAnchor.constraint(equalTo: periodRailViewport.centerXAnchor),
+            periodRailViewportWidthConstraint,
             periodRailScrollView.heightAnchor.constraint(greaterThanOrEqualToConstant: 44),
             periodRailScrollView.heightAnchor.constraint(equalTo: periodRailStack.heightAnchor),
             periodRailStack.leadingAnchor.constraint(equalTo: periodRailScrollView.contentLayoutGuide.leadingAnchor),
@@ -606,6 +623,7 @@ final class OverviewView: UIView, UIScrollViewDelegate {
     private func updatePeriodRailForContentSizeCategory() {
         let usesAccessibilityLayout = traitCollection.preferredContentSizeCategory.isAccessibilityCategory
         periodRailScrollView.isHidden = usesAccessibilityLayout
+        periodRailViewport.isHidden = usesAccessibilityLayout
         periodLabel.isHidden = !usesAccessibilityLayout
         navigationStack.distribution = usesAccessibilityLayout ? .equalSpacing : .fill
         shiftStack.usesAccessibleListLayout = usesAccessibilityLayout
