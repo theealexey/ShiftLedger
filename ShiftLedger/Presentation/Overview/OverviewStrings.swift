@@ -14,7 +14,6 @@ enum OverviewStrings {
     }
     static var title: String { String(localized: "overview.title", table: "Localizable") }
     static var expectedGross: String { String(localized: "overview.expectedGross", table: "Localizable") }
-    static var shiftsInPeriod: String { String(localized: "overview.shiftsInPeriod", table: "Localizable") }
     static var shiftHistoryEmpty: String {
         String(localized: "overview.shiftHistory.empty", table: "Localizable")
     }

@@ -44,28 +44,12 @@ struct JobSetupViewModelTests {
         #expect(viewModel.draft.currencyCode == "SEK")
     }
 
-    @Test("Выбор зоны времени обновляет draft")
-    func updatesTimeZoneInDraft() {
-        let viewModel = makeViewModel()
-
-        #expect(viewModel.selectTimeZone(identifier: "Europe/Helsinki"))
-        #expect(viewModel.draft.timeZoneIdentifier == "Europe/Helsinki")
-    }
-
     @Test("Некорректная валюта отклоняется без изменения draft")
     func rejectsInvalidCurrencyWithoutChangingDraft() {
         let viewModel = makeViewModel()
 
         #expect(viewModel.selectCurrency(code: "EURO") == false)
         #expect(viewModel.draft.currencyCode == "EUR")
-    }
-
-    @Test("Некорректная зона времени отклоняется без изменения draft")
-    func rejectsInvalidTimeZoneWithoutChangingDraft() {
-        let viewModel = makeViewModel()
-
-        #expect(viewModel.selectTimeZone(identifier: "GMT+2") == false)
-        #expect(viewModel.draft.timeZoneIdentifier == "Europe/Stockholm")
     }
 
     @Test("Без базы оплаты продолжить нельзя")

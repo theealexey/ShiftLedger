@@ -16,7 +16,6 @@ enum PayRateResolutionError: Error, Equatable {
     case workTypeNotFound(workTypeID: UUID)
     case invalidJobTimeZoneIdentifier
     case localDateConversionFailed(LocalDateConversionError)
-    case missingInitialPayRate
 }
 
 enum ExpectedGrossCalculationError: Error, Equatable {

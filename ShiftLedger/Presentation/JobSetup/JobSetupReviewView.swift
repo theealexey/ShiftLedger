@@ -6,7 +6,6 @@ final class JobSetupReviewView: UIView {
         static let progressToQuestion: CGFloat = 32
         static let questionToSubtitle: CGFloat = 12
         static let subtitleToRows: CGFloat = 28
-        static let rowHeight: CGFloat = 44
     }
 
     var onBackTapped: (() -> Void)?
@@ -135,10 +134,8 @@ private final class JobSetupReviewRow: UIControl {
     private let valueLabel = UILabel()
     private let separator = UIView()
     private let chevron = UIImageView(image: UIImage(systemName: "chevron.right"))
-    private let showsChevron: Bool
 
     init(showsChevron: Bool = false) {
-        self.showsChevron = showsChevron
         super.init(frame: .zero)
 
         translatesAutoresizingMaskIntoConstraints = false

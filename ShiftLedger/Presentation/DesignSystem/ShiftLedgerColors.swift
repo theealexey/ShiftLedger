@@ -19,12 +19,9 @@ enum ShiftLedgerColors {
     static let textTertiary = UIColor(resource: .DesignSystem.textTertiary)
 
     static let accentPrimary = UIColor(resource: .DesignSystem.accentPrimary)
-    static let textOnAccent = UIColor.black
     static let separator = UIColor(resource: .DesignSystem.separator)
 
-    static let statusPositive = UIColor(resource: .DesignSystem.statusPositive)
     static let statusNegative = UIColor(resource: .DesignSystem.statusNegative)
-    static let statusWarning = UIColor(resource: .DesignSystem.statusWarning)
 
     static func shiftSurfaceRoles(for shiftIDs: [UUID]) -> [ShiftSurfaceRole] {
         var previousRole: ShiftSurfaceRole?

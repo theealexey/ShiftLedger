@@ -77,6 +77,15 @@ struct JobSetupReviewViewModelTests {
         #expect(viewModel.draft.workTypeNameText == draft.workTypeNameText)
     }
 
+    @Test("Некорректный timezone не меняет draft")
+    func invalidTimeZoneSelectionPreservesDraft() {
+        let draft = makeDraft()
+        let viewModel = makeViewModel(draft: draft)
+
+        #expect(viewModel.selectTimeZone(identifier: "GMT+2") == false)
+        #expect(viewModel.draft.timeZoneIdentifier == draft.timeZoneIdentifier)
+    }
+
     @Test("Неполный draft нельзя завершить")
     func incompleteDraftCannotFinish() {
         let viewModel = makeViewModel(draft: makeDraft())
@@ -117,6 +126,7 @@ struct JobSetupReviewViewModelTests {
         draft.basePayBasis = .fixedPerShift
         draft.basePayAmountText = "4000"
         draft.payCalculationCycleKind = .perShift
+        draft.payPeriodAnchorDate = try LocalDate(year: 2026, month: 8, day: 30)
 
         let job = try makeViewModel(draft: draft).makeJob()
         let workType = try #require(job.soleWorkType)
@@ -125,6 +135,32 @@ struct JobSetupReviewViewModelTests {
         #expect(workType.payRates[0].amount == Decimal(4000))
         #expect(workType.payRates[0].effectiveFrom == nil)
         #expect(job.payCalculationCycle == .perShift)
+    }
+
+    @Test("Weekly setup создаёт Job с weekly cycle")
+    func createsWeeklyJob() throws {
+        let anchor = try LocalDate(year: 2026, month: 8, day: 30)
+        var draft = makeDraft()
+        draft.basePayBasis = .hourly
+        draft.basePayAmountText = "500"
+        draft.payCalculationCycleKind = .weekly
+        draft.payPeriodAnchorDate = anchor
+
+        let job = try makeViewModel(draft: draft).makeJob()
+
+        #expect(job.payCalculationCycle == .scheduled(.weekly(anchorDate: anchor)))
+    }
+
+    @Test("Calendar monthly setup создаёт Job с calendar monthly cycle")
+    func createsCalendarMonthlyJob() throws {
+        var draft = makeDraft()
+        draft.basePayBasis = .hourly
+        draft.basePayAmountText = "500"
+        draft.payCalculationCycleKind = .calendarMonthly
+
+        let job = try makeViewModel(draft: draft).makeJob()
+
+        #expect(job.payCalculationCycle == .scheduled(.calendarMonthly))
     }
 
     @Test("Успешное сохранение возвращает Job и блокирует повтор")

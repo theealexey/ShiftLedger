@@ -73,12 +73,4 @@ final class JobSetupViewModel {
         return true
     }
 
-    func selectTimeZone(identifier: String) -> Bool {
-        guard TimeZone.knownTimeZoneIdentifiers.contains(identifier) else {
-            return false
-        }
-
-        draft.timeZoneIdentifier = identifier
-        return true
-    }
 }
