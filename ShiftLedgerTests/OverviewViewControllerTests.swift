@@ -1022,6 +1022,29 @@ struct OverviewViewControllerTests {
         }
     }
 
+    @Test("Prepending a Shift preserves existing decorative surface assignments")
+    func prependingShiftPreservesExistingSurfaceAssignments() {
+        let existingIDs = [1, 7].map {
+            UUID(uuid: (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, UInt8($0)))
+        }
+        let newNewestID = UUID(uuid: (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 37))
+        let allIDs = [newNewestID] + existingIDs
+        
+        #expect(Set(allIDs.map(ShiftLedgerColors.stableSurfaceIndex(for:))).count == 1)
+
+        let before = ShiftLedgerColors.shiftSurfaceRoles(for: existingIDs)
+        let after = ShiftLedgerColors.shiftSurfaceRoles(for: allIDs)
+        let beforeRolesByID = Dictionary(uniqueKeysWithValues: zip(existingIDs, before))
+        let afterRolesByID = Dictionary(uniqueKeysWithValues: zip(allIDs, after))
+
+        for id in existingIDs {
+            #expect(afterRolesByID[id] == beforeRolesByID[id])
+        }
+        for (previousRole, currentRole) in zip(after, after.dropFirst()) {
+            #expect(previousRole != currentRole)
+        }
+    }
+
     @Test("Scheduled zero-shift period renders an honest Shift history empty state")
     func scheduledZeroShiftPeriodRendersShiftHistoryEmptyState() throws {
         let job = try makeJob(cycle: .scheduled(.calendarMonthly))

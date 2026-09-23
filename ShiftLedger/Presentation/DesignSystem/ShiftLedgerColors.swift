@@ -28,7 +28,7 @@ enum ShiftLedgerColors {
 
     static func shiftSurfaceRoles(for shiftIDs: [UUID]) -> [ShiftSurfaceRole] {
         var previousRole: ShiftSurfaceRole?
-        return shiftIDs.map { id in
+        let rolesFromOldestToNewest = shiftIDs.reversed().map { id in
             let preferredRole = preferredShiftSurfaceRole(for: id)
             let resolvedRole = preferredRole == previousRole
                 ? nextShiftSurfaceRole(after: preferredRole)
@@ -36,6 +36,7 @@ enum ShiftLedgerColors {
             previousRole = resolvedRole
             return resolvedRole
         }
+        return Array(rolesFromOldestToNewest.reversed())
     }
 
     static func shiftSurface(for role: ShiftSurfaceRole) -> UIColor {
