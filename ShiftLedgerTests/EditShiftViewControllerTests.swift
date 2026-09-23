@@ -340,28 +340,25 @@ struct EditShiftViewControllerTests {
         saveShift: { _ in .success(()) }
       )
     )
+    viewController.traitOverrides.preferredContentSizeCategory = .large
     let window = makeVisibleWindow(root: viewController)
     defer {
       hide(window)
     }
-    viewController.traitOverrides.preferredContentSizeCategory =
-      .accessibilityExtraExtraExtraLarge
-    window.layoutIfNeeded()
-    viewController.view.layoutIfNeeded()
     let screen: UIScrollView = try requireView(
       "editShift.screen",
       in: viewController.view
     )
     #expect(screen.alwaysBounceVertical)
-    let _: UIControl = try requireView(
+    let workTypeRow: UIControl = try requireView(
       "editShift.workType",
       in: viewController.view
     )
-    let _: UIControl = try requireView(
+    let startRow: UIControl = try requireView(
       "editShift.start",
       in: viewController.view
     )
-    let _: UIControl = try requireView(
+    let endRow: UIControl = try requireView(
       "editShift.end",
       in: viewController.view
     )
@@ -369,14 +366,69 @@ struct EditShiftViewControllerTests {
       "editShift.unpaidBreak",
       in: viewController.view
     )
-    let _: UIControl = try requireView(
+    let breakStartRow: UIControl = try requireView(
       "editShift.breakStart",
       in: viewController.view
     )
-    let _: UIControl = try requireView(
+    let breakEndRow: UIControl = try requireView(
       "editShift.breakEnd",
       in: viewController.view
     )
+    let rows = [
+      (row: workTypeRow, title: AddShiftStrings.workType),
+      (row: startRow, title: AddShiftStrings.start),
+      (row: endRow, title: AddShiftStrings.end),
+      (row: breakStartRow, title: AddShiftStrings.breakStart),
+      (row: breakEndRow, title: AddShiftStrings.breakEnd)
+    ]
+    func expectHorizontalRows() throws {
+      for entry in rows {
+        let labels = try valueRowLabels(in: entry.row, title: entry.title)
+        let titleFrame = labels.title.convert(labels.title.bounds, to: entry.row)
+        let valueFrame = labels.value.convert(labels.value.bounds, to: entry.row)
+        #expect(titleFrame.maxX + 11 <= valueFrame.minX)
+        #expect(titleFrame.minY < valueFrame.maxY)
+        #expect(valueFrame.minY < titleFrame.maxY)
+        #expect(labels.value.textAlignment == .right)
+      }
+    }
+    try expectHorizontalRows()
+
+    viewController.traitOverrides.preferredContentSizeCategory =
+      .accessibilityExtraExtraExtraLarge
+    window.layoutIfNeeded()
+    viewController.view.layoutIfNeeded()
+    for entry in rows {
+      let labels = try valueRowLabels(in: entry.row, title: entry.title)
+      let titleFrame = labels.title.convert(labels.title.bounds, to: entry.row)
+      let valueFrame = labels.value.convert(labels.value.bounds, to: entry.row)
+      let rowBounds = entry.row.bounds.insetBy(dx: -0.5, dy: -0.5)
+      #expect(titleFrame.maxY <= valueFrame.minY)
+      #expect(abs(valueFrame.minX - entry.row.bounds.minX) <= 0.5)
+      #expect(labels.value.numberOfLines == 0)
+      #expect(labels.value.textAlignment == .natural)
+      #expect(rowBounds.contains(titleFrame))
+      #expect(rowBounds.contains(valueFrame))
+      #expect(labels.value.bounds.height + 0.5 >= labels.value.sizeThatFits(
+        CGSize(width: labels.value.bounds.width, height: CGFloat.greatestFiniteMagnitude)
+      ).height)
+      if entry.row.isUserInteractionEnabled {
+        let chevron = try #require(firstDescendant(of: UIImageView.self, in: entry.row))
+        let chevronFrame = chevron.convert(chevron.bounds, to: entry.row)
+        #expect(abs(chevronFrame.minX - valueFrame.maxX - 12) <= 1)
+        #expect(abs(chevronFrame.midY - valueFrame.midY) <= 1)
+      } else {
+        let chevron = try #require(firstDescendant(of: UIImageView.self, in: entry.row))
+        #expect(chevron.isHidden)
+        #expect(abs(valueFrame.maxX - entry.row.bounds.maxX) <= 0.5)
+      }
+    }
+
+    viewController.traitOverrides.preferredContentSizeCategory = .large
+    window.layoutIfNeeded()
+    viewController.view.layoutIfNeeded()
+    try expectHorizontalRows()
+    #expect(screen.alwaysBounceVertical)
     #expect(
       viewController.navigationItem.rightBarButtonItem?.isEnabled
         == true
@@ -588,6 +640,24 @@ struct EditShiftViewControllerTests {
     }
     return root.subviews.contains {
       containsLabel(with: text, in: $0)
+    }
+  }
+  private func valueRowLabels(
+    in row: UIControl,
+    title: String
+  ) throws -> (title: UILabel, value: UILabel) {
+    let labels = labelDescendants(in: row)
+    try #require(labels.count == 2)
+    let titleLabel = try #require(labels.first { $0.text == title })
+    let valueLabel = try #require(labels.first { $0 !== titleLabel })
+    return (titleLabel, valueLabel)
+  }
+  private func labelDescendants(in root: UIView) -> [UILabel] {
+    root.subviews.flatMap { subview in
+      if let label = subview as? UILabel {
+        return [label]
+      }
+      return labelDescendants(in: subview)
     }
   }
   private func firstDescendant<View: UIView>(

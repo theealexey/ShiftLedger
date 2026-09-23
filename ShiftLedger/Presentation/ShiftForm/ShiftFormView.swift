@@ -194,6 +194,8 @@ private final class ShiftFormValueRow: UIControl {
     private let separator = ShiftFormSeparator()
     private var valueToChevronConstraint: NSLayoutConstraint?
     private var valueToEdgeConstraint: NSLayoutConstraint?
+    private var normalLayoutConstraints: [NSLayoutConstraint] = []
+    private var accessibilityLayoutConstraints: [NSLayoutConstraint] = []
 
     init(title: String, accessibilityIdentifier: String) {
         super.init(frame: .zero)
@@ -222,23 +224,36 @@ private final class ShiftFormValueRow: UIControl {
         NSLayoutConstraint.activate([
             titleLabel.leadingAnchor.constraint(equalTo: leadingAnchor),
             titleLabel.topAnchor.constraint(equalTo: topAnchor, constant: 12),
-            titleLabel.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -12),
-            valueLabel.leadingAnchor.constraint(greaterThanOrEqualTo: titleLabel.trailingAnchor, constant: 12),
-            valueLabel.topAnchor.constraint(equalTo: topAnchor, constant: 12),
-            valueLabel.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -12),
             chevron.trailingAnchor.constraint(equalTo: trailingAnchor),
-            chevron.centerYAnchor.constraint(equalTo: centerYAnchor),
             chevron.widthAnchor.constraint(equalToConstant: 9),
             chevron.heightAnchor.constraint(equalToConstant: 13),
             separator.leadingAnchor.constraint(equalTo: leadingAnchor),
             separator.trailingAnchor.constraint(equalTo: trailingAnchor),
             separator.bottomAnchor.constraint(equalTo: bottomAnchor)
         ])
+        normalLayoutConstraints = [
+            titleLabel.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -12),
+            valueLabel.leadingAnchor.constraint(greaterThanOrEqualTo: titleLabel.trailingAnchor, constant: 12),
+            valueLabel.topAnchor.constraint(equalTo: topAnchor, constant: 12),
+            valueLabel.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -12),
+            chevron.centerYAnchor.constraint(equalTo: centerYAnchor)
+        ]
+        accessibilityLayoutConstraints = [
+            titleLabel.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor),
+            valueLabel.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 4),
+            valueLabel.leadingAnchor.constraint(equalTo: leadingAnchor),
+            valueLabel.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -12),
+            chevron.centerYAnchor.constraint(equalTo: valueLabel.centerYAnchor)
+        ]
         isAccessibilityElement = true
         accessibilityTraits = .button
         accessibilityLabel = title
         self.accessibilityIdentifier = accessibilityIdentifier
         valueToChevronConstraint?.isActive = true
+        registerForTraitChanges([UITraitPreferredContentSizeCategory.self]) { (self: Self, _) in
+            self.updateLayoutForContentSizeCategory()
+        }
+        updateLayoutForContentSizeCategory()
     }
 
     @available(*, unavailable)
@@ -259,6 +274,18 @@ private final class ShiftFormValueRow: UIControl {
         valueToEdgeConstraint?.isActive = !selectable
         accessibilityTraits = selectable ? .button : []
         self.accessibilityHint = accessibilityHint
+    }
+
+    private func updateLayoutForContentSizeCategory() {
+        let usesAccessibilityLayout = traitCollection.preferredContentSizeCategory.isAccessibilityCategory
+        if usesAccessibilityLayout {
+            NSLayoutConstraint.deactivate(normalLayoutConstraints)
+            NSLayoutConstraint.activate(accessibilityLayoutConstraints)
+        } else {
+            NSLayoutConstraint.deactivate(accessibilityLayoutConstraints)
+            NSLayoutConstraint.activate(normalLayoutConstraints)
+        }
+        valueLabel.textAlignment = usesAccessibilityLayout ? .natural : .right
     }
 }
 
