@@ -1,6 +1,13 @@
 import UIKit
 
 final class OverviewView: UIView, UIScrollViewDelegate {
+    private static let expectedGrossSurface = UIColor { traits in
+        let color = traits.userInterfaceStyle == .dark
+            ? ShiftLedgerColors.backgroundSecondary
+            : ShiftLedgerColors.surfacePrimary
+        return color.resolvedColor(with: traits)
+    }
+
     struct PeriodItem: Equatable {
         let period: PayCalculationPeriod
         let title: String
@@ -206,7 +213,7 @@ final class OverviewView: UIView, UIScrollViewDelegate {
         mainStack.axis = .vertical
         mainStack.spacing = 24
 
-        contentCard.backgroundColor = ShiftLedgerColors.backgroundSecondary
+        contentCard.backgroundColor = Self.expectedGrossSurface
         contentCard.layer.cornerCurve = .continuous
         contentCard.layer.cornerRadius = 28
         contentCard.accessibilityIdentifier = "overview.expectedGross.hero"
@@ -1078,9 +1085,9 @@ private final class OverviewShiftCardView: UIControl {
         headerStack.isLayoutMarginsRelativeArrangement = true
         headerStack.directionalLayoutMargins = NSDirectionalEdgeInsets(
             top: 2,
-            leading: 4,
+            leading: 0,
             bottom: 0,
-            trailing: 4
+            trailing: 0
         )
         [headerTopRow, timeRangeLabel].forEach(headerStack.addArrangedSubview)
 
@@ -1097,9 +1104,9 @@ private final class OverviewShiftCardView: UIControl {
         frontContentStack.isLayoutMarginsRelativeArrangement = true
         frontContentStack.directionalLayoutMargins = NSDirectionalEdgeInsets(
             top: Layout.frontContentInset,
-            leading: 4,
+            leading: 0,
             bottom: 4,
-            trailing: 4
+            trailing: 0
         )
         frontContentStack.addArrangedSubview(frontHeaderRow)
 

@@ -117,6 +117,31 @@ struct OverviewViewControllerTests {
         #expect(label.font.pointSize == ShiftLedgerTypography.expectedGrossDisplay.pointSize)
     }
 
+    @Test("Expected Gross uses the light surface while preserving the dark surface")
+    func expectedGrossSurfaceAdaptsToAppearance() throws {
+        let subject = try makeSubject(
+            job: makeJob(cycle: .scheduled(.calendarMonthly)),
+            shifts: [makeShift(id: 1, month: 9, day: 10)]
+        )
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+        window.rootViewController = subject.viewController
+        window.isHidden = false
+        defer { window.isHidden = true }
+        window.layoutIfNeeded()
+
+        let hero: UIView = try requireView(
+            identifier: "overview.expectedGross.hero",
+            in: try requireRootView(subject.viewController)
+        )
+        #expect(isEffectivelyHidden(hero) == false)
+        let background = try #require(hero.backgroundColor)
+        let light = UITraitCollection(userInterfaceStyle: .light)
+        let dark = UITraitCollection(userInterfaceStyle: .dark)
+        #expect(background.resolvedColor(with: light) == ShiftLedgerColors.surfacePrimary.resolvedColor(with: light))
+        #expect(background.resolvedColor(with: light) != ShiftLedgerColors.backgroundPrimary.resolvedColor(with: light))
+        #expect(background.resolvedColor(with: dark) == ShiftLedgerColors.backgroundSecondary.resolvedColor(with: dark))
+    }
+
     @Test("Tapping a scheduled rail item changes only the selected calculation, not Shift history")
     func scheduledRailTapUpdatesVisibleContent() throws {
         let job = try makeJob(cycle: .scheduled(.calendarMonthly))
@@ -312,6 +337,42 @@ struct OverviewViewControllerTests {
             #expect(label.bounds.height + 0.5 >= label.sizeThatFits(
                 CGSize(width: label.bounds.width, height: CGFloat.greatestFiniteMagnitude)
             ).height)
+        }
+    }
+
+    @Test("Covered and front Shift headers share the 20-point card grid")
+    func shiftHeadersUseCanonicalHorizontalInset() throws {
+        let older = try makeShift(id: 1, month: 9, day: 10)
+        let newer = try makeShift(id: 2, month: 9, day: 20)
+        let subject = try makeSubject(
+            job: makeJob(cycle: .scheduled(.calendarMonthly)),
+            shifts: [older, newer]
+        )
+        subject.viewController.traitOverrides.preferredContentSizeCategory = .large
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+        window.rootViewController = subject.viewController
+        window.isHidden = false
+        defer { window.isHidden = true }
+        window.layoutIfNeeded()
+
+        let root = try requireRootView(subject.viewController)
+        let covered: UIView = try requireView(identifier: "overview.shift.\(older.id.uuidString)", in: root)
+        let coveredDate: UILabel = try requireView(identifier: "overview.shift.\(older.id.uuidString).date", in: root)
+        let coveredAmount: UILabel = try requireView(identifier: "overview.shift.\(older.id.uuidString).expected", in: root)
+        let front: UIView = try requireView(identifier: "overview.shift.\(newer.id.uuidString)", in: root)
+        let frontDate: UILabel = try requireView(identifier: "overview.shift.\(newer.id.uuidString).frontDate", in: root)
+        let frontAmount: UILabel = try requireView(identifier: "overview.shift.\(newer.id.uuidString).frontExpected", in: root)
+
+        for (card, date, amount) in [(covered, coveredDate, coveredAmount), (front, frontDate, frontAmount)] {
+            let dateFrame = date.convert(date.bounds, to: card)
+            let amountFrame = amount.convert(amount.bounds, to: card)
+            #expect(abs(dateFrame.minX - 20) <= 0.5)
+            #expect(abs((card.bounds.maxX - amountFrame.maxX) - 20) <= 0.5)
+            #expect(dateFrame.maxX <= amountFrame.minX)
+            #expect(dateFrame.minX >= card.bounds.minX)
+            #expect(dateFrame.maxX <= card.bounds.maxX)
+            #expect(amountFrame.minX >= card.bounds.minX)
+            #expect(amountFrame.maxX <= card.bounds.maxX)
         }
     }
 
