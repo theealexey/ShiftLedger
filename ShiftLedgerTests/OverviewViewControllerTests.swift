@@ -405,6 +405,75 @@ struct OverviewViewControllerTests {
         }
     }
 
+    @Test("Visible Shift contribution labels share a trailing column")
+    func shiftContributionAmountsUseTrailingAlignment() throws {
+        let ids = [80, 81, 82].map {
+            UUID(uuid: (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, UInt8($0)))
+        }
+        let amounts = ["$6.00", "$10.00", "$100.00"]
+        let view = OverviewView(frame: .zero)
+        let host = UIViewController()
+        host.view = view
+        host.traitOverrides.preferredContentSizeCategory = .large
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+        window.rootViewController = host
+        window.isHidden = false
+        defer { window.isHidden = true }
+
+        renderPresentationCards(
+            ids: ids,
+            selectedID: ids[2],
+            expectedAmounts: amounts,
+            in: view
+        )
+        window.layoutIfNeeded()
+
+        let labels: [(card: UIView, date: UILabel, label: UILabel, amount: String)] = try [
+            (
+                requireView(identifier: "overview.shift.\(ids[0].uuidString)", in: view),
+                requireView(identifier: "overview.shift.\(ids[0].uuidString).date", in: view),
+                requireView(identifier: "overview.shift.\(ids[0].uuidString).expected", in: view),
+                amounts[0]
+            ),
+            (
+                requireView(identifier: "overview.shift.\(ids[1].uuidString)", in: view),
+                requireView(identifier: "overview.shift.\(ids[1].uuidString).date", in: view),
+                requireView(identifier: "overview.shift.\(ids[1].uuidString).expected", in: view),
+                amounts[1]
+            ),
+            (
+                requireView(identifier: "overview.shift.\(ids[2].uuidString)", in: view),
+                requireView(identifier: "overview.shift.\(ids[2].uuidString).frontDate", in: view),
+                requireView(identifier: "overview.shift.\(ids[2].uuidString).frontExpected", in: view),
+                amounts[2]
+            )
+        ]
+
+        let headerInsets = labels.map { card, date, label, _ in
+            (
+                amount: label.convert(label.bounds, to: card).minY,
+                date: date.convert(date.bounds, to: card).minY
+            )
+        }
+
+        for (card, date, label, amount) in labels {
+            let amountFrame = label.convert(label.bounds, to: card)
+            let dateFrame = date.convert(date.bounds, to: card)
+            #expect(label.text == amount)
+            #expect(label.textAlignment == .right)
+            #expect(abs((card.bounds.maxX - amountFrame.maxX) - 20) <= 0.5)
+            #expect(amountFrame.minX >= card.bounds.minX)
+            #expect(amountFrame.maxX <= card.bounds.maxX)
+            #expect(dateFrame.maxX <= amountFrame.minX)
+        }
+
+        let reference = headerInsets[0]
+        for insets in headerInsets.dropFirst() {
+            #expect(abs(insets.amount - reference.amount) <= 0.5)
+            #expect(abs(insets.date - reference.date) <= 0.5)
+        }
+    }
+
     @Test("Only the fully visible front Shift renders the endpoints")
     func onlyFrontShiftRendersEndpoints() throws {
         let job = try makeJob(cycle: .scheduled(.calendarMonthly))
@@ -1659,9 +1728,10 @@ struct OverviewViewControllerTests {
         ids: [UUID],
         selectedID: UUID?,
         expectedAmount: String = "€160",
+        expectedAmounts: [String] = [],
         in view: OverviewView
     ) {
-        let cards = ids.map { id in
+        let cards = ids.enumerated().map { index, id in
             OverviewView.ShiftCard(
                 id: id,
                 frontDate: "Sep 14",
@@ -1672,7 +1742,7 @@ struct OverviewViewControllerTests {
                     startDate: nil,
                     endDate: nil
                 ),
-                expectedAmount: expectedAmount,
+                expectedAmount: expectedAmounts.indices.contains(index) ? expectedAmounts[index] : expectedAmount,
                 paidDuration: "8h",
                 unpaidBreak: nil,
                 unpaidBreakTimeRange: nil,

@@ -4,8 +4,8 @@ final class OverviewShiftCardView: UIControl {
     private enum Layout {
         static let horizontalInset: CGFloat = 20
         static let verticalInset: CGFloat = 12
+        static let headerTopInset: CGFloat = 2
         static let headerToMetadataSpacing: CGFloat = 20
-        static let frontContentInset: CGFloat = 12
         static let frontHeaderSpacing: CGFloat = 12
         static let frontEndpointsSpacing: CGFloat = 24
     }
@@ -142,6 +142,7 @@ final class OverviewShiftCardView: UIControl {
 
         expectedAmountLabel.text = card.expectedAmount
         configureLabel(expectedAmountLabel, font: ShiftLedgerTypography.basePayAmount, color: foreground)
+        expectedAmountLabel.textAlignment = .right
         expectedAmountLabel.accessibilityIdentifier = "overview.shift.\(card.id.uuidString).expected"
         expectedAmountLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
 
@@ -242,7 +243,7 @@ final class OverviewShiftCardView: UIControl {
         headerStack.spacing = 4
         headerStack.isLayoutMarginsRelativeArrangement = true
         headerStack.directionalLayoutMargins = NSDirectionalEdgeInsets(
-            top: 2,
+            top: Layout.headerTopInset,
             leading: 0,
             bottom: 0,
             trailing: 0
@@ -261,7 +262,7 @@ final class OverviewShiftCardView: UIControl {
         frontContentStack.spacing = Layout.frontEndpointsSpacing
         frontContentStack.isLayoutMarginsRelativeArrangement = true
         frontContentStack.directionalLayoutMargins = NSDirectionalEdgeInsets(
-            top: Layout.frontContentInset,
+            top: Layout.headerTopInset,
             leading: 0,
             bottom: 4,
             trailing: 0
