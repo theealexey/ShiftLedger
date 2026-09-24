@@ -87,8 +87,14 @@ struct MainCoordinatorTests {
         _ = harness.navigationController.popViewController(animated: false)
         #expect(harness.navigationController.topViewController === harness.overview)
 
-        harness.overview.onAddWorkType?()
+        harness.overview.onManageWorkTypes?()
+        let workTypes = try #require(
+            harness.navigationController.topViewController as? WorkTypesViewController
+        )
+        workTypes.onAddWorkType?()
         #expect(harness.navigationController.topViewController is AddWorkTypeViewController)
+        _ = harness.navigationController.popViewController(animated: false)
+        #expect(harness.navigationController.topViewController === workTypes)
         _ = harness.navigationController.popViewController(animated: false)
         #expect(harness.navigationController.topViewController === harness.overview)
 
@@ -99,22 +105,32 @@ struct MainCoordinatorTests {
         #expect(harness.navigationController.topViewController === harness.overview)
     }
 
-    @Test("Add Work Type обновляет Job, возвращает тот же Overview и передаёт новый aggregate в Add Shift")
+    @Test("Add Work Type обновляет Job и тот же Work Types, затем передаёт aggregate в Add и Edit Shift")
     func addWorkTypeCompletionUpdatesCurrentJob() throws {
         let harness = try makeHarness(cycle: .perShift)
         harness.coordinator.start()
         harness.overview.loadViewIfNeeded()
         let originalOverview = harness.overview
 
-        harness.overview.onAddWorkType?()
+        harness.overview.onManageWorkTypes?()
+        let workTypes = try #require(
+            harness.navigationController.topViewController as? WorkTypesViewController
+        )
+        #expect(workTypes.tableView(workTypes.tableView, numberOfRowsInSection: 0) == 1)
+        workTypes.onAddWorkType?()
         let addWorkType = try #require(
             harness.navigationController.topViewController as? AddWorkTypeViewController
         )
         let updatedJob = try makeUpdatedJob(from: harness.job)
         addWorkType.onSaved?(updatedJob)
 
+        #expect(harness.navigationController.topViewController === workTypes)
+        #expect(harness.navigationController.viewControllers.count == 2)
+        #expect(harness.navigationController.viewControllers[0] === originalOverview)
+        #expect(workTypes.tableView(workTypes.tableView, numberOfRowsInSection: 0) == 2)
+        #expect(harness.metrics.workTypesInputs == [harness.job.workTypes])
+        _ = harness.navigationController.popViewController(animated: false)
         #expect(harness.navigationController.topViewController === originalOverview)
-        #expect(harness.navigationController.viewControllers.count == 1)
         harness.overview.onAddShift?()
         let suppliedJob = try #require(harness.metrics.addShiftJobs.last)
         #expect(suppliedJob == updatedJob)
@@ -216,6 +232,10 @@ struct MainCoordinatorTests {
                         saveShift: { _ in .success(()) }
                     )
                 )
+            },
+            makeWorkTypes: { workTypes in
+                metrics.workTypesInputs.append(workTypes)
+                return WorkTypesViewController(workTypes: workTypes)
             },
             makeAddWorkType: { job in
                 AddWorkTypeViewController(
@@ -364,6 +384,7 @@ private final class Metrics {
     var overviewLoadCount = 0
     var overviewShifts: [Shift] = []
     var addShiftJobs: [Job] = []
+    var workTypesInputs: [[WorkType]] = []
     var editShiftJobs: [Job] = []
     var editedShifts: [Shift] = []
     var preparedPeriods: [PayCalculationPeriod] = []

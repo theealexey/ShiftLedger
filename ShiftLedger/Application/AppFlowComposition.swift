@@ -33,6 +33,9 @@ struct AppFlowComposition {
             makeAddShift: { job in
                 AddShiftAssembly.make(job: job, stack: stack)
             },
+            makeWorkTypes: { workTypes in
+                WorkTypesViewController(workTypes: workTypes)
+            },
             makeAddWorkType: { job in
                 AddWorkTypeAssembly.make(job: job, stack: stack)
             },

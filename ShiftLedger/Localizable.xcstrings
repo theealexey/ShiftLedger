@@ -1010,11 +1010,11 @@
         "ru" : { "stringUnit" : { "state" : "translated", "value" : "Добавить смену" } }
       }
     },
-    "overview.addWorkType" : {
+    "overview.workTypes" : {
       "extractionState" : "manual",
       "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Add work type" } },
-        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Добавить вид работы" } }
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Work types" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Виды работы" } }
       }
     },
     "overview.editShift" : {
@@ -1232,6 +1232,41 @@
       "localizations" : {
         "en" : { "stringUnit" : { "state" : "translated", "value" : "sec" } },
         "ru" : { "stringUnit" : { "state" : "translated", "value" : "с" } }
+      }
+    },
+    "workTypes.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Work Types" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Виды работы" } }
+      }
+    },
+    "workTypes.add" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Add work type" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Добавить вид работы" } }
+      }
+    },
+    "workTypes.unnamed" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Unnamed work type" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Вид работы без названия" } }
+      }
+    },
+    "workTypes.payBasis.hourly" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Hourly" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Почасовая" } }
+      }
+    },
+    "workTypes.payBasis.fixedPerShift" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Per shift" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "За смену" } }
       }
     }
   },

@@ -1255,8 +1255,8 @@ struct OverviewViewControllerTests {
         #expect(callCount == 1)
     }
 
-    @Test("Overview устанавливает меню Add work type в navigation bar")
-    func installsAddWorkTypeMenu() throws {
+    @Test("Overview устанавливает меню Work types в navigation bar")
+    func installsWorkTypesMenu() throws {
         let job = try makeJob(cycle: .scheduled(.calendarMonthly))
         let subject = try makeSubject(job: job, shifts: [])
 
@@ -1267,7 +1267,7 @@ struct OverviewViewControllerTests {
         #expect(item.image == UIImage(systemName: "ellipsis.circle"))
         let menu = try #require(item.menu)
         #expect(menu.children.count == 1)
-        #expect(menu.children.first?.title == OverviewStrings.addWorkType)
+        #expect(menu.children.first?.title == OverviewStrings.workTypes)
     }
 
     @Test("Check Paycheck forwards the selected Domain period")

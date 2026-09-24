@@ -6,6 +6,7 @@ final class MainCoordinator {
     struct Dependencies {
         let makeOverview: @MainActor (Job) -> OverviewViewController
         let makeAddShift: @MainActor (Job) -> AddShiftViewController
+        let makeWorkTypes: @MainActor ([WorkType]) -> WorkTypesViewController
         let makeAddWorkType: @MainActor (Job) -> AddWorkTypeViewController
         let makeEditShift: @MainActor (Job, Shift) -> EditShiftViewController
         let makeActualGrossEntry: @MainActor (String) -> ActualGrossEntryViewController
@@ -16,7 +17,8 @@ final class MainCoordinator {
     private enum Route {
         case overview
         case addShift
-        case addWorkType
+        case workTypes
+        case addWorkType(returningTo: WorkTypesViewController)
         case editShift(Shift)
         case actualGrossEntry(PayCalculationPeriod)
         case paycheckResult(PaycheckComparison)
@@ -49,8 +51,8 @@ final class MainCoordinator {
         overviewViewController.onAddShift = { [weak self] in
             self?.navigate(to: .addShift)
         }
-        overviewViewController.onAddWorkType = { [weak self] in
-            self?.navigate(to: .addWorkType)
+        overviewViewController.onManageWorkTypes = { [weak self] in
+            self?.navigate(to: .workTypes)
         }
         overviewViewController.onEditShift = { [weak self] shift in
             self?.navigate(to: .editShift(shift))
@@ -66,8 +68,10 @@ final class MainCoordinator {
             navigationController.setViewControllers([overviewViewController], animated: false)
         case .addShift:
             showAddShift()
-        case .addWorkType:
-            showAddWorkType()
+        case .workTypes:
+            showWorkTypes()
+        case let .addWorkType(returningTo):
+            showAddWorkType(returningTo: returningTo)
         case let .editShift(shift):
             showEditShift(shift)
         case let .actualGrossEntry(period):
@@ -90,18 +94,29 @@ final class MainCoordinator {
         navigationController.popToViewController(overviewViewController, animated: true)
     }
 
-    private func showAddWorkType() {
-        let viewController = dependencies.makeAddWorkType(job)
-        viewController.onSaved = { [weak self] updatedJob in
-            self?.completeAddWorkType(with: updatedJob)
+    private func showWorkTypes() {
+        let viewController = dependencies.makeWorkTypes(job.workTypes)
+        viewController.onAddWorkType = { [weak self, weak viewController] in
+            guard let viewController else { return }
+            self?.navigate(to: .addWorkType(returningTo: viewController))
         }
         navigationController.pushViewController(viewController, animated: true)
     }
 
-    private func completeAddWorkType(with updatedJob: Job) {
+    private func showAddWorkType(returningTo workTypesViewController: WorkTypesViewController) {
+        let viewController = dependencies.makeAddWorkType(job)
+        viewController.onSaved = { [weak self, weak workTypesViewController] updatedJob in
+            guard let workTypesViewController else { return }
+            self?.completeAddWorkType(with: updatedJob, returningTo: workTypesViewController)
+        }
+        navigationController.pushViewController(viewController, animated: true)
+    }
+
+    private func completeAddWorkType(with updatedJob: Job, returningTo workTypesViewController: WorkTypesViewController) {
         job = updatedJob
         overviewViewController.reload(job: updatedJob)
-        navigationController.popToViewController(overviewViewController, animated: true)
+        workTypesViewController.reload(workTypes: updatedJob.workTypes)
+        navigationController.popToViewController(workTypesViewController, animated: true)
     }
 
     private func showEditShift(_ shift: Shift) {

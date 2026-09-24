@@ -430,7 +430,13 @@ struct AppCoordinatorTests {
         let originalJob = try makeValidJob()
 
         try await withOverview(job: originalJob) { stack, navigation, overview in
-            overview.onAddWorkType?()
+            overview.onManageWorkTypes?()
+            let workTypes = try #require(
+                navigation.topViewController as? WorkTypesViewController
+            )
+            workTypes.loadViewIfNeeded()
+            #expect(workTypes.tableView(workTypes.tableView, numberOfRowsInSection: 0) == 1)
+            try tapBarButtonItem(workTypes.navigationItem.rightBarButtonItem)
             let addWorkType = try #require(
                 navigation.topViewController as? AddWorkTypeViewController
             )
@@ -457,6 +463,18 @@ struct AppCoordinatorTests {
             #expect(added.payRates.count == 1)
             #expect(added.payRates.first?.amount == Decimal(500))
             #expect(added.payRates.first?.effectiveFrom == nil)
+            #expect(navigation.topViewController === workTypes)
+            #expect(navigation.viewControllers.count == 2)
+            #expect(workTypes.tableView(workTypes.tableView, numberOfRowsInSection: 0) == 2)
+            let displayedNames = (0..<2).compactMap { row in
+                let cell = workTypes.tableView(
+                    workTypes.tableView,
+                    cellForRowAt: IndexPath(row: row, section: 0)
+                )
+                return (cell.contentConfiguration as? UIListContentConfiguration)?.text
+            }
+            #expect(Set(displayedNames) == Set(["Lectures", "Exams"]))
+            _ = navigation.popViewController(animated: false)
             #expect(navigation.topViewController === overview)
             #expect(navigation.viewControllers.count == 1)
 

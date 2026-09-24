@@ -2,7 +2,7 @@ import UIKit
 
 final class OverviewViewController: UIViewController {
     var onAddShift: (() -> Void)?
-    var onAddWorkType: (() -> Void)?
+    var onManageWorkTypes: (() -> Void)?
     var onCheckPaycheck: ((PayCalculationPeriod) -> Void)?
     var onEditShift: ((Shift) -> Void)?
 
@@ -64,12 +64,12 @@ final class OverviewViewController: UIViewController {
     }
 
     private func configureNavigationItem() {
-        let addWorkType = UIAction(title: OverviewStrings.addWorkType) { [weak self] _ in
-            self?.onAddWorkType?()
+        let workTypes = UIAction(title: OverviewStrings.workTypes) { [weak self] _ in
+            self?.onManageWorkTypes?()
         }
         let item = UIBarButtonItem(
             image: UIImage(systemName: "ellipsis.circle"),
-            menu: UIMenu(children: [addWorkType])
+            menu: UIMenu(children: [workTypes])
         )
         item.accessibilityIdentifier = "overview.more"
         navigationItem.rightBarButtonItem = item
