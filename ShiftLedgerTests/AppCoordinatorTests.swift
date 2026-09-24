@@ -502,6 +502,58 @@ struct AppCoordinatorTests {
         }
     }
 
+    @Test("Rename Work Type persists only its name and immediately updates Work Types and Add Shift")
+    func renameWorkTypePersistsAndUpdatesAddShift() async throws {
+        let originalJob = try makeMultiWorkTypeJob()
+        let original = try #require(originalJob.workTypes.first)
+
+        try await withOverview(job: originalJob) { stack, navigation, overview in
+            overview.onManageWorkTypes?()
+            let workTypes = try #require(navigation.topViewController as? WorkTypesViewController)
+            workTypes.loadViewIfNeeded()
+            workTypes.tableView(workTypes.tableView, didSelectRowAt: IndexPath(row: 0, section: 0))
+            let rename = try #require(navigation.topViewController as? RenameWorkTypeViewController)
+            rename.loadViewIfNeeded()
+            let field: UITextField = try requireView("renameWorkType.name", in: rename.view)
+            #expect(field.text == "Lectures")
+            field.text = "  Senior   Lectures  "
+            field.sendActions(for: .editingChanged)
+            try tapBarButtonItem(rename.navigationItem.rightBarButtonItem)
+
+            #expect(navigation.topViewController === workTypes)
+            #expect(navigation.viewControllers.count == 2)
+            #expect(navigation.viewControllers[0] === overview)
+            let row = workTypes.tableView(workTypes.tableView, cellForRowAt: IndexPath(row: 0, section: 0))
+            #expect((row.contentConfiguration as? UIListContentConfiguration)?.text == "Senior   Lectures")
+            let persisted = try #require(try JobStorage(stack: stack).load())
+            let renamed = try #require(persisted.workType(id: original.id))
+            #expect(persisted.workTypes.count == originalJob.workTypes.count)
+            #expect(renamed.id == original.id)
+            #expect(renamed.name == "Senior   Lectures")
+            #expect(renamed.basePayBasis == original.basePayBasis)
+            #expect(renamed.payRates == original.payRates)
+            #expect(persisted.workTypes[1] == originalJob.workTypes[1])
+
+            _ = navigation.popViewController(animated: false)
+            #expect(navigation.topViewController === overview)
+            overview.onAddShift?()
+            let addShift = try #require(navigation.topViewController as? AddShiftViewController)
+            addShift.loadViewIfNeeded()
+            let workTypeRow: UIControl = try requireView("addShift.workType", in: addShift.view)
+            workTypeRow.sendActions(for: .touchUpInside)
+            let pickerNavigation = try #require(addShift.presentedViewController as? UINavigationController)
+            let picker = try #require(pickerNavigation.topViewController as? WorkTypeSelectionViewController)
+            picker.loadViewIfNeeded()
+            let names = (0..<picker.tableView(picker.tableView, numberOfRowsInSection: 0)).compactMap { index in
+                picker.tableView(
+                    picker.tableView,
+                    cellForRowAt: IndexPath(row: index, section: 0)
+                ).textLabel?.text
+            }
+            #expect(names == ["Senior   Lectures", "Exams"])
+        }
+    }
+
     @Test("Редактирование Shift сохраняет exact WorkType и время через реальный persistence path")
     func editShiftPersistsAndReturnsToSameOverview() async throws {
         let job = try makeMultiWorkTypeJob()

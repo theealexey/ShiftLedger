@@ -95,6 +95,11 @@ struct MainCoordinatorTests {
         #expect(harness.navigationController.topViewController is AddWorkTypeViewController)
         _ = harness.navigationController.popViewController(animated: false)
         #expect(harness.navigationController.topViewController === workTypes)
+        let selected = try #require(harness.job.workTypes.first)
+        workTypes.onRenameWorkType?(selected)
+        #expect(harness.navigationController.topViewController is RenameWorkTypeViewController)
+        _ = harness.navigationController.popViewController(animated: false)
+        #expect(harness.navigationController.topViewController === workTypes)
         _ = harness.navigationController.popViewController(animated: false)
         #expect(harness.navigationController.topViewController === harness.overview)
 
@@ -103,6 +108,38 @@ struct MainCoordinatorTests {
         #expect(harness.navigationController.topViewController is ActualGrossEntryViewController)
         _ = harness.navigationController.popViewController(animated: false)
         #expect(harness.navigationController.topViewController === harness.overview)
+    }
+
+    @Test("Rename Work Type returns to the same list and passes updated Job to subsequent flows")
+    func renameWorkTypeUpdatesCurrentJob() throws {
+        let harness = try makeHarness(cycle: .perShift)
+        harness.coordinator.start()
+        harness.overview.loadViewIfNeeded()
+        harness.overview.onManageWorkTypes?()
+        let workTypes = try #require(harness.navigationController.topViewController as? WorkTypesViewController)
+        workTypes.loadViewIfNeeded()
+        let selected = try #require(harness.job.workTypes.first)
+        workTypes.tableView(workTypes.tableView, didSelectRowAt: IndexPath(row: 0, section: 0))
+        let rename = try #require(harness.navigationController.topViewController as? RenameWorkTypeViewController)
+        #expect(harness.metrics.renameInputs == [selected])
+        let updatedJob = try harness.job.renamingWorkType(id: selected.id, to: "Senior Lectures")
+        rename.onSaved?(updatedJob)
+
+        #expect(harness.navigationController.topViewController === workTypes)
+        #expect(harness.navigationController.viewControllers.count == 2)
+        #expect(harness.navigationController.viewControllers[0] === harness.overview)
+        let renamedCell = workTypes.tableView(workTypes.tableView, cellForRowAt: IndexPath(row: 0, section: 0))
+        #expect((renamedCell.contentConfiguration as? UIListContentConfiguration)?.text == "Senior Lectures")
+        _ = harness.navigationController.popViewController(animated: false)
+        #expect(harness.navigationController.topViewController === harness.overview)
+        harness.overview.onAddShift?()
+        #expect(harness.metrics.addShiftJobs.last == updatedJob)
+        _ = harness.navigationController.popViewController(animated: false)
+        harness.overview.onEditShift?(try makeShift())
+        #expect(harness.metrics.editShiftJobs.last == updatedJob)
+        _ = harness.navigationController.popViewController(animated: false)
+        harness.overview.onManageWorkTypes?()
+        #expect(harness.metrics.workTypesInputs.last == updatedJob.workTypes)
     }
 
     @Test("Add Work Type обновляет Job и тот же Work Types, затем передаёт aggregate в Add и Edit Shift")
@@ -245,6 +282,14 @@ struct MainCoordinatorTests {
                     )
                 )
             },
+            makeRenameWorkType: { workType in
+                metrics.renameInputs.append(workType)
+                return RenameWorkTypeViewController(
+                    viewModel: RenameWorkTypeViewModel(workType: workType) { _, _ in
+                        .failure(.persistence)
+                    }
+                )
+            },
             makeEditShift: { job, shift in
                 metrics.editShiftJobs.append(job)
                 metrics.editedShifts.append(shift)
@@ -385,6 +430,7 @@ private final class Metrics {
     var overviewShifts: [Shift] = []
     var addShiftJobs: [Job] = []
     var workTypesInputs: [[WorkType]] = []
+    var renameInputs: [WorkType] = []
     var editShiftJobs: [Job] = []
     var editedShifts: [Shift] = []
     var preparedPeriods: [PayCalculationPeriod] = []

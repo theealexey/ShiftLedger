@@ -39,6 +39,9 @@ struct AppFlowComposition {
             makeAddWorkType: { job in
                 AddWorkTypeAssembly.make(job: job, stack: stack)
             },
+            makeRenameWorkType: { workType in
+                RenameWorkTypeAssembly.make(workType: workType, stack: stack)
+            },
             makeEditShift: { job, shift in
                 EditShiftAssembly.make(job: job, shift: shift, stack: stack)
             },

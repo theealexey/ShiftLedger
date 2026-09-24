@@ -4,7 +4,7 @@ import UIKit
 
 @MainActor
 struct WorkTypesViewControllerTests {
-    @Test("Work Types renders supplied order, names, basis, and noneditable rows")
+    @Test("Work Types renders supplied order, names, basis, and actionable rows")
     func rendersSuppliedWorkTypes() throws {
         let first = try makeWorkType(id: 1, name: "  Lectures  ", basis: .hourly)
         let second = try makeWorkType(id: 2, name: nil, basis: .fixedPerShift)
@@ -37,13 +37,31 @@ struct WorkTypesViewControllerTests {
             #expect(cell.accessibilityIdentifier == "workTypes.row.\(workType.id.uuidString)")
             #expect(cell.accessibilityLabel == name)
             #expect(cell.accessibilityValue == basis)
-            #expect(cell.selectionStyle == .none)
-            #expect(cell.accessoryType == .none)
+            #expect(cell.selectionStyle != .none)
+            #expect(cell.accessoryType == .disclosureIndicator)
+            #expect(cell.accessibilityTraits.contains(.button))
             #expect(content.textProperties.numberOfLines == 0)
             #expect(content.secondaryTextProperties.numberOfLines == 0)
             #expect(content.textProperties.font == UIFont.preferredFont(forTextStyle: .body))
             #expect(content.secondaryTextProperties.font == UIFont.preferredFont(forTextStyle: .subheadline))
         }
+    }
+
+    @Test("Selecting a row forwards its exact WorkType and deselects it")
+    func selectingRowForwardsExactWorkType() throws {
+        let first = try makeWorkType(id: 1, name: "Lectures", basis: .hourly)
+        let second = try makeWorkType(id: 2, name: "Lectures", basis: .fixedPerShift)
+        let viewController = WorkTypesViewController(workTypes: [first, second])
+        var selected: [WorkType] = []
+        viewController.onRenameWorkType = { selected.append($0) }
+        viewController.loadViewIfNeeded()
+        let indexPath = IndexPath(row: 1, section: 0)
+        viewController.tableView.selectRow(at: indexPath, animated: false, scrollPosition: .none)
+
+        viewController.tableView(viewController.tableView, didSelectRowAt: indexPath)
+
+        #expect(selected == [second])
+        #expect(viewController.tableView.indexPathForSelectedRow == nil)
     }
 
     @Test("Reload replaces rows on the same Work Types screen")

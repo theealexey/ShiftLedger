@@ -2,6 +2,7 @@ import UIKit
 
 final class WorkTypesViewController: UITableViewController {
     var onAddWorkType: (() -> Void)?
+    var onRenameWorkType: ((WorkType) -> Void)?
 
     private var workTypes: [WorkType]
 
@@ -70,13 +71,21 @@ final class WorkTypesViewController: UITableViewController {
         content.secondaryTextProperties.color = .secondaryLabel
         content.secondaryTextProperties.numberOfLines = 0
         cell.contentConfiguration = content
-        cell.selectionStyle = .none
-        cell.accessoryType = .none
+        cell.selectionStyle = .default
+        cell.accessoryType = .disclosureIndicator
         cell.accessibilityIdentifier = "workTypes.row.\(workType.id.uuidString)"
         cell.isAccessibilityElement = true
         cell.accessibilityLabel = name
         cell.accessibilityValue = basis
+        cell.accessibilityTraits.insert(.button)
         return cell
+    }
+
+    override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
+        guard workTypes.indices.contains(indexPath.row) else { return }
+        let workType = workTypes[indexPath.row]
+        tableView.deselectRow(at: indexPath, animated: true)
+        onRenameWorkType?(workType)
     }
 
     @objc private func addTapped() {

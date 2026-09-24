@@ -8,6 +8,7 @@ final class MainCoordinator {
         let makeAddShift: @MainActor (Job) -> AddShiftViewController
         let makeWorkTypes: @MainActor ([WorkType]) -> WorkTypesViewController
         let makeAddWorkType: @MainActor (Job) -> AddWorkTypeViewController
+        let makeRenameWorkType: @MainActor (WorkType) -> RenameWorkTypeViewController
         let makeEditShift: @MainActor (Job, Shift) -> EditShiftViewController
         let makeActualGrossEntry: @MainActor (String) -> ActualGrossEntryViewController
         let preparePaycheckComparison: @MainActor (Job, PayCalculationPeriod, ActualGross) throws -> PaycheckComparison
@@ -19,6 +20,7 @@ final class MainCoordinator {
         case addShift
         case workTypes
         case addWorkType(returningTo: WorkTypesViewController)
+        case renameWorkType(WorkType, returningTo: WorkTypesViewController)
         case editShift(Shift)
         case actualGrossEntry(PayCalculationPeriod)
         case paycheckResult(PaycheckComparison)
@@ -72,6 +74,8 @@ final class MainCoordinator {
             showWorkTypes()
         case let .addWorkType(returningTo):
             showAddWorkType(returningTo: returningTo)
+        case let .renameWorkType(workType, returningTo):
+            showRenameWorkType(workType, returningTo: returningTo)
         case let .editShift(shift):
             showEditShift(shift)
         case let .actualGrossEntry(period):
@@ -100,6 +104,10 @@ final class MainCoordinator {
             guard let viewController else { return }
             self?.navigate(to: .addWorkType(returningTo: viewController))
         }
+        viewController.onRenameWorkType = { [weak self, weak viewController] workType in
+            guard let viewController else { return }
+            self?.navigate(to: .renameWorkType(workType, returningTo: viewController))
+        }
         navigationController.pushViewController(viewController, animated: true)
     }
 
@@ -107,12 +115,27 @@ final class MainCoordinator {
         let viewController = dependencies.makeAddWorkType(job)
         viewController.onSaved = { [weak self, weak workTypesViewController] updatedJob in
             guard let workTypesViewController else { return }
-            self?.completeAddWorkType(with: updatedJob, returningTo: workTypesViewController)
+            self?.completeWorkTypeMutation(with: updatedJob, returningTo: workTypesViewController)
         }
         navigationController.pushViewController(viewController, animated: true)
     }
 
-    private func completeAddWorkType(with updatedJob: Job, returningTo workTypesViewController: WorkTypesViewController) {
+    private func showRenameWorkType(
+        _ workType: WorkType,
+        returningTo workTypesViewController: WorkTypesViewController
+    ) {
+        let viewController = dependencies.makeRenameWorkType(workType)
+        viewController.onSaved = { [weak self, weak workTypesViewController] updatedJob in
+            guard let workTypesViewController else { return }
+            self?.completeWorkTypeMutation(with: updatedJob, returningTo: workTypesViewController)
+        }
+        navigationController.pushViewController(viewController, animated: true)
+    }
+
+    private func completeWorkTypeMutation(
+        with updatedJob: Job,
+        returningTo workTypesViewController: WorkTypesViewController
+    ) {
         job = updatedJob
         overviewViewController.reload(job: updatedJob)
         workTypesViewController.reload(workTypes: updatedJob.workTypes)

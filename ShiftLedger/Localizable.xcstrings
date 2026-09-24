@@ -1234,6 +1234,48 @@
         "ru" : { "stringUnit" : { "state" : "translated", "value" : "с" } }
       }
     },
+    "renameWorkType.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Rename Work Type" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Переименовать вид работы" } }
+      }
+    },
+    "renameWorkType.name.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Work type name" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Название вида работы" } }
+      }
+    },
+    "renameWorkType.name.accessibilityHint" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Enter the new name for this work type." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Введите новое название этого вида работы." } }
+      }
+    },
+    "renameWorkType.save" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Save" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Сохранить" } }
+      }
+    },
+    "renameWorkType.error.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Couldn't Rename Work Type" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Не удалось переименовать вид работы" } }
+      }
+    },
+    "renameWorkType.error.message" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Your changes weren't saved. Try again." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Изменения не сохранены. Попробуйте ещё раз." } }
+      }
+    },
     "workTypes.title" : {
       "extractionState" : "manual",
       "localizations" : {
