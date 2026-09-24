@@ -12,6 +12,11 @@ enum JobValidationError: Error, Equatable {
     case duplicatePayRateID
 }
 
+enum JobWorkTypeRenameError: Error, Equatable {
+    case workTypeNotFound(workTypeID: UUID)
+    case invalidName(WorkTypeNameValidationError)
+}
+
 enum PayRateResolutionError: Error, Equatable {
     case workTypeNotFound(workTypeID: UUID)
     case invalidJobTimeZoneIdentifier
@@ -124,6 +129,33 @@ struct Job: Equatable {
 
     func workType(id: UUID) -> WorkType? {
         workTypes.first { $0.id == id }
+    }
+
+    func renamingWorkType(
+        id workTypeID: UUID,
+        to rawName: String
+    ) throws(JobWorkTypeRenameError) -> Job {
+        guard let index = workTypes.firstIndex(where: { $0.id == workTypeID }) else {
+            throw .workTypeNotFound(workTypeID: workTypeID)
+        }
+
+        var renamedWorkTypes = workTypes
+        do {
+            renamedWorkTypes[index] = try workTypes[index].renamed(to: rawName)
+        } catch {
+            throw .invalidName(error)
+        }
+
+        return Job(
+            id: id,
+            metadata: ValidatedMetadata(
+                currencyCode: currencyCode,
+                timeZoneIdentifier: timeZoneIdentifier
+            ),
+            payCalculationCycle: payCalculationCycle,
+            workTypes: renamedWorkTypes,
+            createdAt: createdAt
+        )
     }
 
     func applicablePayRate(for shift: Shift) throws(PayRateResolutionError) -> PayRate {

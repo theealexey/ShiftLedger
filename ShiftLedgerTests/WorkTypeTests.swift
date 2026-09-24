@@ -64,6 +64,53 @@ struct WorkTypeTests {
         #expect(first != second)
     }
 
+    @Test("Rename changes only the WorkType name and preserves its original value")
+    func renamePreservesCompensationAndOriginal() throws {
+        let initial = try PayRate(id: payRateID, amount: 100, effectiveFrom: nil)
+        let dated = try PayRate(
+            id: UUID(uuid: (5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5)),
+            amount: 125,
+            effectiveFrom: LocalDate(year: 2026, month: 9, day: 1)
+        )
+        let original = WorkType(
+            id: primaryWorkTypeID,
+            name: "Lectures",
+            basePayBasis: .hourly,
+            payRateHistory: try PayRateHistory(payRates: [initial, dated])
+        )
+
+        let renamed = try original.renamed(to: " \n Night   SHIFT \t ")
+
+        #expect(renamed.name == "Night   SHIFT")
+        #expect(renamed.id == original.id)
+        #expect(renamed.basePayBasis == original.basePayBasis)
+        #expect(renamed.payRates == original.payRates)
+        #expect(original.name == "Lectures")
+        #expect(renamed.applicablePayRate(on: try LocalDate(year: 2026, month: 9, day: 1)) == dated)
+    }
+
+    @Test("Whitespace-only WorkType rename is rejected")
+    func rejectsEmptyRenamedName() throws {
+        let original = try makeWorkType(id: primaryWorkTypeID, basePayBasis: .hourly)
+
+        #expect(throws: WorkTypeNameValidationError.empty) {
+            try original.renamed(to: " \n\t ")
+        }
+        #expect(original.name == nil)
+    }
+
+    @Test("Historical nil-named WorkType accepts a real name")
+    func renamesHistoricalNilName() throws {
+        let original = try makeWorkType(id: primaryWorkTypeID, basePayBasis: .fixedPerShift)
+
+        let renamed = try original.renamed(to: "Экзамен!")
+
+        #expect(original.name == nil)
+        #expect(renamed.name == "Экзамен!")
+        #expect(renamed.id == original.id)
+        #expect(renamed.payRates == original.payRates)
+    }
+
     @Test("WorkType identity participates in value equality")
     func identityParticipatesInEquality() throws {
         let payRate = try PayRate(

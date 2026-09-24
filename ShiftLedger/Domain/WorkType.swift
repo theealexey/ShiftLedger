@@ -1,5 +1,9 @@
 import Foundation
 
+enum WorkTypeNameValidationError: Error, Equatable {
+    case empty
+}
+
 struct WorkType: Equatable {
     let id: UUID
     let name: String?
@@ -25,6 +29,20 @@ struct WorkType: Equatable {
 
     func applicablePayRate(on localDate: LocalDate) -> PayRate {
         payRateHistory.applicablePayRate(on: localDate)
+    }
+
+    func renamed(to rawName: String) throws(WorkTypeNameValidationError) -> WorkType {
+        let normalizedName = rawName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard normalizedName.isEmpty == false else {
+            throw .empty
+        }
+
+        return WorkType(
+            id: id,
+            name: normalizedName,
+            basePayBasis: basePayBasis,
+            payRateHistory: payRateHistory
+        )
     }
 
     func basePay(for shift: Shift, on localDate: LocalDate) -> Decimal {

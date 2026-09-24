@@ -70,6 +70,106 @@ struct JobWorkTypeOwnershipTests {
         #expect(job.workType(id: unknownWorkTypeID) == nil)
     }
 
+    @Test("Renaming one WorkType preserves Job metadata and historical compensation")
+    func renamingWorkTypePreservesAggregateAndPay() throws {
+        let initial = try PayRate(
+            id: UUID(uuid: (5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1)),
+            amount: 20,
+            effectiveFrom: nil
+        )
+        let dated = try PayRate(
+            id: UUID(uuid: (5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2)),
+            amount: 25,
+            effectiveFrom: LocalDate(year: 2001, month: 1, day: 2)
+        )
+        let lecture = WorkType(
+            id: lectureID,
+            name: "Lectures",
+            basePayBasis: .hourly,
+            payRateHistory: try PayRateHistory(payRates: [dated, initial])
+        )
+        let exam = try makeWorkType(id: examID, basis: .fixedPerShift, amount: 500)
+        let original = try makeJob(workTypes: [lecture, exam])
+        let beforeShift = try makeShift(workTypeID: lectureID, startOffset: 0, hours: 2)
+        let afterShift = try makeShift(workTypeID: lectureID, startOffset: 2 * 24 * 60 * 60, hours: 2)
+        let beforeRate = try original.applicablePayRate(for: beforeShift)
+        let afterRate = try original.applicablePayRate(for: afterShift)
+        let beforePay = try original.basePay(for: beforeShift)
+        let afterPay = try original.basePay(for: afterShift)
+        let beforeGross = try original.expectedGross(
+            for: .perShift(shiftID: beforeShift.id), from: [beforeShift, afterShift]
+        )
+        let afterGross = try original.expectedGross(
+            for: .perShift(shiftID: afterShift.id), from: [beforeShift, afterShift]
+        )
+
+        let renamed = try original.renamingWorkType(id: lectureID, to: "  Senior Lectures \n")
+
+        #expect(renamed.id == original.id)
+        #expect(renamed.currencyCode == original.currencyCode)
+        #expect(renamed.timeZoneIdentifier == original.timeZoneIdentifier)
+        #expect(renamed.payCalculationCycle == original.payCalculationCycle)
+        #expect(renamed.createdAt == original.createdAt)
+        #expect(renamed.workTypes.map(\.id) == original.workTypes.map(\.id))
+        #expect(renamed.workType(id: lectureID)?.name == "Senior Lectures")
+        #expect(renamed.workType(id: lectureID)?.payRates == [initial, dated])
+        #expect(renamed.workType(id: examID) == exam)
+        #expect(original.workType(id: lectureID)?.name == "Lectures")
+        #expect(try renamed.applicablePayRate(for: beforeShift) == beforeRate)
+        #expect(try renamed.applicablePayRate(for: afterShift) == afterRate)
+        #expect(try renamed.basePay(for: beforeShift) == beforePay)
+        #expect(try renamed.basePay(for: afterShift) == afterPay)
+        #expect(try renamed.expectedGross(
+            for: .perShift(shiftID: beforeShift.id), from: [beforeShift, afterShift]
+        ) == beforeGross)
+        #expect(try renamed.expectedGross(
+            for: .perShift(shiftID: afterShift.id), from: [beforeShift, afterShift]
+        ) == afterGross)
+    }
+
+    @Test("Rename maps unknown identity and blank name to exact errors")
+    func rejectsInvalidWorkTypeRename() throws {
+        let job = try makeJob(workTypes: [
+            makeWorkType(id: lectureID, basis: .hourly, amount: 20)
+        ])
+
+        #expect(throws: JobWorkTypeRenameError.workTypeNotFound(workTypeID: unknownWorkTypeID)) {
+            try job.renamingWorkType(id: unknownWorkTypeID, to: "Exams")
+        }
+        #expect(throws: JobWorkTypeRenameError.invalidName(.empty)) {
+            try job.renamingWorkType(id: lectureID, to: "\n  ")
+        }
+    }
+
+    @Test("Equal display names do not merge distinct WorkType identities")
+    func renameAllowsDuplicateDisplayName() throws {
+        let lecture = WorkType(
+            id: lectureID,
+            name: "Lectures",
+            basePayBasis: .hourly,
+            payRateHistory: try PayRateHistory(payRates: [
+                try PayRate(amount: 20, effectiveFrom: nil)
+            ])
+        )
+        let exam = WorkType(
+            id: examID,
+            name: "Exams",
+            basePayBasis: .fixedPerShift,
+            payRateHistory: try PayRateHistory(payRates: [
+                try PayRate(amount: 500, effectiveFrom: nil)
+            ])
+        )
+        let original = try makeJob(workTypes: [lecture, exam])
+
+        let renamed = try original.renamingWorkType(id: examID, to: "Lectures")
+
+        #expect(renamed.workTypes.map(\.id) == [lectureID, examID])
+        #expect(renamed.workTypes.map(\.name) == ["Lectures", "Lectures"])
+        #expect(renamed.workType(id: lectureID) == lecture)
+        #expect(renamed.workType(id: examID)?.basePayBasis == .fixedPerShift)
+        #expect(original.workType(id: examID)?.name == "Exams")
+    }
+
     @Test("Legacy initializer создаёт один WorkType с identity Job")
     func legacyInitializerPreservesSingleWorkTypeContract() throws {
         let initial = try PayRate(amount: 3_000, effectiveFrom: nil)

@@ -33,6 +33,8 @@ enum JobStorageError: Error {
     case jobNotFound
     case multipleJobsFound
     case invalidWorkTypeAddition(underlying: JobValidationError)
+    case workTypeNotFound(workTypeID: UUID)
+    case invalidWorkTypeName(underlying: WorkTypeNameValidationError)
     case fetchFailed(underlying: Error)
     case saveFailed(underlying: Error)
     case corruptedData(Corruption)
@@ -192,6 +194,50 @@ final class JobStorage {
         )
         jobEntity.basePayKind = nil
 
+        do {
+            try context.save()
+        } catch {
+            context.rollback()
+            throw JobStorageError.saveFailed(underlying: error)
+        }
+
+        return candidateJob
+    }
+
+    func renameWorkType(id workTypeID: UUID, to rawName: String) throws -> Job {
+        let jobEntities = try fetchJobs()
+        let jobEntity: JobEntity
+        switch jobEntities.count {
+        case 0:
+            throw JobStorageError.jobNotFound
+        case 1:
+            jobEntity = jobEntities[0]
+        default:
+            throw JobStorageError.multipleJobsFound
+        }
+
+        let existingJob = try makeJob(from: jobEntity)
+        let candidateJob: Job
+        do {
+            candidateJob = try existingJob.renamingWorkType(id: workTypeID, to: rawName)
+        } catch {
+            switch error {
+            case let .workTypeNotFound(id):
+                throw JobStorageError.workTypeNotFound(workTypeID: id)
+            case let .invalidName(underlying):
+                throw JobStorageError.invalidWorkTypeName(underlying: underlying)
+            }
+        }
+
+        guard let normalizedName = candidateJob.workType(id: workTypeID)?.name else {
+            throw JobStorageError.corruptedData(.missingWorkType)
+        }
+        guard let workTypeEntity = try workTypeEntities(for: jobEntity)
+            .first(where: { $0.id == workTypeID }) else {
+            throw JobStorageError.corruptedData(.missingWorkType)
+        }
+
+        workTypeEntity.name = normalizedName
         do {
             try context.save()
         } catch {
