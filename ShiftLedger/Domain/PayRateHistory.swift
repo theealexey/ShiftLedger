@@ -62,6 +62,10 @@ struct PayRateHistory: Equatable {
         return initialPayRate
     }
 
+    func adding(_ payRate: PayRate) throws(PayRateHistoryValidationError) -> PayRateHistory {
+        try PayRateHistory(payRates: payRates + [payRate])
+    }
+
     private static func isOrderedBefore(_ lhs: PayRate, _ rhs: PayRate) -> Bool {
         switch (lhs.effectiveFrom, rhs.effectiveFrom) {
         case (nil, nil):

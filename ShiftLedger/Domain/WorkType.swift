@@ -4,6 +4,11 @@ enum WorkTypeNameValidationError: Error, Equatable {
     case empty
 }
 
+enum WorkTypePayRateChangeError: Error, Equatable {
+    case initialPayRateNotAllowed
+    case invalidHistory(PayRateHistoryValidationError)
+}
+
 struct WorkType: Equatable {
     let id: UUID
     let name: String?
@@ -42,6 +47,26 @@ struct WorkType: Equatable {
             name: normalizedName,
             basePayBasis: basePayBasis,
             payRateHistory: payRateHistory
+        )
+    }
+
+    func addingPayRate(_ payRate: PayRate) throws(WorkTypePayRateChangeError) -> WorkType {
+        guard payRate.effectiveFrom != nil else {
+            throw .initialPayRateNotAllowed
+        }
+
+        let updatedHistory: PayRateHistory
+        do {
+            updatedHistory = try payRateHistory.adding(payRate)
+        } catch {
+            throw .invalidHistory(error)
+        }
+
+        return WorkType(
+            id: id,
+            name: name,
+            basePayBasis: basePayBasis,
+            payRateHistory: updatedHistory
         )
     }
 

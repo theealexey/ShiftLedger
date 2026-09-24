@@ -11,6 +11,7 @@ struct JobStorageTests {
     private let renameInitialRateID = UUID(uuid: (0x79, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4))
     private let renameDatedRateID = UUID(uuid: (0x79, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5))
     private let renameOtherRateID = UUID(uuid: (0x79, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 6))
+    private let addedRateID = UUID(uuid: (0x79, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 7))
 
     private struct StoredRateState: Equatable {
         let objectID: NSManagedObjectID
@@ -318,6 +319,227 @@ struct JobStorageTests {
         let restoredJob = try #require(try JobStorage(stack: stackB).load())
         #expect(restoredJob == renamedJob)
         #expect(restoredJob.workType(id: renameTargetID)?.name == "Senior Lectures")
+    }
+
+    @Test("Dated rate addition inserts one rate and survives SQLite reopen")
+    func addsDatedPayRateAcrossNewCoreDataStack() async throws {
+        let storeURL = try makeTemporaryStoreURL()
+        var stacks: [CoreDataStack] = []
+        defer { removeTemporaryStoreDirectory(for: storeURL, stacks: stacks) }
+
+        let original = try makeRenameJob()
+        let targetBefore = try #require(original.workType(id: renameTargetID))
+        let otherBefore = try #require(original.workType(id: renameOtherID))
+        let timeZone = try #require(TimeZone(identifier: original.timeZoneIdentifier))
+        let effectiveDate = try LocalDate(year: 2026, month: 3, day: 1)
+        let added = try PayRate(id: addedRateID, amount: 150, effectiveFrom: effectiveDate)
+        let beforeDate = try LocalDate(year: 2026, month: 2, day: 28)
+        let beforeStart = try beforeDate.startOfDay(in: timeZone).addingTimeInterval(9 * 60 * 60)
+        let afterStart = try effectiveDate.startOfDay(in: timeZone).addingTimeInterval(9 * 60 * 60)
+        let beforeShift = try Shift(
+            workTypeID: renameTargetID,
+            start: beforeStart,
+            end: beforeStart.addingTimeInterval(2 * 60 * 60)
+        )
+        let afterShift = try Shift(
+            workTypeID: renameTargetID,
+            start: afterStart,
+            end: afterStart.addingTimeInterval(2 * 60 * 60)
+        )
+        let beforeRate = try original.applicablePayRate(for: beforeShift)
+        let beforePay = try original.basePay(for: beforeShift)
+        let beforeGross = try original.expectedGross(
+            for: .perShift(shiftID: beforeShift.id), from: [beforeShift, afterShift]
+        )
+
+        let stackA = try await CoreDataStack.load(storeURL: storeURL)
+        stacks.append(stackA)
+        let storage = JobStorage(stack: stackA)
+        try storage.save(original)
+        let context = stackA.viewContext
+        let jobEntity = try #require(try context.fetch(
+            NSFetchRequest<JobEntity>(entityName: "JobEntity")
+        ).first)
+        let workTypes = try context.fetch(
+            NSFetchRequest<WorkTypeEntity>(entityName: "WorkTypeEntity")
+        )
+        let targetEntity = try #require(workTypes.first { $0.id == renameTargetID })
+        let otherEntity = try #require(workTypes.first { $0.id == renameOtherID })
+        let jobObjectID = jobEntity.objectID
+        let targetObjectID = targetEntity.objectID
+        let otherObjectID = otherEntity.objectID
+        let rateStatesBefore = storedRateStates(try context.fetch(
+            NSFetchRequest<PayRateEntity>(entityName: "PayRateEntity")
+        ))
+
+        let updated = try storage.addPayRate(added, toWorkTypeID: renameTargetID)
+
+        #expect(updated.id == original.id)
+        #expect(updated.currencyCode == original.currencyCode)
+        #expect(updated.timeZoneIdentifier == original.timeZoneIdentifier)
+        #expect(updated.payCalculationCycle == original.payCalculationCycle)
+        #expect(updated.createdAt == original.createdAt)
+        #expect(updated.workType(id: renameOtherID) == otherBefore)
+        #expect(updated.workType(id: renameTargetID)?.id == targetBefore.id)
+        #expect(updated.workType(id: renameTargetID)?.name == targetBefore.name)
+        #expect(updated.workType(id: renameTargetID)?.basePayBasis == targetBefore.basePayBasis)
+        #expect(updated.workType(id: renameTargetID)?.payRates == targetBefore.payRates + [added])
+        #expect(try updated.applicablePayRate(for: beforeShift) == beforeRate)
+        #expect(try updated.basePay(for: beforeShift) == beforePay)
+        #expect(try updated.expectedGross(
+            for: .perShift(shiftID: beforeShift.id), from: [beforeShift, afterShift]
+        ) == beforeGross)
+        #expect(try updated.applicablePayRate(for: afterShift) == added)
+        #expect(try updated.basePay(for: afterShift) == 300)
+        #expect(try updated.expectedGross(
+            for: .perShift(shiftID: afterShift.id), from: [beforeShift, afterShift]
+        ) == 300)
+
+        let jobsAfter = try context.fetch(NSFetchRequest<JobEntity>(entityName: "JobEntity"))
+        let workTypesAfter = try context.fetch(
+            NSFetchRequest<WorkTypeEntity>(entityName: "WorkTypeEntity")
+        )
+        let ratesAfter = try context.fetch(NSFetchRequest<PayRateEntity>(entityName: "PayRateEntity"))
+        let rateStatesAfter = storedRateStates(ratesAfter)
+        #expect(jobsAfter.count == 1)
+        #expect(jobsAfter.first?.objectID == jobObjectID)
+        #expect(workTypesAfter.count == 2)
+        #expect(workTypesAfter.first { $0.id == renameTargetID }?.objectID == targetObjectID)
+        #expect(workTypesAfter.first { $0.id == renameOtherID }?.objectID == otherObjectID)
+        #expect(ratesAfter.count == rateStatesBefore.count + 1)
+        for (id, state) in rateStatesBefore {
+            #expect(rateStatesAfter[id] == state)
+        }
+        let addedState = try #require(rateStatesAfter[addedRateID])
+        #expect(addedState.amount == 150)
+        #expect(addedState.effectiveFrom == (try effectiveDate.startOfDay(in: timeZone)))
+        #expect(addedState.jobID == original.id)
+        #expect(addedState.workTypeID == renameTargetID)
+        #expect(context.hasChanges == false)
+
+        try close(stackA)
+        let stackB = try await CoreDataStack.load(storeURL: storeURL)
+        stacks.append(stackB)
+        let restored = try #require(try JobStorage(stack: stackB).load())
+        #expect(restored == updated)
+        #expect(try restored.applicablePayRate(for: beforeShift) == beforeRate)
+        #expect(try restored.applicablePayRate(for: afterShift) == added)
+    }
+
+    @Test("Invalid dated rate additions leave persisted Job unchanged")
+    func rejectsInvalidPayRateAdditionsWithoutMutation() async throws {
+        let storeURL = try makeTemporaryStoreURL()
+        var stacks: [CoreDataStack] = []
+        defer { removeTemporaryStoreDirectory(for: storeURL, stacks: stacks) }
+
+        let original = try makeRenameJob()
+        let stack = try await CoreDataStack.load(storeURL: storeURL)
+        stacks.append(stack)
+        let storage = JobStorage(stack: stack)
+        try storage.save(original)
+        let context = stack.viewContext
+        let rateStatesBefore = storedRateStates(try context.fetch(
+            NSFetchRequest<PayRateEntity>(entityName: "PayRateEntity")
+        ))
+        let duplicateDate = try PayRate(
+            id: addedRateID,
+            amount: 150,
+            effectiveFrom: LocalDate(year: 2026, month: 2, day: 1)
+        )
+        let duplicateID = try PayRate(
+            id: renameDatedRateID,
+            amount: 150,
+            effectiveFrom: LocalDate(year: 2026, month: 3, day: 1)
+        )
+        let initial = try PayRate(id: addedRateID, amount: 150, effectiveFrom: nil)
+        let valid = try PayRate(
+            id: addedRateID,
+            amount: 150,
+            effectiveFrom: LocalDate(year: 2026, month: 3, day: 1)
+        )
+        let unknownID = UUID(uuid: (0x79, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 9))
+
+        var rejectedDuplicateDate = false
+        do {
+            _ = try storage.addPayRate(duplicateDate, toWorkTypeID: renameTargetID)
+            Issue.record("Duplicate effective date was accepted")
+        } catch JobStorageError.invalidPayRateChange(
+            underlying: .invalidHistory(.duplicatePayRateEffectiveFrom)
+        ) {
+            rejectedDuplicateDate = true
+        } catch {
+            Issue.record("Duplicate effective date returned an unexpected error")
+        }
+        var rejectedDuplicateID = false
+        do {
+            _ = try storage.addPayRate(duplicateID, toWorkTypeID: renameTargetID)
+            Issue.record("Duplicate PayRate ID was accepted")
+        } catch JobStorageError.invalidPayRateChange(
+            underlying: .invalidHistory(.duplicatePayRateID)
+        ) {
+            rejectedDuplicateID = true
+        } catch {
+            Issue.record("Duplicate PayRate ID returned an unexpected error")
+        }
+        var rejectedInitial = false
+        do {
+            _ = try storage.addPayRate(initial, toWorkTypeID: renameTargetID)
+            Issue.record("Another initial PayRate was accepted")
+        } catch JobStorageError.invalidPayRateChange(underlying: .initialPayRateNotAllowed) {
+            rejectedInitial = true
+        } catch {
+            Issue.record("Initial PayRate addition returned an unexpected error")
+        }
+        var rejectedUnknownID = false
+        do {
+            _ = try storage.addPayRate(valid, toWorkTypeID: unknownID)
+            Issue.record("Unknown WorkType ID was accepted")
+        } catch JobStorageError.workTypeNotFound(workTypeID: let receivedID) {
+            #expect(receivedID == unknownID)
+            rejectedUnknownID = true
+        } catch {
+            Issue.record("Unknown WorkType ID returned an unexpected error")
+        }
+
+        #expect(rejectedDuplicateDate)
+        #expect(rejectedDuplicateID)
+        #expect(rejectedInitial)
+        #expect(rejectedUnknownID)
+        #expect(try storage.load() == original)
+        #expect(storedRateStates(try context.fetch(
+            NSFetchRequest<PayRateEntity>(entityName: "PayRateEntity")
+        )) == rateStatesBefore)
+        #expect(context.hasChanges == false)
+    }
+
+    @Test("Adding a rate to an empty store returns jobNotFound without insertion")
+    func rejectsPayRateAdditionWhenNoJobExists() async throws {
+        let storeURL = try makeTemporaryStoreURL()
+        var stacks: [CoreDataStack] = []
+        defer { removeTemporaryStoreDirectory(for: storeURL, stacks: stacks) }
+        let stack = try await CoreDataStack.load(storeURL: storeURL)
+        stacks.append(stack)
+        let context = stack.viewContext
+        let rate = try PayRate(
+            id: addedRateID,
+            amount: 150,
+            effectiveFrom: LocalDate(year: 2026, month: 3, day: 1)
+        )
+
+        var rejectedMissingJob = false
+        do {
+            _ = try JobStorage(stack: stack).addPayRate(rate, toWorkTypeID: renameTargetID)
+            Issue.record("Rate addition succeeded without a Job")
+        } catch JobStorageError.jobNotFound {
+            rejectedMissingJob = true
+        } catch {
+            Issue.record("Empty store returned an unexpected error")
+        }
+        #expect(rejectedMissingJob)
+        #expect(try context.fetch(NSFetchRequest<JobEntity>(entityName: "JobEntity")).isEmpty)
+        #expect(try context.fetch(NSFetchRequest<WorkTypeEntity>(entityName: "WorkTypeEntity")).isEmpty)
+        #expect(try context.fetch(NSFetchRequest<PayRateEntity>(entityName: "PayRateEntity")).isEmpty)
+        #expect(context.hasChanges == false)
     }
 
     @Test("Blank rename leaves persisted Job and managed objects unchanged")

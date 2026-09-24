@@ -70,6 +70,47 @@ struct JobWorkTypeOwnershipTests {
         #expect(job.workType(id: unknownWorkTypeID) == nil)
     }
 
+    @Test("Adding a rate updates only the exact WorkType and preserves Job metadata")
+    func addsPayRateToExactWorkType() throws {
+        let lecture = try makeWorkType(id: lectureID, basis: .hourly, amount: 20)
+        let exam = try makeWorkType(id: examID, basis: .fixedPerShift, amount: 500)
+        let original = try makeJob(workTypes: [lecture, exam])
+        let added = try PayRate(
+            id: UUID(uuid: (8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1)),
+            amount: 30,
+            effectiveFrom: LocalDate(year: 2001, month: 1, day: 2)
+        )
+
+        let updated = try original.addingPayRate(added, toWorkTypeID: examID)
+
+        #expect(updated.id == original.id)
+        #expect(updated.currencyCode == original.currencyCode)
+        #expect(updated.timeZoneIdentifier == original.timeZoneIdentifier)
+        #expect(updated.payCalculationCycle == original.payCalculationCycle)
+        #expect(updated.createdAt == original.createdAt)
+        #expect(updated.workTypes.map(\.id) == original.workTypes.map(\.id))
+        #expect(updated.workType(id: lectureID) == lecture)
+        #expect(updated.workType(id: examID)?.payRates == exam.payRates + [added])
+        #expect(original.workType(id: examID) == exam)
+    }
+
+    @Test("Unknown WorkType ID never falls back to another WorkType")
+    func rejectsPayRateForUnknownWorkType() throws {
+        let lecture = try makeWorkType(id: lectureID, basis: .hourly, amount: 20)
+        let exam = try makeWorkType(id: examID, basis: .fixedPerShift, amount: 500)
+        let original = try makeJob(workTypes: [lecture, exam])
+        let added = try PayRate(
+            amount: 30,
+            effectiveFrom: LocalDate(year: 2001, month: 1, day: 2)
+        )
+
+        #expect(throws: JobPayRateChangeError.workTypeNotFound(workTypeID: unknownWorkTypeID)) {
+            try original.addingPayRate(added, toWorkTypeID: unknownWorkTypeID)
+        }
+        #expect(original.workType(id: lectureID) == lecture)
+        #expect(original.workType(id: examID) == exam)
+    }
+
     @Test("Renaming one WorkType preserves Job metadata and historical compensation")
     func renamingWorkTypePreservesAggregateAndPay() throws {
         let initial = try PayRate(

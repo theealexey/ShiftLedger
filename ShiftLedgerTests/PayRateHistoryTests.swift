@@ -78,6 +78,45 @@ struct PayRateHistoryTests {
         #expect(history.payRates == [initialRate, septemberRate, octoberRate])
     }
 
+    @Test("Adding a dated rate is immutable and chronologically normalized")
+    func addingDatedRate() throws {
+        let initial = try PayRate(amount: 100, effectiveFrom: nil)
+        let october = try PayRate(amount: 150, effectiveFrom: localDate(month: 10, day: 1))
+        let september = try PayRate(amount: 125, effectiveFrom: localDate(month: 9, day: 1))
+        let original = try PayRateHistory(payRates: [initial, october])
+
+        let updated = try original.adding(september)
+
+        #expect(original.payRates == [initial, october])
+        #expect(updated.payRates == [initial, september, october])
+    }
+
+    @Test("Adding a duplicate effective date is rejected without changing history")
+    func addingDuplicateDate() throws {
+        let initial = try PayRate(amount: 100, effectiveFrom: nil)
+        let dated = try PayRate(amount: 125, effectiveFrom: localDate(month: 9, day: 1))
+        let history = try PayRateHistory(payRates: [initial, dated])
+        let duplicate = try PayRate(amount: 150, effectiveFrom: localDate(month: 9, day: 1))
+
+        #expect(throws: PayRateHistoryValidationError.duplicatePayRateEffectiveFrom) {
+            try history.adding(duplicate)
+        }
+        #expect(history.payRates == [initial, dated])
+    }
+
+    @Test("Adding a duplicate rate ID is rejected without changing history")
+    func addingDuplicateID() throws {
+        let id = UUID(uuid: (7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1))
+        let initial = try PayRate(id: id, amount: 100, effectiveFrom: nil)
+        let history = try PayRateHistory(payRates: [initial])
+        let duplicate = try PayRate(id: id, amount: 125, effectiveFrom: localDate(month: 9, day: 1))
+
+        #expect(throws: PayRateHistoryValidationError.duplicatePayRateID) {
+            try history.adding(duplicate)
+        }
+        #expect(history.payRates == [initial])
+    }
+
     @Test(
         "История разрешает применимую ставку на исторических границах",
         arguments: [

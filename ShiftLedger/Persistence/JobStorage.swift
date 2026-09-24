@@ -35,6 +35,7 @@ enum JobStorageError: Error {
     case invalidWorkTypeAddition(underlying: JobValidationError)
     case workTypeNotFound(workTypeID: UUID)
     case invalidWorkTypeName(underlying: WorkTypeNameValidationError)
+    case invalidPayRateChange(underlying: WorkTypePayRateChangeError)
     case fetchFailed(underlying: Error)
     case saveFailed(underlying: Error)
     case corruptedData(Corruption)
@@ -248,6 +249,63 @@ final class JobStorage {
         return candidateJob
     }
 
+    func addPayRate(_ payRate: PayRate, toWorkTypeID workTypeID: UUID) throws -> Job {
+        let jobEntities = try fetchJobs()
+        let jobEntity: JobEntity
+        switch jobEntities.count {
+        case 0:
+            throw JobStorageError.jobNotFound
+        case 1:
+            jobEntity = jobEntities[0]
+        default:
+            throw JobStorageError.multipleJobsFound
+        }
+
+        let existingJob = try makeJob(from: jobEntity)
+        let candidateJob: Job
+        do {
+            candidateJob = try existingJob.addingPayRate(payRate, toWorkTypeID: workTypeID)
+        } catch {
+            switch error {
+            case let .workTypeNotFound(id):
+                throw JobStorageError.workTypeNotFound(workTypeID: id)
+            case let .invalidPayRateChange(underlying):
+                throw JobStorageError.invalidPayRateChange(underlying: underlying)
+            }
+        }
+
+        guard let workTypeEntity = try workTypeEntities(for: jobEntity)
+            .first(where: { $0.id == workTypeID }) else {
+            throw JobStorageError.corruptedData(.missingWorkType)
+        }
+        let timeZone = try makeTimeZone(from: existingJob.timeZoneIdentifier)
+        let storedPayRate = try prepareStoredPayRate(payRate, timeZone: timeZone)
+        guard let payRateEntityDescription = NSEntityDescription.entity(
+            forEntityName: "PayRateEntity",
+            in: context
+        ) else {
+            throw JobStorageError.saveFailed(
+                underlying: ManagedObjectCreationError.missingPayRateEntityDescription
+            )
+        }
+
+        let payRateEntity = PayRateEntity(entity: payRateEntityDescription, insertInto: context)
+        payRateEntity.id = storedPayRate.payRate.id
+        payRateEntity.amount = NSDecimalNumber(decimal: storedPayRate.payRate.amount)
+        payRateEntity.effectiveFrom = storedPayRate.effectiveFrom
+        payRateEntity.job = jobEntity
+        payRateEntity.workType = workTypeEntity
+
+        do {
+            try context.save()
+        } catch {
+            context.rollback()
+            throw JobStorageError.saveFailed(underlying: error)
+        }
+
+        return candidateJob
+    }
+
     func load() throws -> Job? {
         let jobEntities = try fetchJobs()
 
@@ -308,18 +366,25 @@ final class JobStorage {
         timeZone: TimeZone
     ) throws -> StoredWorkType {
         let payRates = try workType.payRates.map { payRate in
-            StoredPayRate(
-                payRate: payRate,
-                effectiveFrom: try payRate.effectiveFrom.map {
-                    try $0.startOfDay(in: timeZone)
-                }
-            )
+            try prepareStoredPayRate(payRate, timeZone: timeZone)
         }
 
         return StoredWorkType(
             workType: workType,
             basePayKind: encodeBasePayBasis(workType.basePayBasis),
             payRates: payRates
+        )
+    }
+
+    private func prepareStoredPayRate(
+        _ payRate: PayRate,
+        timeZone: TimeZone
+    ) throws -> StoredPayRate {
+        StoredPayRate(
+            payRate: payRate,
+            effectiveFrom: try payRate.effectiveFrom.map {
+                try $0.startOfDay(in: timeZone)
+            }
         )
     }
 

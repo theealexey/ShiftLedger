@@ -99,6 +99,50 @@ struct WorkTypeTests {
         #expect(original.name == nil)
     }
 
+    @Test("Dated rate addition preserves WorkType identity and historical rates")
+    func addsDatedPayRateWithoutRewritingHistory() throws {
+        let initial = try PayRate(id: payRateID, amount: 100, effectiveFrom: nil)
+        let existing = try PayRate(
+            id: UUID(uuid: (6, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1)),
+            amount: 125,
+            effectiveFrom: LocalDate(year: 2026, month: 9, day: 1)
+        )
+        let added = try PayRate(
+            id: UUID(uuid: (6, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2)),
+            amount: 150,
+            effectiveFrom: LocalDate(year: 2026, month: 10, day: 1)
+        )
+        let original = WorkType(
+            id: primaryWorkTypeID,
+            name: "Lectures",
+            basePayBasis: .hourly,
+            payRateHistory: try PayRateHistory(payRates: [initial, existing])
+        )
+
+        let updated = try original.addingPayRate(added)
+
+        #expect(updated.id == original.id)
+        #expect(updated.name == original.name)
+        #expect(updated.basePayBasis == original.basePayBasis)
+        #expect(updated.payRates == [initial, existing, added])
+        #expect(original.payRates == [initial, existing])
+        #expect(updated.applicablePayRate(on: try LocalDate(year: 2026, month: 8, day: 31)) == initial)
+        #expect(updated.applicablePayRate(on: try LocalDate(year: 2026, month: 9, day: 30)) == existing)
+        #expect(updated.applicablePayRate(on: try LocalDate(year: 2026, month: 10, day: 1)) == added)
+        #expect(updated.applicablePayRate(on: try LocalDate(year: 2026, month: 10, day: 2)) == added)
+    }
+
+    @Test("Rate change rejects another initial rate")
+    func rejectsInitialPayRateAddition() throws {
+        let original = try makeWorkType(id: primaryWorkTypeID, basePayBasis: .hourly)
+        let initial = try PayRate(amount: 150, effectiveFrom: nil)
+
+        #expect(throws: WorkTypePayRateChangeError.initialPayRateNotAllowed) {
+            try original.addingPayRate(initial)
+        }
+        #expect(original.payRates.count == 1)
+    }
+
     @Test("Historical nil-named WorkType accepts a real name")
     func renamesHistoricalNilName() throws {
         let original = try makeWorkType(id: primaryWorkTypeID, basePayBasis: .fixedPerShift)
