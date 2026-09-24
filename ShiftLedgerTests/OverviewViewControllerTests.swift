@@ -1087,20 +1087,99 @@ struct OverviewViewControllerTests {
         #expect(visibleFrontCardIdentifiers(in: view) == [ids[0]])
     }
 
-    @Test("Six decorative Shift surface roles each provide a foreground")
-    func shiftSurfaceRolesProvideForegrounds() {
-        #expect(ShiftSurfaceRole.allCases.count == 6)
+    @Test("All six Wada Shift surfaces have exact identical Light and Dark sRGB fills")
+    func shiftSurfaceRolesHaveExactFills() throws {
+        let expected: [(role: ShiftSurfaceRole, red: Int, green: Int, blue: Int)] = [
+            (.ivoryBuff, 235, 211, 162),
+            (.pistachioGreen, 100, 143, 123),
+            (.salviaBlue, 151, 172, 200),
+            (.seashellPink, 253, 212, 189),
+            (.glaucousGreen, 180, 205, 194),
+            (.cinnamonBuff, 253, 197, 126)
+        ]
+        #expect(ShiftSurfaceRole.allCases == expected.map { $0.role })
+        let light = UITraitCollection(userInterfaceStyle: .light)
+        let dark = UITraitCollection(userInterfaceStyle: .dark)
+        let epsilon: CGFloat = 0.000001
 
+        for entry in expected {
+            let lightComponents = try colorComponents(ShiftLedgerColors.shiftSurface(for: entry.role), traits: light)
+            let darkComponents = try colorComponents(ShiftLedgerColors.shiftSurface(for: entry.role), traits: dark)
+            for components in [lightComponents, darkComponents] {
+                #expect(abs(components.red - CGFloat(entry.red) / 255.0) < epsilon)
+                #expect(abs(components.green - CGFloat(entry.green) / 255.0) < epsilon)
+                #expect(abs(components.blue - CGFloat(entry.blue) / 255.0) < epsilon)
+                #expect(abs(components.alpha - 1) < epsilon)
+            }
+            #expect(abs(lightComponents.red - darkComponents.red) < epsilon)
+            #expect(abs(lightComponents.green - darkComponents.green) < epsilon)
+            #expect(abs(lightComponents.blue - darkComponents.blue) < epsilon)
+        }
+    }
+
+    @Test("Opaque Wada Shift foreground clears 4.5 to 1 contrast in both appearances")
+    func shiftSurfaceForegroundContrast() throws {
+        let epsilon: CGFloat = 0.000001
         for traits in [
             UITraitCollection(userInterfaceStyle: .light),
             UITraitCollection(userInterfaceStyle: .dark)
         ] {
             for role in ShiftSurfaceRole.allCases {
-                let surface = ShiftLedgerColors.shiftSurface(for: role).resolvedColor(with: traits)
-                let foreground = ShiftLedgerColors.shiftForeground(for: role).resolvedColor(with: traits)
-                #expect(surface.isEqual(foreground) == false)
+                let surface = try colorComponents(ShiftLedgerColors.shiftSurface(for: role), traits: traits)
+                let foreground = try colorComponents(ShiftLedgerColors.shiftForeground(for: role), traits: traits)
+                #expect(abs(foreground.red - CGFloat(16) / 255.0) < epsilon)
+                #expect(abs(foreground.green - CGFloat(19) / 255.0) < epsilon)
+                #expect(abs(foreground.blue - CGFloat(21) / 255.0) < epsilon)
+                #expect(abs(foreground.alpha - 1) < epsilon)
+                let brighter = max(relativeLuminance(surface), relativeLuminance(foreground))
+                let darker = min(relativeLuminance(surface), relativeLuminance(foreground))
+                #expect((brighter + 0.05) / (darker + 0.05) >= 4.5)
             }
         }
+    }
+
+    @Test("Pistachio Shift card uses opaque foreground for text, endpoints, and Edit")
+    func pistachioCardTextIsOpaque() throws {
+        let id = try #require((1...255).map { value in
+            UUID(uuid: (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, UInt8(value)))
+        }.first { ShiftLedgerColors.shiftSurfaceRoles(for: [$0]) == [.pistachioGreen] })
+        let view = OverviewView(frame: .zero)
+        let host = UIViewController()
+        host.view = view
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+        window.rootViewController = host
+        window.isHidden = false
+        defer { window.isHidden = true }
+        renderPresentationCards(ids: [id], selectedID: id, isExpanded: true, in: view)
+        window.layoutIfNeeded()
+
+        let prefix = "overview.shift.\(id.uuidString)"
+        let card: UIView = try requireView(identifier: prefix, in: view)
+        let foreground = try colorComponents(ShiftLedgerColors.shiftForeground(for: .pistachioGreen), traits: window.traitCollection)
+        for identifier in [
+            "\(prefix).frontDate",
+            "\(prefix).frontExpected",
+            "\(prefix).duration",
+            "\(prefix).detail.rate",
+            "\(prefix).endpoints.start"
+        ] {
+            let label: UILabel = try requireView(identifier: identifier, in: card)
+            let color = try colorComponents(label.textColor, traits: window.traitCollection)
+            #expect(abs(color.red - foreground.red) < 0.000001)
+            #expect(abs(color.green - foreground.green) < 0.000001)
+            #expect(abs(color.blue - foreground.blue) < 0.000001)
+            #expect(abs(color.alpha - 1) < 0.000001)
+        }
+        let edit: UIButton = try requireView(identifier: "\(prefix).edit", in: card)
+        #expect(edit.isHidden == false)
+        let editColor = try colorComponents(
+            try #require(edit.configuration?.baseForegroundColor),
+            traits: window.traitCollection
+        )
+        #expect(abs(editColor.red - foreground.red) < 0.000001)
+        #expect(abs(editColor.green - foreground.green) < 0.000001)
+        #expect(abs(editColor.blue - foreground.blue) < 0.000001)
+        #expect(abs(editColor.alpha - 1) < 0.000001)
     }
 
     @Test("Adjacent Shift cards resolve deterministic nonrepeating decorative surfaces")
@@ -1729,6 +1808,7 @@ struct OverviewViewControllerTests {
         selectedID: UUID?,
         expectedAmount: String = "€160",
         expectedAmounts: [String] = [],
+        isExpanded: Bool = false,
         in view: OverviewView
     ) {
         let cards = ids.enumerated().map { index, id in
@@ -1749,7 +1829,7 @@ struct OverviewViewControllerTests {
                 appliedRate: "€20 / h",
                 payBasis: "Hourly",
                 isSelected: id == selectedID,
-                isExpanded: false,
+                isExpanded: isExpanded,
                 accessibilityLabel: "Shift"
             )
         }
@@ -1775,6 +1855,36 @@ struct OverviewViewControllerTests {
             candidate = current.superview
         }
         return false
+    }
+
+    private func colorComponents(
+        _ color: UIColor,
+        traits: UITraitCollection
+    ) throws -> (red: CGFloat, green: CGFloat, blue: CGFloat, alpha: CGFloat) {
+        var red: CGFloat = 0
+        var green: CGFloat = 0
+        var blue: CGFloat = 0
+        var alpha: CGFloat = 0
+        guard color.resolvedColor(with: traits).getRed(
+            &red, green: &green, blue: &blue, alpha: &alpha
+        ) else {
+            throw OverviewControllerTestError.colorComponentsUnavailable
+        }
+        return (red, green, blue, alpha)
+    }
+
+    private func relativeLuminance(
+        _ color: (red: CGFloat, green: CGFloat, blue: CGFloat, alpha: CGFloat)
+    ) -> Double {
+        func linearized(_ component: CGFloat) -> Double {
+            let value = Double(component)
+            return value <= 0.04045
+                ? value / 12.92
+                : pow((value + 0.055) / 1.055, 2.4)
+        }
+        return 0.2126 * linearized(color.red)
+            + 0.7152 * linearized(color.green)
+            + 0.0722 * linearized(color.blue)
     }
 
     private func hasFixedHeight(_ view: UIView) -> Bool {
@@ -1808,4 +1918,5 @@ private struct Subject {
 private enum OverviewControllerTestError: Error {
     case loading
     case contentUnavailable
+    case colorComponentsUnavailable
 }

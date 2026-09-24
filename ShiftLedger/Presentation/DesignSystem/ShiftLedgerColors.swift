@@ -1,12 +1,12 @@
 import UIKit
 
 enum ShiftSurfaceRole: CaseIterable {
-    case mint
-    case camel
-    case yellow
-    case coral
-    case coolGray
-    case orange
+    case ivoryBuff
+    case pistachioGreen
+    case salviaBlue
+    case seashellPink
+    case glaucousGreen
+    case cinnamonBuff
 }
 
 enum ShiftLedgerColors {
@@ -37,45 +37,24 @@ enum ShiftLedgerColors {
     }
 
     static func shiftSurface(for role: ShiftSurfaceRole) -> UIColor {
-        UIColor { traits in
-            switch (traits.userInterfaceStyle, role) {
-            case (.dark, .mint):
-                UIColor(red: 0.32, green: 0.48, blue: 0.44, alpha: 1)
-            case (.dark, .camel):
-                UIColor(red: 0.50, green: 0.40, blue: 0.28, alpha: 1)
-            case (.dark, .yellow):
-                UIColor(red: 0.52, green: 0.50, blue: 0.18, alpha: 1)
-            case (.dark, .coral):
-                UIColor(red: 0.56, green: 0.21, blue: 0.20, alpha: 1)
-            case (.dark, .coolGray):
-                UIColor(red: 0.38, green: 0.40, blue: 0.43, alpha: 1)
-            case (.dark, .orange):
-                UIColor(red: 0.59, green: 0.25, blue: 0.12, alpha: 1)
-            case (_, .mint):
-                UIColor(red: 0.66, green: 0.78, blue: 0.75, alpha: 1)
-            case (_, .camel):
-                UIColor(red: 0.73, green: 0.60, blue: 0.44, alpha: 1)
-            case (_, .yellow):
-                UIColor(red: 0.90, green: 0.87, blue: 0.42, alpha: 1)
-            case (_, .coral):
-                UIColor(red: 0.87, green: 0.29, blue: 0.26, alpha: 1)
-            case (_, .coolGray):
-                UIColor(red: 0.72, green: 0.74, blue: 0.76, alpha: 1)
-            case (_, .orange):
-                UIColor(red: 0.91, green: 0.48, blue: 0.18, alpha: 1)
-            }
+        switch role {
+        case .ivoryBuff:
+            UIColor(red: CGFloat(235) / 255.0, green: CGFloat(211) / 255.0, blue: CGFloat(162) / 255.0, alpha: 1)
+        case .pistachioGreen:
+            UIColor(red: CGFloat(100) / 255.0, green: CGFloat(143) / 255.0, blue: CGFloat(123) / 255.0, alpha: 1)
+        case .salviaBlue:
+            UIColor(red: CGFloat(151) / 255.0, green: CGFloat(172) / 255.0, blue: CGFloat(200) / 255.0, alpha: 1)
+        case .seashellPink:
+            UIColor(red: CGFloat(253) / 255.0, green: CGFloat(212) / 255.0, blue: CGFloat(189) / 255.0, alpha: 1)
+        case .glaucousGreen:
+            UIColor(red: CGFloat(180) / 255.0, green: CGFloat(205) / 255.0, blue: CGFloat(194) / 255.0, alpha: 1)
+        case .cinnamonBuff:
+            UIColor(red: CGFloat(253) / 255.0, green: CGFloat(197) / 255.0, blue: CGFloat(126) / 255.0, alpha: 1)
         }
     }
 
-    static func shiftForeground(for role: ShiftSurfaceRole) -> UIColor {
-        UIColor { traits in
-            switch (traits.userInterfaceStyle, role) {
-            case (.dark, _):
-                .white
-            case (_, .mint), (_, .camel), (_, .yellow), (_, .coral), (_, .coolGray), (_, .orange):
-                UIColor(white: 0.10, alpha: 1)
-            }
-        }
+    static func shiftForeground(for _: ShiftSurfaceRole) -> UIColor {
+        UIColor(red: CGFloat(16) / 255.0, green: CGFloat(19) / 255.0, blue: CGFloat(21) / 255.0, alpha: 1)
     }
 
     static func stableSurfaceIndex(for id: UUID) -> Int {
@@ -87,34 +66,34 @@ enum ShiftLedgerColors {
     private static func preferredShiftSurfaceRole(for id: UUID) -> ShiftSurfaceRole {
         switch stableSurfaceIndex(for: id) {
         case 0:
-            .mint
+            .ivoryBuff
         case 1:
-            .camel
+            .pistachioGreen
         case 2:
-            .yellow
+            .salviaBlue
         case 3:
-            .coral
+            .seashellPink
         case 4:
-            .coolGray
+            .glaucousGreen
         default:
-            .orange
+            .cinnamonBuff
         }
     }
 
     private static func nextShiftSurfaceRole(after role: ShiftSurfaceRole) -> ShiftSurfaceRole {
         switch role {
-        case .mint:
-            .camel
-        case .camel:
-            .yellow
-        case .yellow:
-            .coral
-        case .coral:
-            .coolGray
-        case .coolGray:
-            .orange
-        case .orange:
-            .mint
+        case .ivoryBuff:
+            .pistachioGreen
+        case .pistachioGreen:
+            .salviaBlue
+        case .salviaBlue:
+            .seashellPink
+        case .seashellPink:
+            .glaucousGreen
+        case .glaucousGreen:
+            .cinnamonBuff
+        case .cinnamonBuff:
+            .ivoryBuff
         }
     }
 }

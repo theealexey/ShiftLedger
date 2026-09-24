@@ -120,8 +120,10 @@ final class OverviewShiftCardView: UIControl {
             : nil
 
         let foreground = ShiftLedgerColors.shiftForeground(for: surfaceRole)
-        let secondaryForeground = foreground.withAlphaComponent(0.78)
-        let tertiaryForeground = foreground.withAlphaComponent(0.68)
+        if var editConfiguration = editButton.configuration {
+            editConfiguration.baseForegroundColor = foreground
+            editButton.configuration = editConfiguration
+        }
 
         headerStack.accessibilityIdentifier = "overview.shift.\(card.id.uuidString).header"
         headerStack.isHidden = isDeckFront
@@ -129,14 +131,14 @@ final class OverviewShiftCardView: UIControl {
         frontContentStack.isHidden = isDeckFront == false
 
         coveredDateLabel.text = card.frontDate
-        configureLabel(coveredDateLabel, font: ShiftLedgerTypography.headline, color: secondaryForeground)
+        configureLabel(coveredDateLabel, font: ShiftLedgerTypography.headline, color: foreground)
         coveredDateLabel.numberOfLines = 1
         coveredDateLabel.accessibilityIdentifier = "overview.shift.\(card.id.uuidString).date"
         coveredDateLabel.isAccessibilityElement = false
         coveredDateLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
 
         timeRangeLabel.text = card.timeRange
-        configureLabel(timeRangeLabel, font: ShiftLedgerTypography.caption, color: secondaryForeground)
+        configureLabel(timeRangeLabel, font: ShiftLedgerTypography.caption, color: foreground)
         timeRangeLabel.accessibilityIdentifier = "overview.shift.\(card.id.uuidString).time"
         timeRangeLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
 
@@ -147,7 +149,7 @@ final class OverviewShiftCardView: UIControl {
         expectedAmountLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
 
         frontDateLabel.text = card.frontDate
-        configureLabel(frontDateLabel, font: ShiftLedgerTypography.headline, color: secondaryForeground)
+        configureLabel(frontDateLabel, font: ShiftLedgerTypography.headline, color: foreground)
         frontDateLabel.numberOfLines = 1
         frontDateLabel.accessibilityIdentifier = "overview.shift.\(card.id.uuidString).frontDate"
         frontDateLabel.isAccessibilityElement = false
@@ -178,11 +180,11 @@ final class OverviewShiftCardView: UIControl {
         }
 
         paidDurationLabel.text = isDeckFront ? OverviewStrings.paidDuration(card.paidDuration) : card.paidDuration
-        configureLabel(paidDurationLabel, font: ShiftLedgerTypography.callout, color: secondaryForeground)
+        configureLabel(paidDurationLabel, font: ShiftLedgerTypography.callout, color: foreground)
         paidDurationLabel.accessibilityIdentifier = "overview.shift.\(card.id.uuidString).duration"
 
         unpaidBreakLabel.text = card.unpaidBreak.map { "\(AddShiftStrings.unpaidBreak): \($0)" }
-        configureLabel(unpaidBreakLabel, font: ShiftLedgerTypography.caption, color: tertiaryForeground)
+        configureLabel(unpaidBreakLabel, font: ShiftLedgerTypography.caption, color: foreground)
         unpaidBreakLabel.accessibilityIdentifier = "overview.shift.\(card.id.uuidString).break"
         unpaidBreakLabel.isHidden = card.unpaidBreak == nil
         metadataStack.isHidden = card.isExpanded
@@ -210,10 +212,10 @@ final class OverviewShiftCardView: UIControl {
             rateDetailTitleLabel,
             payBasisDetailTitleLabel
         ].forEach {
-            configureLabel($0, font: ShiftLedgerTypography.caption, color: tertiaryForeground)
+            configureLabel($0, font: ShiftLedgerTypography.caption, color: foreground)
         }
         [paidTimeDetailLabel, unpaidBreakDetailLabel, rateDetailLabel, payBasisDetailLabel].forEach {
-            configureLabel($0, font: ShiftLedgerTypography.callout, color: secondaryForeground)
+            configureLabel($0, font: ShiftLedgerTypography.callout, color: foreground)
         }
         paidTimeDetailLabel.accessibilityIdentifier = "overview.shift.\(card.id.uuidString).detail.paidTime"
         unpaidBreakDetailLabel.accessibilityIdentifier = "overview.shift.\(card.id.uuidString).detail.break"
@@ -287,7 +289,6 @@ final class OverviewShiftCardView: UIControl {
         editConfiguration.image = UIImage(systemName: "pencil")
         editConfiguration.imagePlacement = .leading
         editConfiguration.imagePadding = 8
-        editConfiguration.baseForegroundColor = ShiftLedgerColors.accentPrimary
         editConfiguration.contentInsets = .zero
         editButton.configuration = editConfiguration
         editButton.contentHorizontalAlignment = .leading

@@ -76,7 +76,7 @@ final class OverviewShiftEndpointsView: UIView {
         }
         [startTime, endTime].forEach { $0.textColor = foreground }
         [startCaption, endCaption, startDate, endDate].forEach {
-            $0.textColor = foreground.withAlphaComponent(0.78)
+            $0.textColor = foreground
         }
         updateLayout()
     }
