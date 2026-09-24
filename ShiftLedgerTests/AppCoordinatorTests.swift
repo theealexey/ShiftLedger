@@ -502,6 +502,43 @@ struct AppCoordinatorTests {
         }
     }
 
+    @Test("Change Pay Rate saves through real composition and returns to the same Work Types")
+    func changePayRatePersistsThroughRealAssembly() async throws {
+        let originalJob = try makeMultiWorkTypeJob()
+        let target = try #require(originalJob.workTypes.first)
+        let other = try #require(originalJob.workTypes.last)
+        let zone = try #require(TimeZone(identifier: originalJob.timeZoneIdentifier))
+        let effectiveDate = try LocalDate(year: 2026, month: 6, day: 1)
+
+        try await withOverview(job: originalJob) { stack, navigation, overview in
+            overview.onManageWorkTypes?()
+            let workTypes = try #require(navigation.topViewController as? WorkTypesViewController)
+            workTypes.onChangePayRate?(target)
+            let change = try #require(navigation.topViewController as? ChangePayRateViewController)
+            change.loadViewIfNeeded()
+            let amount: UITextField = try requireView("changePayRate.amount", in: change.view)
+            let picker: UIDatePicker = try requireView("changePayRate.effectiveDate", in: change.view)
+            amount.text = "175"
+            amount.sendActions(for: .editingChanged)
+            picker.date = try effectiveDate.startOfDay(in: zone)
+            picker.sendActions(for: .valueChanged)
+            try tapBarButtonItem(change.navigationItem.rightBarButtonItem)
+
+            #expect(navigation.topViewController === workTypes)
+            #expect(navigation.viewControllers.count == 2)
+            #expect(navigation.viewControllers[0] === overview)
+            let persisted = try #require(try JobStorage(stack: stack).load())
+            let updated = try #require(persisted.workType(id: target.id))
+            #expect(updated.payRates.count == target.payRates.count + 1)
+            #expect(updated.payRates.dropLast() == target.payRates[...])
+            #expect(updated.payRates.last?.amount == 175)
+            #expect(updated.payRates.last?.effectiveFrom == effectiveDate)
+            #expect(persisted.workType(id: other.id) == other)
+            _ = navigation.popViewController(animated: false)
+            #expect(navigation.topViewController === overview)
+        }
+    }
+
     @Test("Rename Work Type persists only its name and immediately updates Work Types and Add Shift")
     func renameWorkTypePersistsAndUpdatesAddShift() async throws {
         let originalJob = try makeMultiWorkTypeJob()
@@ -511,7 +548,7 @@ struct AppCoordinatorTests {
             overview.onManageWorkTypes?()
             let workTypes = try #require(navigation.topViewController as? WorkTypesViewController)
             workTypes.loadViewIfNeeded()
-            workTypes.tableView(workTypes.tableView, didSelectRowAt: IndexPath(row: 0, section: 0))
+            workTypes.onRenameWorkType?(original)
             let rename = try #require(navigation.topViewController as? RenameWorkTypeViewController)
             rename.loadViewIfNeeded()
             let field: UITextField = try requireView("renameWorkType.name", in: rename.view)

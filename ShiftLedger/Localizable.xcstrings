@@ -1234,6 +1234,111 @@
         "ru" : { "stringUnit" : { "state" : "translated", "value" : "с" } }
       }
     },
+    "changePayRate.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Change Pay Rate" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Изменить ставку" } }
+      }
+    },
+    "changePayRate.save" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Save" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Сохранить" } }
+      }
+    },
+    "changePayRate.unnamed" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Unnamed work type" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Вид работы без названия" } }
+      }
+    },
+    "changePayRate.hourly" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Hourly" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Почасовая" } }
+      }
+    },
+    "changePayRate.fixedPerShift" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Fixed per shift" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Фиксированная за смену" } }
+      }
+    },
+    "changePayRate.newHourlyRate" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "New hourly rate" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Новая ставка в час" } }
+      }
+    },
+    "changePayRate.newPerShiftAmount" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "New per-shift amount" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Новая сумма за смену" } }
+      }
+    },
+    "changePayRate.amount.hint" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Enter a positive new amount." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Введите новую положительную сумму." } }
+      }
+    },
+    "changePayRate.currency" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Currency" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Валюта" } }
+      }
+    },
+    "changePayRate.effectiveDate" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Effective date" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Дата начала действия" } }
+      }
+    },
+    "changePayRate.effectiveDate.explanation" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "This rate applies to shifts starting on or after this date in the job’s time zone." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Эта ставка применяется к сменам, начинающимся в эту дату или позже по часовому поясу работы." } }
+      }
+    },
+    "changePayRate.timeZone" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Time zone" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Часовой пояс" } }
+      }
+    },
+    "changePayRate.effectiveDate.duplicate" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "A pay rate already starts on this date." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "В эту дату уже начинает действовать ставка." } }
+      }
+    },
+    "changePayRate.error.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Couldn’t save pay rate" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Не удалось сохранить ставку" } }
+      }
+    },
+    "changePayRate.error.message" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Your changes weren’t saved. Try again." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Изменения не сохранены. Попробуйте ещё раз." } }
+      }
+    },
     "renameWorkType.title" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1274,6 +1379,27 @@
       "localizations" : {
         "en" : { "stringUnit" : { "state" : "translated", "value" : "Your changes weren't saved. Try again." } },
         "ru" : { "stringUnit" : { "state" : "translated", "value" : "Изменения не сохранены. Попробуйте ещё раз." } }
+      }
+    },
+    "workTypes.action.rename" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Rename" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Переименовать" } }
+      }
+    },
+    "workTypes.action.changePayRate" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Change pay rate" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Изменить ставку" } }
+      }
+    },
+    "workTypes.actionsHint" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Opens rename and pay rate actions for this work type." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Открывает действия переименования и изменения ставки для этого вида работы." } }
       }
     },
     "workTypes.title" : {

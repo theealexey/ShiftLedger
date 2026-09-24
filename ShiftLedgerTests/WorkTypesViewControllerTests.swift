@@ -37,6 +37,7 @@ struct WorkTypesViewControllerTests {
             #expect(cell.accessibilityIdentifier == "workTypes.row.\(workType.id.uuidString)")
             #expect(cell.accessibilityLabel == name)
             #expect(cell.accessibilityValue == basis)
+            #expect(cell.accessibilityHint == WorkTypesStrings.actionsHint)
             #expect(cell.selectionStyle != .none)
             #expect(cell.accessoryType == .disclosureIndicator)
             #expect(cell.accessibilityTraits.contains(.button))
@@ -47,21 +48,43 @@ struct WorkTypesViewControllerTests {
         }
     }
 
-    @Test("Selecting a row forwards its exact WorkType and deselects it")
-    func selectingRowForwardsExactWorkType() throws {
+    @Test("Selecting a row opens its exact WorkType action sheet and deselects it")
+    func selectingRowOpensActions() throws {
         let first = try makeWorkType(id: 1, name: "Lectures", basis: .hourly)
         let second = try makeWorkType(id: 2, name: "Lectures", basis: .fixedPerShift)
         let viewController = WorkTypesViewController(workTypes: [first, second])
-        var selected: [WorkType] = []
-        viewController.onRenameWorkType = { selected.append($0) }
-        viewController.loadViewIfNeeded()
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+        window.rootViewController = viewController
+        window.makeKeyAndVisible()
         let indexPath = IndexPath(row: 1, section: 0)
         viewController.tableView.selectRow(at: indexPath, animated: false, scrollPosition: .none)
 
         viewController.tableView(viewController.tableView, didSelectRowAt: indexPath)
 
-        #expect(selected == [second])
+        let sheet = try #require(viewController.presentedViewController as? UIAlertController)
+        #expect(sheet.preferredStyle == .actionSheet)
+        #expect(sheet.title == second.name)
+        #expect(sheet.actions.map(\.title) == [
+            WorkTypesStrings.rename, WorkTypesStrings.changePayRate, WorkTypesStrings.cancel
+        ])
+        #expect(sheet.actions.map(\.style) == [.default, .default, .cancel])
+        #expect(sheet.popoverPresentationController?.sourceView != nil)
         #expect(viewController.tableView.indexPathForSelectedRow == nil)
+        viewController.tableView(viewController.tableView, didSelectRowAt: IndexPath(row: 0, section: 0))
+        #expect(viewController.presentedViewController === sheet)
+        window.isHidden = true
+    }
+
+    @Test("Unnamed row uses truthful action-sheet fallback")
+    func unnamedRowActionSheet() throws {
+        let unnamed = try makeWorkType(id: 1, name: nil, basis: .hourly)
+        let viewController = WorkTypesViewController(workTypes: [unnamed])
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+        window.rootViewController = viewController
+        window.makeKeyAndVisible()
+        viewController.tableView(viewController.tableView, didSelectRowAt: IndexPath(row: 0, section: 0))
+        #expect((viewController.presentedViewController as? UIAlertController)?.title == WorkTypesStrings.unnamed)
+        window.isHidden = true
     }
 
     @Test("Reload replaces rows on the same Work Types screen")

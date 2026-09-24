@@ -3,6 +3,7 @@ import UIKit
 final class WorkTypesViewController: UITableViewController {
     var onAddWorkType: (() -> Void)?
     var onRenameWorkType: ((WorkType) -> Void)?
+    var onChangePayRate: ((WorkType) -> Void)?
 
     private var workTypes: [WorkType]
 
@@ -77,6 +78,7 @@ final class WorkTypesViewController: UITableViewController {
         cell.isAccessibilityElement = true
         cell.accessibilityLabel = name
         cell.accessibilityValue = basis
+        cell.accessibilityHint = WorkTypesStrings.actionsHint
         cell.accessibilityTraits.insert(.button)
         return cell
     }
@@ -85,7 +87,25 @@ final class WorkTypesViewController: UITableViewController {
         guard workTypes.indices.contains(indexPath.row) else { return }
         let workType = workTypes[indexPath.row]
         tableView.deselectRow(at: indexPath, animated: true)
-        onRenameWorkType?(workType)
+        guard presentedViewController == nil else { return }
+        let sheet = UIAlertController(
+            title: workType.name ?? WorkTypesStrings.unnamed,
+            message: nil,
+            preferredStyle: .actionSheet
+        )
+        sheet.addAction(UIAlertAction(title: WorkTypesStrings.rename, style: .default) { [weak self] _ in
+            self?.onRenameWorkType?(workType)
+        })
+        sheet.addAction(UIAlertAction(title: WorkTypesStrings.changePayRate, style: .default) { [weak self] _ in
+            self?.onChangePayRate?(workType)
+        })
+        sheet.addAction(UIAlertAction(title: WorkTypesStrings.cancel, style: .cancel))
+        if let popover = sheet.popoverPresentationController {
+            let cell = tableView.cellForRow(at: indexPath)
+            popover.sourceView = cell ?? tableView
+            popover.sourceRect = cell?.bounds ?? tableView.rectForRow(at: indexPath)
+        }
+        present(sheet, animated: true)
     }
 
     @objc private func addTapped() {

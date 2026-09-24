@@ -119,7 +119,7 @@ struct MainCoordinatorTests {
         let workTypes = try #require(harness.navigationController.topViewController as? WorkTypesViewController)
         workTypes.loadViewIfNeeded()
         let selected = try #require(harness.job.workTypes.first)
-        workTypes.tableView(workTypes.tableView, didSelectRowAt: IndexPath(row: 0, section: 0))
+        workTypes.onRenameWorkType?(selected)
         let rename = try #require(harness.navigationController.topViewController as? RenameWorkTypeViewController)
         #expect(harness.metrics.renameInputs == [selected])
         let updatedJob = try harness.job.renamingWorkType(id: selected.id, to: "Senior Lectures")
@@ -140,6 +140,55 @@ struct MainCoordinatorTests {
         _ = harness.navigationController.popViewController(animated: false)
         harness.overview.onManageWorkTypes?()
         #expect(harness.metrics.workTypesInputs.last == updatedJob.workTypes)
+    }
+
+    @Test("Change Pay Rate uses current Job and returns to the same Work Types and Overview")
+    func changePayRateUpdatesCurrentJob() throws {
+        let harness = try makeHarness(cycle: .perShift)
+        harness.coordinator.start()
+        harness.overview.loadViewIfNeeded()
+        harness.overview.onManageWorkTypes?()
+        let workTypes = try #require(
+            harness.navigationController.topViewController as? WorkTypesViewController
+        )
+        let selected = try #require(harness.job.workTypes.first)
+        workTypes.onChangePayRate?(selected)
+        _ = try #require(
+            harness.navigationController.topViewController as? ChangePayRateViewController
+        )
+        #expect(harness.metrics.changePayRateInputs == [selected])
+        #expect(harness.metrics.changePayRateJobs == [harness.job])
+        _ = harness.navigationController.popViewController(animated: false)
+        #expect(harness.navigationController.topViewController === workTypes)
+
+        workTypes.onChangePayRate?(selected)
+        let saving = try #require(
+            harness.navigationController.topViewController as? ChangePayRateViewController
+        )
+        let added = try PayRate(
+            id: UUID(uuid: (0x78, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1)),
+            amount: 175,
+            effectiveFrom: LocalDate(year: 2026, month: 9, day: 1)
+        )
+        let updated = try harness.job.addingPayRate(added, toWorkTypeID: selected.id)
+        saving.onSaved?(updated)
+        #expect(harness.navigationController.topViewController === workTypes)
+        #expect(harness.navigationController.viewControllers.count == 2)
+        #expect(harness.navigationController.viewControllers[0] === harness.overview)
+        _ = harness.navigationController.popViewController(animated: false)
+        harness.overview.onAddShift?()
+        #expect(harness.metrics.addShiftJobs.last == updated)
+        _ = harness.navigationController.popViewController(animated: false)
+        harness.overview.onEditShift?(try makeShift())
+        #expect(harness.metrics.editShiftJobs.last == updated)
+        _ = harness.navigationController.popViewController(animated: false)
+        harness.overview.onManageWorkTypes?()
+        #expect(harness.metrics.workTypesInputs.last == updated.workTypes)
+        let reopened = try #require(
+            harness.navigationController.topViewController as? WorkTypesViewController
+        )
+        reopened.onChangePayRate?(try #require(updated.workType(id: selected.id)))
+        #expect(harness.metrics.changePayRateJobs.last == updated)
     }
 
     @Test("Add Work Type обновляет Job и тот же Work Types, затем передаёт aggregate в Add и Edit Shift")
@@ -290,6 +339,18 @@ struct MainCoordinatorTests {
                     }
                 )
             },
+            makeChangePayRate: { job, workType in
+                metrics.changePayRateJobs.append(job)
+                metrics.changePayRateInputs.append(workType)
+                return ChangePayRateViewController(
+                    viewModel: ChangePayRateViewModel(
+                        workType: workType,
+                        currencyCode: job.currencyCode,
+                        timeZoneIdentifier: job.timeZoneIdentifier,
+                        savePayRate: { _, _ in .failure(.persistence) }
+                    )
+                )
+            },
             makeEditShift: { job, shift in
                 metrics.editShiftJobs.append(job)
                 metrics.editedShifts.append(shift)
@@ -431,6 +492,8 @@ private final class Metrics {
     var addShiftJobs: [Job] = []
     var workTypesInputs: [[WorkType]] = []
     var renameInputs: [WorkType] = []
+    var changePayRateJobs: [Job] = []
+    var changePayRateInputs: [WorkType] = []
     var editShiftJobs: [Job] = []
     var editedShifts: [Shift] = []
     var preparedPeriods: [PayCalculationPeriod] = []
