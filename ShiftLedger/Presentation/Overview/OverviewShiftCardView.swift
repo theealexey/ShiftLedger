@@ -3,8 +3,10 @@ import UIKit
 final class OverviewShiftCardView: UIControl {
     private enum Layout {
         static let horizontalInset: CGFloat = 20
-        static let verticalInset: CGFloat = 12
         static let headerTopInset: CGFloat = 2
+        static let headerContentTopInset: CGFloat = 20
+        static let contentTopInset = headerContentTopInset - headerTopInset
+        static let editActionBottomInset: CGFloat = 8
         static let headerToMetadataSpacing: CGFloat = 20
         static let frontHeaderSpacing: CGFloat = 12
         static let frontEndpointsSpacing: CGFloat = 24
@@ -309,10 +311,10 @@ final class OverviewShiftCardView: UIControl {
 
     private func configureLayout() {
         NSLayoutConstraint.activate([
-            contentStack.topAnchor.constraint(equalTo: topAnchor, constant: Layout.verticalInset),
+            contentStack.topAnchor.constraint(equalTo: topAnchor, constant: Layout.contentTopInset),
             contentStack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: Layout.horizontalInset),
             contentStack.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -Layout.horizontalInset),
-            contentStack.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -Layout.horizontalInset)
+            contentStack.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -Layout.editActionBottomInset)
         ])
     }
 

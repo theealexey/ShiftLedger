@@ -834,6 +834,17 @@ struct OverviewViewControllerTests {
         #expect(editButton.bounds.height >= 44)
         #expect(card.accessibilityCustomActions?.map(\.name) == [OverviewStrings.editShift])
 
+        let frontDate: UILabel = try requireView(
+            identifier: "overview.shift.\(shift.id.uuidString).frontDate",
+            in: try requireRootView(subject.viewController)
+        )
+        let headerFrame = frontDate.convert(frontDate.bounds, to: card)
+        let editFrame = editButton.convert(editButton.bounds, to: card)
+        #expect(abs(headerFrame.minY - 20) <= 0.5)
+        #expect(abs((card.bounds.maxY - editFrame.maxY) - 8) <= 0.5)
+        #expect(headerFrame.minY >= card.bounds.minY)
+        #expect(editFrame.maxY <= card.bounds.maxY)
+
         var receivedShift: Shift?
         subject.viewController.onEditShift = { receivedShift = $0 }
         let editAction = try #require(card.accessibilityCustomActions?.first)
