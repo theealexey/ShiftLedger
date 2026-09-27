@@ -1381,6 +1381,55 @@
         "ru" : { "stringUnit" : { "state" : "translated", "value" : "Изменения не сохранены. Попробуйте ещё раз." } }
       }
     },
+    "payRateHistory.accessibility.effectiveFrom" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "%1$@. Effective from %2$@." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "%1$@. Действует с %2$@." } }
+      }
+    },
+    "payRateHistory.accessibility.hourlyRate" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "%@ per hour" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "%@ в час" } }
+      }
+    },
+    "payRateHistory.accessibility.initialRate" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "%@. Initial rate." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "%@. Исходная ставка." } }
+      }
+    },
+    "payRateHistory.accessibility.perShiftRate" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "%@ per shift" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "%@ за смену" } }
+      }
+    },
+    "payRateHistory.effectiveFrom" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Effective from %@" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "С %@" } }
+      }
+    },
+    "payRateHistory.initialRate" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Initial rate" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Исходная ставка" } }
+      }
+    },
+    "payRateHistory.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Pay Rate History" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "История ставок" } }
+      }
+    },
     "workTypes.action.rename" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1393,6 +1442,13 @@
       "localizations" : {
         "en" : { "stringUnit" : { "state" : "translated", "value" : "Change pay rate" } },
         "ru" : { "stringUnit" : { "state" : "translated", "value" : "Изменить ставку" } }
+      }
+    },
+    "workTypes.action.payRateHistory" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Pay rate history" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "История ставок" } }
       }
     },
     "workTypes.actionsHint" : {

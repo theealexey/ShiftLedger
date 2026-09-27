@@ -10,6 +10,7 @@ final class MainCoordinator {
         let makeAddWorkType: @MainActor (Job) -> AddWorkTypeViewController
         let makeRenameWorkType: @MainActor (WorkType) -> RenameWorkTypeViewController
         let makeChangePayRate: @MainActor (Job, WorkType) -> ChangePayRateViewController
+        let makePayRateHistory: @MainActor (Job, WorkType) -> PayRateHistoryViewController
         let makeEditShift: @MainActor (Job, Shift) -> EditShiftViewController
         let makeActualGrossEntry: @MainActor (String) -> ActualGrossEntryViewController
         let preparePaycheckComparison: @MainActor (Job, PayCalculationPeriod, ActualGross) throws -> PaycheckComparison
@@ -23,6 +24,7 @@ final class MainCoordinator {
         case addWorkType(returningTo: WorkTypesViewController)
         case renameWorkType(WorkType, returningTo: WorkTypesViewController)
         case changePayRate(WorkType, returningTo: WorkTypesViewController)
+        case payRateHistory(WorkType)
         case editShift(Shift)
         case actualGrossEntry(PayCalculationPeriod)
         case paycheckResult(PaycheckComparison)
@@ -80,6 +82,8 @@ final class MainCoordinator {
             showRenameWorkType(workType, returningTo: returningTo)
         case let .changePayRate(workType, returningTo):
             showChangePayRate(workType, returningTo: returningTo)
+        case let .payRateHistory(workType):
+            showPayRateHistory(workType)
         case let .editShift(shift):
             showEditShift(shift)
         case let .actualGrossEntry(period):
@@ -115,6 +119,9 @@ final class MainCoordinator {
         viewController.onChangePayRate = { [weak self, weak viewController] workType in
             guard let viewController else { return }
             self?.navigate(to: .changePayRate(workType, returningTo: viewController))
+        }
+        viewController.onPayRateHistory = { [weak self] workType in
+            self?.navigate(to: .payRateHistory(workType))
         }
         navigationController.pushViewController(viewController, animated: true)
     }
@@ -159,6 +166,11 @@ final class MainCoordinator {
             guard let workTypesViewController else { return }
             self?.completeWorkTypeMutation(with: updatedJob, returningTo: workTypesViewController)
         }
+        navigationController.pushViewController(viewController, animated: true)
+    }
+
+    private func showPayRateHistory(_ workType: WorkType) {
+        let viewController = dependencies.makePayRateHistory(job, workType)
         navigationController.pushViewController(viewController, animated: true)
     }
 

@@ -4,6 +4,7 @@ final class WorkTypesViewController: UITableViewController {
     var onAddWorkType: (() -> Void)?
     var onRenameWorkType: ((WorkType) -> Void)?
     var onChangePayRate: ((WorkType) -> Void)?
+    var onPayRateHistory: ((WorkType) -> Void)?
 
     private var workTypes: [WorkType]
 
@@ -98,6 +99,9 @@ final class WorkTypesViewController: UITableViewController {
         })
         sheet.addAction(UIAlertAction(title: WorkTypesStrings.changePayRate, style: .default) { [weak self] _ in
             self?.onChangePayRate?(workType)
+        })
+        sheet.addAction(UIAlertAction(title: WorkTypesStrings.payRateHistory, style: .default) { [weak self] _ in
+            self?.onPayRateHistory?(workType)
         })
         sheet.addAction(UIAlertAction(title: WorkTypesStrings.cancel, style: .cancel))
         if let popover = sheet.popoverPresentationController {

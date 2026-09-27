@@ -65,9 +65,12 @@ struct WorkTypesViewControllerTests {
         #expect(sheet.preferredStyle == .actionSheet)
         #expect(sheet.title == second.name)
         #expect(sheet.actions.map(\.title) == [
-            WorkTypesStrings.rename, WorkTypesStrings.changePayRate, WorkTypesStrings.cancel
+            WorkTypesStrings.rename,
+            WorkTypesStrings.changePayRate,
+            WorkTypesStrings.payRateHistory,
+            WorkTypesStrings.cancel
         ])
-        #expect(sheet.actions.map(\.style) == [.default, .default, .cancel])
+        #expect(sheet.actions.map(\.style) == [.default, .default, .default, .cancel])
         #expect(sheet.popoverPresentationController?.sourceView != nil)
         #expect(viewController.tableView.indexPathForSelectedRow == nil)
         viewController.tableView(viewController.tableView, didSelectRowAt: IndexPath(row: 0, section: 0))

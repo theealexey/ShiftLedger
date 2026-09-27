@@ -189,6 +189,35 @@ struct MainCoordinatorTests {
         )
         reopened.onChangePayRate?(try #require(updated.workType(id: selected.id)))
         #expect(harness.metrics.changePayRateJobs.last == updated)
+        _ = harness.navigationController.popViewController(animated: false)
+        let currentWorkType = try #require(updated.workType(id: selected.id))
+        reopened.onPayRateHistory?(currentWorkType)
+        #expect(harness.metrics.payRateHistoryJobs.last == updated)
+        #expect(harness.metrics.payRateHistoryInputs.last == currentWorkType)
+    }
+
+    @Test("Pay Rate History uses the selected current WorkType and native Back returns to Work Types")
+    func payRateHistoryUsesCurrentWorkType() throws {
+        let harness = try makeHarness(cycle: .perShift)
+        harness.coordinator.start()
+        harness.overview.onManageWorkTypes?()
+        let workTypes = try #require(
+            harness.navigationController.topViewController as? WorkTypesViewController
+        )
+        let selected = try #require(harness.job.workTypes.first)
+
+        workTypes.onPayRateHistory?(selected)
+
+        let history = try #require(
+            harness.navigationController.topViewController as? PayRateHistoryViewController
+        )
+        #expect(harness.metrics.payRateHistoryJobs == [harness.job])
+        #expect(harness.metrics.payRateHistoryInputs == [selected])
+        #expect(harness.navigationController.viewControllers.count == 3)
+        #expect(harness.navigationController.viewControllers[1] === workTypes)
+        _ = harness.navigationController.popViewController(animated: false)
+        #expect(harness.navigationController.topViewController === workTypes)
+        #expect(history.presentedViewController == nil)
     }
 
     @Test("Add Work Type обновляет Job и тот же Work Types, затем передаёт aggregate в Add и Edit Shift")
@@ -351,6 +380,11 @@ struct MainCoordinatorTests {
                     )
                 )
             },
+            makePayRateHistory: { job, workType in
+                metrics.payRateHistoryJobs.append(job)
+                metrics.payRateHistoryInputs.append(workType)
+                return PayRateHistoryAssembly.make(job: job, workType: workType)
+            },
             makeEditShift: { job, shift in
                 metrics.editShiftJobs.append(job)
                 metrics.editedShifts.append(shift)
@@ -494,6 +528,8 @@ private final class Metrics {
     var renameInputs: [WorkType] = []
     var changePayRateJobs: [Job] = []
     var changePayRateInputs: [WorkType] = []
+    var payRateHistoryJobs: [Job] = []
+    var payRateHistoryInputs: [WorkType] = []
     var editShiftJobs: [Job] = []
     var editedShifts: [Shift] = []
     var preparedPeriods: [PayCalculationPeriod] = []

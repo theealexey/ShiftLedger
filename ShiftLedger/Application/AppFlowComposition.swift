@@ -45,6 +45,9 @@ struct AppFlowComposition {
             makeChangePayRate: { job, workType in
                 ChangePayRateAssembly.make(job: job, workType: workType, stack: stack)
             },
+            makePayRateHistory: { job, workType in
+                PayRateHistoryAssembly.make(job: job, workType: workType)
+            },
             makeEditShift: { job, shift in
                 EditShiftAssembly.make(job: job, shift: shift, stack: stack)
             },

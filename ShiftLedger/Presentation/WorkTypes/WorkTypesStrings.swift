@@ -11,5 +11,8 @@ enum WorkTypesStrings {
     static var actionsHint: String { String(localized: "workTypes.actionsHint", table: "Localizable") }
     static var rename: String { String(localized: "workTypes.action.rename", table: "Localizable") }
     static var changePayRate: String { String(localized: "workTypes.action.changePayRate", table: "Localizable") }
+    static var payRateHistory: String {
+        String(localized: "workTypes.action.payRateHistory", table: "Localizable")
+    }
     static var cancel: String { String(localized: "common.cancel", table: "Localizable") }
 }
