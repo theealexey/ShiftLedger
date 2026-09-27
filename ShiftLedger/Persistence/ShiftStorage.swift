@@ -32,6 +32,7 @@ enum ShiftStorageError: Error {
     case jobNotFound
     case multipleJobsFound
     case workTypeNotFound(workTypeID: UUID)
+    case workTypeArchived(workTypeID: UUID)
     case shiftNotFound(shiftID: UUID)
     case duplicateShift
     case overlappingShift
@@ -56,6 +57,7 @@ final class ShiftStorage {
         let job = try singleJob()
         let workTypes = try workTypes(for: job)
         let workType = try workType(id: shift.workTypeID, in: workTypes)
+        try validateNewAssignment(to: workType)
         let existingShifts = try fetchShifts()
 
         for entity in existingShifts {
@@ -102,6 +104,10 @@ final class ShiftStorage {
         let existingShifts = try fetchShifts()
         let target = try uniqueShift(id: shift.id, in: existingShifts)
         let requestedWorkType = try workType(id: shift.workTypeID, in: workTypes)
+        let existingWorkType = try validatedWorkType(of: target, job: job)
+        if requestedWorkType.objectID != existingWorkType.objectID {
+            try validateNewAssignment(to: requestedWorkType)
+        }
 
         for entity in existingShifts {
             let existingShift = try makeShift(from: entity, job: job)
@@ -239,6 +245,12 @@ final class ShiftStorage {
             return workType
         }
         throw ShiftStorageError.workTypeNotFound(workTypeID: id)
+    }
+
+    private func validateNewAssignment(to workType: WorkTypeEntity) throws {
+        guard workType.isArchived == false else {
+            throw ShiftStorageError.workTypeArchived(workTypeID: workType.id)
+        }
     }
 
     private func isWorkTypeOrderedBefore(

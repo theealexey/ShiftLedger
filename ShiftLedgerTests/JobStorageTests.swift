@@ -321,6 +321,195 @@ struct JobStorageTests {
         #expect(restoredJob.workType(id: renameTargetID)?.name == "Senior Lectures")
     }
 
+    @Test("Archive updates one WorkType in place and survives SQLite reopen")
+    func archivesWorkTypeInPlaceAcrossNewCoreDataStack() async throws {
+        let storeURL = try makeTemporaryStoreURL()
+        var stacks: [CoreDataStack] = []
+        defer { removeTemporaryStoreDirectory(for: storeURL, stacks: stacks) }
+
+        let originalJob = try makeRenameJob()
+        let target = try #require(originalJob.workType(id: renameTargetID))
+        let other = try #require(originalJob.workType(id: renameOtherID))
+        let timeZone = try #require(TimeZone(identifier: originalJob.timeZoneIdentifier))
+        let shiftDate = try LocalDate(year: 2026, month: 2, day: 2)
+        let shiftStart = try shiftDate.startOfDay(in: timeZone)
+            .addingTimeInterval(9 * 60 * 60)
+        let shift = try Shift(
+            id: UUID(uuid: (0x79, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 8)),
+            workTypeID: renameTargetID,
+            start: shiftStart,
+            end: shiftStart.addingTimeInterval(2 * 60 * 60)
+        )
+        let originalRate = try originalJob.applicablePayRate(for: shift)
+        let originalBasePay = try originalJob.basePay(for: shift)
+        let originalGross = try originalJob.expectedGross(
+            for: .perShift(shiftID: shift.id),
+            from: [shift]
+        )
+
+        let stackA = try await CoreDataStack.load(storeURL: storeURL)
+        stacks.append(stackA)
+        let storage = JobStorage(stack: stackA)
+        try storage.save(originalJob)
+        try ShiftStorage(stack: stackA).save(shift)
+
+        let context = stackA.viewContext
+        let storedJobBefore = try #require(try context.fetch(
+            NSFetchRequest<JobEntity>(entityName: "JobEntity")
+        ).first)
+        let workTypesBefore = try context.fetch(
+            NSFetchRequest<WorkTypeEntity>(entityName: "WorkTypeEntity")
+        )
+        let targetBefore = try #require(workTypesBefore.first { $0.id == renameTargetID })
+        let otherBefore = try #require(workTypesBefore.first { $0.id == renameOtherID })
+        let storedShiftBefore = try #require(try context.fetch(
+            NSFetchRequest<ShiftEntity>(entityName: "ShiftEntity")
+        ).first)
+        let jobObjectID = storedJobBefore.objectID
+        let targetObjectID = targetBefore.objectID
+        let otherObjectID = otherBefore.objectID
+        let shiftObjectID = storedShiftBefore.objectID
+        let rateStatesBefore = storedRateStates(try context.fetch(
+            NSFetchRequest<PayRateEntity>(entityName: "PayRateEntity")
+        ))
+
+        let archivedJob = try storage.archiveWorkType(id: renameTargetID)
+
+        let archivedTarget = try #require(archivedJob.workType(id: renameTargetID))
+        #expect(archivedJob.id == originalJob.id)
+        #expect(archivedJob.currencyCode == originalJob.currencyCode)
+        #expect(archivedJob.timeZoneIdentifier == originalJob.timeZoneIdentifier)
+        #expect(archivedJob.payCalculationCycle == originalJob.payCalculationCycle)
+        #expect(archivedJob.createdAt == originalJob.createdAt)
+        #expect(archivedTarget.id == target.id)
+        #expect(archivedTarget.name == target.name)
+        #expect(archivedTarget.basePayBasis == target.basePayBasis)
+        #expect(archivedTarget.payRates == target.payRates)
+        #expect(archivedTarget.isArchived)
+        #expect(archivedJob.workType(id: renameOtherID) == other)
+        #expect(originalJob.workType(id: renameTargetID)?.isArchived == false)
+        #expect(try archivedJob.applicablePayRate(for: shift) == originalRate)
+        #expect(try archivedJob.basePay(for: shift) == originalBasePay)
+        #expect(try archivedJob.expectedGross(
+            for: .perShift(shiftID: shift.id),
+            from: [shift]
+        ) == originalGross)
+
+        let storedJobAfter = try #require(try context.fetch(
+            NSFetchRequest<JobEntity>(entityName: "JobEntity")
+        ).first)
+        let workTypesAfter = try context.fetch(
+            NSFetchRequest<WorkTypeEntity>(entityName: "WorkTypeEntity")
+        )
+        let targetAfter = try #require(workTypesAfter.first { $0.id == renameTargetID })
+        let otherAfter = try #require(workTypesAfter.first { $0.id == renameOtherID })
+        let storedShiftAfter = try #require(try context.fetch(
+            NSFetchRequest<ShiftEntity>(entityName: "ShiftEntity")
+        ).first)
+        #expect(storedJobAfter.objectID == jobObjectID)
+        #expect(targetAfter.objectID == targetObjectID)
+        #expect(otherAfter.objectID == otherObjectID)
+        #expect(targetAfter.isArchived)
+        #expect(otherAfter.isArchived == false)
+        #expect(storedShiftAfter.objectID == shiftObjectID)
+        #expect(storedShiftAfter.workType?.objectID == targetObjectID)
+        #expect(storedShiftAfter.job?.objectID == jobObjectID)
+        #expect(storedRateStates(try context.fetch(
+            NSFetchRequest<PayRateEntity>(entityName: "PayRateEntity")
+        )) == rateStatesBefore)
+        #expect(context.hasChanges == false)
+
+        try close(stackA)
+        let stackB = try await CoreDataStack.load(storeURL: storeURL)
+        stacks.append(stackB)
+        let restoredJob = try #require(try JobStorage(stack: stackB).load())
+        let restoredShifts = try ShiftStorage(stack: stackB).loadAll()
+        #expect(restoredJob == archivedJob)
+        #expect(restoredJob.workType(id: renameTargetID)?.isArchived == true)
+        #expect(restoredShifts == [shift])
+        #expect(try restoredJob.basePay(for: shift) == originalBasePay)
+        #expect(try restoredJob.expectedGross(
+            for: .perShift(shiftID: shift.id),
+            from: restoredShifts
+        ) == originalGross)
+    }
+
+    @Test("Invalid archive operations leave the persisted Job unchanged")
+    func invalidArchivesDoNotMutatePersistedJob() async throws {
+        let storeURL = try makeTemporaryStoreURL()
+        var stacks: [CoreDataStack] = []
+        defer { removeTemporaryStoreDirectory(for: storeURL, stacks: stacks) }
+
+        let originalJob = try makeRenameJob()
+        let stack = try await CoreDataStack.load(storeURL: storeURL)
+        stacks.append(stack)
+        let storage = JobStorage(stack: stack)
+        try storage.save(originalJob)
+        let context = stack.viewContext
+        let unknownID = UUID(uuid: (0x79, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 9))
+        let objectIDsBefore = try context.fetch(
+            NSFetchRequest<WorkTypeEntity>(entityName: "WorkTypeEntity")
+        ).reduce(into: [UUID: NSManagedObjectID]()) { result, entity in
+            result[entity.id] = entity.objectID
+        }
+        let rateStatesBefore = storedRateStates(try context.fetch(
+            NSFetchRequest<PayRateEntity>(entityName: "PayRateEntity")
+        ))
+
+        do {
+            _ = try storage.archiveWorkType(id: unknownID)
+            Issue.record("Unknown WorkType archive was accepted")
+        } catch JobStorageError.workTypeNotFound(let workTypeID) {
+            #expect(workTypeID == unknownID)
+        }
+        #expect(try storage.load() == originalJob)
+        #expect(context.hasChanges == false)
+
+        let archivedJob = try storage.archiveWorkType(id: renameTargetID)
+        do {
+            _ = try storage.archiveWorkType(id: renameTargetID)
+            Issue.record("Repeated WorkType archive was accepted")
+        } catch JobStorageError.workTypeAlreadyArchived(let workTypeID) {
+            #expect(workTypeID == renameTargetID)
+        }
+
+        let workTypesAfter = try context.fetch(
+            NSFetchRequest<WorkTypeEntity>(entityName: "WorkTypeEntity")
+        )
+        #expect(try storage.load() == archivedJob)
+        #expect(workTypesAfter.first { $0.id == renameTargetID }?.isArchived == true)
+        #expect(workTypesAfter.first { $0.id == renameOtherID }?.isArchived == false)
+        #expect(Dictionary(uniqueKeysWithValues: workTypesAfter.map { ($0.id, $0.objectID) }) == objectIDsBefore)
+        #expect(storedRateStates(try context.fetch(
+            NSFetchRequest<PayRateEntity>(entityName: "PayRateEntity")
+        )) == rateStatesBefore)
+        #expect(context.hasChanges == false)
+    }
+
+    @Test("Archiving a WorkType in an empty store returns jobNotFound")
+    func archiveInEmptyStoreReturnsJobNotFound() async throws {
+        let storeURL = try makeTemporaryStoreURL()
+        var stacks: [CoreDataStack] = []
+        defer { removeTemporaryStoreDirectory(for: storeURL, stacks: stacks) }
+
+        let stack = try await CoreDataStack.load(storeURL: storeURL)
+        stacks.append(stack)
+
+        do {
+            _ = try JobStorage(stack: stack).archiveWorkType(id: renameTargetID)
+            Issue.record("WorkType archive without a persisted Job was accepted")
+        } catch JobStorageError.jobNotFound {
+        }
+
+        #expect(try stack.viewContext.fetch(
+            NSFetchRequest<JobEntity>(entityName: "JobEntity")
+        ).isEmpty)
+        #expect(try stack.viewContext.fetch(
+            NSFetchRequest<WorkTypeEntity>(entityName: "WorkTypeEntity")
+        ).isEmpty)
+        #expect(stack.viewContext.hasChanges == false)
+    }
+
     @Test("Dated rate addition inserts one rate and survives SQLite reopen")
     func addsDatedPayRateAcrossNewCoreDataStack() async throws {
         let storeURL = try makeTemporaryStoreURL()

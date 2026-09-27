@@ -34,6 +34,7 @@ enum JobStorageError: Error {
     case multipleJobsFound
     case invalidWorkTypeAddition(underlying: JobValidationError)
     case workTypeNotFound(workTypeID: UUID)
+    case workTypeAlreadyArchived(workTypeID: UUID)
     case invalidWorkTypeName(underlying: WorkTypeNameValidationError)
     case invalidPayRateChange(underlying: WorkTypePayRateChangeError)
     case fetchFailed(underlying: Error)
@@ -306,6 +307,47 @@ final class JobStorage {
         return candidateJob
     }
 
+    func archiveWorkType(id workTypeID: UUID) throws -> Job {
+        let jobEntities = try fetchJobs()
+        let jobEntity: JobEntity
+        switch jobEntities.count {
+        case 0:
+            throw JobStorageError.jobNotFound
+        case 1:
+            jobEntity = jobEntities[0]
+        default:
+            throw JobStorageError.multipleJobsFound
+        }
+
+        let existingJob = try makeJob(from: jobEntity)
+        let candidateJob: Job
+        do {
+            candidateJob = try existingJob.archivingWorkType(id: workTypeID)
+        } catch {
+            switch error {
+            case let .workTypeNotFound(id):
+                throw JobStorageError.workTypeNotFound(workTypeID: id)
+            case let .alreadyArchived(id):
+                throw JobStorageError.workTypeAlreadyArchived(workTypeID: id)
+            }
+        }
+
+        guard let workTypeEntity = try workTypeEntities(for: jobEntity)
+            .first(where: { $0.id == workTypeID }) else {
+            throw JobStorageError.corruptedData(.missingWorkType)
+        }
+
+        workTypeEntity.isArchived = true
+        do {
+            try context.save()
+        } catch {
+            context.rollback()
+            throw JobStorageError.saveFailed(underlying: error)
+        }
+
+        return candidateJob
+    }
+
     func load() throws -> Job? {
         let jobEntities = try fetchJobs()
 
@@ -401,6 +443,7 @@ final class JobStorage {
         workTypeEntity.id = storedWorkType.workType.id
         workTypeEntity.name = storedWorkType.workType.name
         workTypeEntity.basePayKind = storedWorkType.basePayKind.rawValue
+        workTypeEntity.isArchived = storedWorkType.workType.isArchived
         workTypeEntity.job = jobEntity
 
         for storedPayRate in storedWorkType.payRates {
@@ -485,7 +528,8 @@ final class JobStorage {
             id: workTypeEntity.id,
             name: workTypeEntity.name,
             basePayBasis: basePayBasis,
-            payRateHistory: payRateHistory
+            payRateHistory: payRateHistory,
+            isArchived: workTypeEntity.isArchived
         )
     }
 

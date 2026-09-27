@@ -6,6 +6,7 @@ class WorkTypeEntity: NSManagedObject {
     @NSManaged var id: UUID
     @NSManaged var name: String?
     @NSManaged var basePayKind: String
+    @NSManaged var isArchived: Bool
     @NSManaged var job: JobEntity
     @NSManaged var payRates: NSSet?
     @NSManaged var shifts: NSSet?

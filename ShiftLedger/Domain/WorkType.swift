@@ -9,10 +9,15 @@ enum WorkTypePayRateChangeError: Error, Equatable {
     case invalidHistory(PayRateHistoryValidationError)
 }
 
+enum WorkTypeArchiveError: Error, Equatable {
+    case alreadyArchived
+}
+
 struct WorkType: Equatable {
     let id: UUID
     let name: String?
     let basePayBasis: BasePayBasis
+    let isArchived: Bool
 
     private let payRateHistory: PayRateHistory
 
@@ -24,12 +29,14 @@ struct WorkType: Equatable {
         id: UUID,
         name: String? = nil,
         basePayBasis: BasePayBasis,
-        payRateHistory: PayRateHistory
+        payRateHistory: PayRateHistory,
+        isArchived: Bool = false
     ) {
         self.id = id
         self.name = name
         self.basePayBasis = basePayBasis
         self.payRateHistory = payRateHistory
+        self.isArchived = isArchived
     }
 
     func applicablePayRate(on localDate: LocalDate) -> PayRate {
@@ -46,7 +53,8 @@ struct WorkType: Equatable {
             id: id,
             name: normalizedName,
             basePayBasis: basePayBasis,
-            payRateHistory: payRateHistory
+            payRateHistory: payRateHistory,
+            isArchived: isArchived
         )
     }
 
@@ -66,7 +74,22 @@ struct WorkType: Equatable {
             id: id,
             name: name,
             basePayBasis: basePayBasis,
-            payRateHistory: updatedHistory
+            payRateHistory: updatedHistory,
+            isArchived: isArchived
+        )
+    }
+
+    func archived() throws(WorkTypeArchiveError) -> WorkType {
+        guard isArchived == false else {
+            throw .alreadyArchived
+        }
+
+        return WorkType(
+            id: id,
+            name: name,
+            basePayBasis: basePayBasis,
+            payRateHistory: payRateHistory,
+            isArchived: true
         )
     }
 

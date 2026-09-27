@@ -22,6 +22,16 @@ enum JobPayRateChangeError: Error, Equatable {
     case invalidPayRateChange(WorkTypePayRateChangeError)
 }
 
+enum JobWorkTypeArchiveError: Error, Equatable {
+    case workTypeNotFound(workTypeID: UUID)
+    case alreadyArchived(workTypeID: UUID)
+}
+
+enum JobShiftAssignmentError: Error, Equatable {
+    case workTypeNotFound(workTypeID: UUID)
+    case workTypeArchived(workTypeID: UUID)
+}
+
 enum PayRateResolutionError: Error, Equatable {
     case workTypeNotFound(workTypeID: UUID)
     case invalidJobTimeZoneIdentifier
@@ -188,6 +198,43 @@ struct Job: Equatable {
             workTypes: updatedWorkTypes,
             createdAt: createdAt
         )
+    }
+
+    func archivingWorkType(
+        id workTypeID: UUID
+    ) throws(JobWorkTypeArchiveError) -> Job {
+        guard let index = workTypes.firstIndex(where: { $0.id == workTypeID }) else {
+            throw .workTypeNotFound(workTypeID: workTypeID)
+        }
+
+        var archivedWorkTypes = workTypes
+        do {
+            archivedWorkTypes[index] = try workTypes[index].archived()
+        } catch {
+            throw .alreadyArchived(workTypeID: workTypeID)
+        }
+
+        return Job(
+            id: id,
+            metadata: ValidatedMetadata(
+                currencyCode: currencyCode,
+                timeZoneIdentifier: timeZoneIdentifier
+            ),
+            payCalculationCycle: payCalculationCycle,
+            workTypes: archivedWorkTypes,
+            createdAt: createdAt
+        )
+    }
+
+    func validateNewShiftAssignment(
+        _ shift: Shift
+    ) throws(JobShiftAssignmentError) {
+        guard let workType = workType(id: shift.workTypeID) else {
+            throw .workTypeNotFound(workTypeID: shift.workTypeID)
+        }
+        guard workType.isArchived == false else {
+            throw .workTypeArchived(workTypeID: shift.workTypeID)
+        }
     }
 
     func applicablePayRate(for shift: Shift) throws(PayRateResolutionError) -> PayRate {

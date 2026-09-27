@@ -143,6 +143,34 @@ struct WorkTypeTests {
         #expect(original.payRates.count == 1)
     }
 
+    @Test("Archive changes only explicit assignment availability state")
+    func archivePreservesIdentityAndCompensation() throws {
+        let initial = try PayRate(id: payRateID, amount: 100, effectiveFrom: nil)
+        let dated = try PayRate(
+            id: UUID(uuid: (7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1)),
+            amount: 125,
+            effectiveFrom: LocalDate(year: 2026, month: 9, day: 1)
+        )
+        let original = WorkType(
+            id: primaryWorkTypeID,
+            name: "Lectures",
+            basePayBasis: .hourly,
+            payRateHistory: try PayRateHistory(payRates: [initial, dated])
+        )
+
+        let archived = try original.archived()
+
+        #expect(original.isArchived == false)
+        #expect(archived.isArchived)
+        #expect(archived.id == original.id)
+        #expect(archived.name == original.name)
+        #expect(archived.basePayBasis == original.basePayBasis)
+        #expect(archived.payRates == original.payRates)
+        #expect(throws: WorkTypeArchiveError.alreadyArchived) {
+            try archived.archived()
+        }
+    }
+
     @Test("Historical nil-named WorkType accepts a real name")
     func renamesHistoricalNilName() throws {
         let original = try makeWorkType(id: primaryWorkTypeID, basePayBasis: .fixedPerShift)

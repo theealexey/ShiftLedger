@@ -157,6 +157,74 @@ struct ShiftStorageTests {
         #expect(try fetchShifts(in: stackB.viewContext).count == 2)
     }
 
+    @Test("New Shift cannot be assigned to an archived WorkType")
+    func rejectsNewShiftAssignmentToArchivedWorkType() async throws {
+        let storeURL = try makeTemporaryStoreURL()
+        var stacks: [CoreDataStack] = []
+        defer { removeTemporaryStoreDirectory(for: storeURL, stacks: stacks) }
+
+        let stack = try await makeStack(storeURL: storeURL, stacks: &stacks)
+        let activeJob = try makeJob()
+        let archivedJob = try activeJob.archivingWorkType(id: canonicalWorkTypeID)
+        try JobStorage(stack: stack).save(archivedJob)
+
+        do {
+            try ShiftStorage(stack: stack).save(try makeShift())
+            Issue.record("A new Shift was assigned to an archived WorkType")
+        } catch ShiftStorageError.workTypeArchived(let workTypeID) {
+            #expect(workTypeID == canonicalWorkTypeID)
+        }
+
+        #expect(try fetchShifts(in: stack.viewContext).isEmpty)
+        #expect(stack.viewContext.hasChanges == false)
+    }
+
+    @Test("Existing archived Shift assignment remains editable but cannot move to another archived WorkType")
+    func preservesExistingArchivedAssignmentDuringUpdate() async throws {
+        let storeURL = try makeTemporaryStoreURL()
+        var stacks: [CoreDataStack] = []
+        defer { removeTemporaryStoreDirectory(for: storeURL, stacks: stacks) }
+
+        let stack = try await makeStack(storeURL: storeURL, stacks: &stacks)
+        let job = try makeMultiWorkTypeJob()
+        try JobStorage(stack: stack).save(job)
+        let initial = try makeShift(
+            id: "73000000-0000-0000-0000-000000000001",
+            start: 10 * 60 * 60,
+            workTypeID: firstWorkTypeID
+        )
+        let storage = ShiftStorage(stack: stack)
+        try storage.save(initial)
+        let jobStorage = JobStorage(stack: stack)
+        _ = try jobStorage.archiveWorkType(id: firstWorkTypeID)
+
+        let movedInTime = try Shift(
+            id: initial.id,
+            workTypeID: firstWorkTypeID,
+            start: initial.start.addingTimeInterval(60 * 60),
+            end: initial.end.addingTimeInterval(60 * 60)
+        )
+        try storage.update(movedInTime)
+        #expect(try storage.loadAll() == [movedInTime])
+
+        _ = try jobStorage.archiveWorkType(id: secondWorkTypeID)
+        let reassigned = try Shift(
+            id: initial.id,
+            workTypeID: secondWorkTypeID,
+            start: movedInTime.start,
+            end: movedInTime.end
+        )
+        do {
+            try storage.update(reassigned)
+            Issue.record("An existing Shift was reassigned to another archived WorkType")
+        } catch ShiftStorageError.workTypeArchived(let workTypeID) {
+            #expect(workTypeID == secondWorkTypeID)
+        }
+
+        #expect(try storage.loadAll() == [movedInTime])
+        #expect(stack.viewContext.hasChanges == false)
+    }
+
     @Test("Update изменяет Shift in place, сохраняет exact WorkType и переживает reopen")
     func updatesShiftInPlaceAndSurvivesReopen() async throws {
         let storeURL = try makeTemporaryStoreURL()

@@ -211,6 +211,96 @@ struct JobWorkTypeOwnershipTests {
         #expect(original.workType(id: examID)?.name == "Exams")
     }
 
+    @Test("Archiving exact WorkType preserves Job metadata and historical payroll")
+    func archivePreservesAggregateAndHistoricalPay() throws {
+        let lecture = WorkType(
+            id: lectureID,
+            name: "Lectures",
+            basePayBasis: .hourly,
+            payRateHistory: try PayRateHistory(payRates: [
+                try PayRate(amount: 20, effectiveFrom: nil),
+                try PayRate(
+                    amount: 25,
+                    effectiveFrom: LocalDate(year: 2001, month: 1, day: 2)
+                )
+            ])
+        )
+        let exam = try makeWorkType(id: examID, basis: .fixedPerShift, amount: 500)
+        let original = try makeJob(workTypes: [lecture, exam])
+        let historicalShift = try makeShift(
+            workTypeID: lectureID,
+            startOffset: 2 * 24 * 60 * 60,
+            hours: 2
+        )
+        let rateBefore = try original.applicablePayRate(for: historicalShift)
+        let payBefore = try original.basePay(for: historicalShift)
+        let grossBefore = try original.expectedGross(
+            for: .perShift(shiftID: historicalShift.id),
+            from: [historicalShift]
+        )
+
+        let archived = try original.archivingWorkType(id: lectureID)
+
+        #expect(archived.id == original.id)
+        #expect(archived.currencyCode == original.currencyCode)
+        #expect(archived.timeZoneIdentifier == original.timeZoneIdentifier)
+        #expect(archived.payCalculationCycle == original.payCalculationCycle)
+        #expect(archived.createdAt == original.createdAt)
+        #expect(archived.workType(id: lectureID)?.isArchived == true)
+        #expect(archived.workType(id: lectureID)?.id == lecture.id)
+        #expect(archived.workType(id: lectureID)?.name == lecture.name)
+        #expect(archived.workType(id: lectureID)?.basePayBasis == lecture.basePayBasis)
+        #expect(archived.workType(id: lectureID)?.payRates == lecture.payRates)
+        #expect(archived.workType(id: examID) == exam)
+        #expect(original.workType(id: lectureID)?.isArchived == false)
+        #expect(try archived.applicablePayRate(for: historicalShift) == rateBefore)
+        #expect(try archived.basePay(for: historicalShift) == payBefore)
+        #expect(try archived.expectedGross(
+            for: .perShift(shiftID: historicalShift.id),
+            from: [historicalShift]
+        ) == grossBefore)
+    }
+
+    @Test("Archive maps unknown and repeated identity to exact errors without mutation")
+    func rejectsInvalidWorkTypeArchive() throws {
+        let lecture = try makeWorkType(id: lectureID, basis: .hourly, amount: 20)
+        let original = try makeJob(workTypes: [lecture])
+        let archived = try original.archivingWorkType(id: lectureID)
+
+        #expect(throws: JobWorkTypeArchiveError.workTypeNotFound(
+            workTypeID: unknownWorkTypeID
+        )) {
+            try original.archivingWorkType(id: unknownWorkTypeID)
+        }
+        #expect(throws: JobWorkTypeArchiveError.alreadyArchived(workTypeID: lectureID)) {
+            try archived.archivingWorkType(id: lectureID)
+        }
+        #expect(original.workType(id: lectureID) == lecture)
+        #expect(archived.workType(id: lectureID)?.isArchived == true)
+    }
+
+    @Test("New assignment rejects archived WorkType while historical calculation remains valid")
+    func distinguishesNewAssignmentFromHistoricalCalculation() throws {
+        let lecture = try makeWorkType(id: lectureID, basis: .hourly, amount: 20)
+        let activeJob = try makeJob(workTypes: [lecture])
+        let shift = try makeShift(workTypeID: lectureID)
+        let unknownShift = try makeShift(workTypeID: unknownWorkTypeID)
+        let payBefore = try activeJob.basePay(for: shift)
+
+        try activeJob.validateNewShiftAssignment(shift)
+        #expect(throws: JobShiftAssignmentError.workTypeNotFound(
+            workTypeID: unknownWorkTypeID
+        )) {
+            try activeJob.validateNewShiftAssignment(unknownShift)
+        }
+
+        let archivedJob = try activeJob.archivingWorkType(id: lectureID)
+        #expect(throws: JobShiftAssignmentError.workTypeArchived(workTypeID: lectureID)) {
+            try archivedJob.validateNewShiftAssignment(shift)
+        }
+        #expect(try archivedJob.basePay(for: shift) == payBefore)
+    }
+
     @Test("Legacy initializer создаёт один WorkType с identity Job")
     func legacyInitializerPreservesSingleWorkTypeContract() throws {
         let initial = try PayRate(amount: 3_000, effectiveFrom: nil)
