@@ -387,6 +387,47 @@ struct AddShiftViewModelTests {
         #expect(viewModel.workTypeOptions[1].name == nil)
     }
 
+    @Test("Archived WorkTypes are excluded from Add Shift selection and reset")
+    func archivedWorkTypesAreNotSelectable() throws {
+        let workTypes = try makeMultipleWorkTypes()
+        let archived = try workTypes[1].archived()
+        let viewModel = makeViewModel(workTypes: [archived, workTypes[0]])
+
+        #expect(viewModel.workTypeOptions.map(\.id) == [workTypes[0].id])
+        #expect(viewModel.selectedWorkTypeID == workTypes[0].id)
+        #expect(viewModel.selectWorkType(id: archived.id) == false)
+        viewModel.reset()
+        #expect(viewModel.selectedWorkTypeID == workTypes[0].id)
+    }
+
+    @Test("Two active WorkTypes still require explicit selection when an archived one exists")
+    func activeCountControlsSelection() throws {
+        let workTypes = try makeMultipleWorkTypes()
+        let archived = try soleWorkType.archived()
+        let viewModel = makeViewModel(workTypes: [archived] + workTypes)
+
+        #expect(viewModel.workTypeOptions.map(\.id) == workTypes.map(\.id))
+        #expect(viewModel.selectedWorkTypeID == nil)
+        #expect(viewModel.selectWorkType(id: archived.id) == false)
+        #expect(viewModel.selectWorkType(id: workTypes[1].id))
+        viewModel.reset()
+        #expect(viewModel.selectedWorkTypeID == nil)
+    }
+
+    @Test("Only archived WorkTypes leave Add Shift unsaveable")
+    func onlyArchivedWorkTypesCannotBeSaved() throws {
+        let archived = try soleWorkType.archived()
+        let viewModel = makeViewModel(workTypes: [archived])
+        viewModel.setStart(start)
+        viewModel.setEnd(end)
+
+        #expect(viewModel.workTypeOptions.isEmpty)
+        #expect(viewModel.selectedWorkTypeID == nil)
+        #expect(viewModel.selectWorkType(id: archived.id) == false)
+        #expect(viewModel.canSave == false)
+        #expect(viewModel.save() == .invalid)
+    }
+
     private var knownID: UUID {
         UUID(uuid: (0x50, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1))
     }

@@ -15,4 +15,13 @@ enum WorkTypesStrings {
         String(localized: "workTypes.action.payRateHistory", table: "Localizable")
     }
     static var cancel: String { String(localized: "common.cancel", table: "Localizable") }
+    static var ok: String { String(localized: "common.ok", table: "Localizable") }
+    static var activeSection: String { String(localized: "workTypes.section.active", table: "Localizable") }
+    static var archivedSection: String { String(localized: "workTypes.section.archived", table: "Localizable") }
+    static var archivedStatus: String { String(localized: "workTypes.archived.accessibilityStatus", table: "Localizable") }
+    static var archive: String { String(localized: "workTypes.action.archive", table: "Localizable") }
+    static var archiveConfirmationTitle: String { String(localized: "workTypes.archive.confirmation.title", table: "Localizable") }
+    static var archiveConfirmationMessage: String { String(localized: "workTypes.archive.confirmation.message", table: "Localizable") }
+    static var archiveErrorTitle: String { String(localized: "workTypes.archive.error.title", table: "Localizable") }
+    static var archiveErrorMessage: String { String(localized: "workTypes.archive.error.message", table: "Localizable") }
 }

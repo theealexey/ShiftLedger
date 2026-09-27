@@ -737,6 +737,13 @@
         "ru" : { "stringUnit" : { "state" : "translated", "value" : "Вид работы" } }
       }
     },
+    "addShift.noActiveWorkTypes" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "No active work types" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Нет активных типов работ" } }
+      }
+    },
     "addShift.workType.unnamed" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1430,6 +1437,13 @@
         "ru" : { "stringUnit" : { "state" : "translated", "value" : "История ставок" } }
       }
     },
+    "shiftForm.workType.archived" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Archived" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Архивирован" } }
+      }
+    },
     "workTypes.action.rename" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1451,11 +1465,67 @@
         "ru" : { "stringUnit" : { "state" : "translated", "value" : "История ставок" } }
       }
     },
+    "workTypes.action.archive" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Archive" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Архивировать" } }
+      }
+    },
+    "workTypes.archive.confirmation.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Archive “%@”?" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Архивировать «%@»?" } }
+      }
+    },
+    "workTypes.archive.confirmation.message" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "New shifts can no longer use this work type. Existing shifts and pay rate history will remain unchanged. Archived work types cannot be restored yet." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Этот тип работы больше нельзя будет выбирать для новых смен. Существующие смены и история ставок останутся без изменений. Восстановление из архива пока недоступно." } }
+      }
+    },
+    "workTypes.archive.error.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Couldn’t archive work type" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Не удалось архивировать тип работы" } }
+      }
+    },
+    "workTypes.archive.error.message" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Nothing was changed. Try again." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Изменения не сохранены. Попробуйте ещё раз." } }
+      }
+    },
+    "workTypes.section.active" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Active" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Активные" } }
+      }
+    },
+    "workTypes.section.archived" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Archived" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Архивные" } }
+      }
+    },
+    "workTypes.archived.accessibilityStatus" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Archived" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Архивирован" } }
+      }
+    },
     "workTypes.actionsHint" : {
       "extractionState" : "manual",
       "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Opens rename and pay rate actions for this work type." } },
-        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Открывает действия переименования и изменения ставки для этого вида работы." } }
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Opens actions for this work type." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Открывает действия для этого вида работы." } }
       }
     },
     "workTypes.title" : {

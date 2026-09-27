@@ -142,6 +142,30 @@ struct MainCoordinatorTests {
         #expect(harness.metrics.workTypesInputs.last == updatedJob.workTypes)
     }
 
+    @Test("Archiving WorkType keeps Work Types open and updates the Job for subsequent Add Shift")
+    func archiveWorkTypeUpdatesCurrentJobWithoutNavigation() throws {
+        let harness = try makeHarness(cycle: .perShift)
+        harness.coordinator.start()
+        harness.overview.loadViewIfNeeded()
+        harness.overview.onManageWorkTypes?()
+        let workTypes = try #require(harness.navigationController.topViewController as? WorkTypesViewController)
+        workTypes.loadViewIfNeeded()
+        let selected = try #require(harness.job.workTypes.first)
+
+        workTypes.archive(selected)
+
+        #expect(harness.navigationController.topViewController === workTypes)
+        #expect(harness.navigationController.viewControllers.first === harness.overview)
+        #expect(workTypes.tableView(workTypes.tableView, titleForHeaderInSection: 0) == WorkTypesStrings.archivedSection)
+        #expect(harness.metrics.overviewLoadCount == 2)
+        _ = harness.navigationController.popViewController(animated: false)
+        harness.overview.onAddShift?()
+        #expect(harness.metrics.addShiftJobs.last?.workTypes.first?.isArchived == true)
+        let addShift = try #require(harness.navigationController.topViewController as? AddShiftViewController)
+        let row: UIControl = try requireView("addShift.workType", in: addShift.view)
+        #expect(row.accessibilityValue == AddShiftStrings.noActiveWorkTypes)
+    }
+
     @Test("Change Pay Rate uses current Job and returns to the same Work Types and Overview")
     func changePayRateUpdatesCurrentJob() throws {
         let harness = try makeHarness(cycle: .perShift)
@@ -350,7 +374,13 @@ struct MainCoordinatorTests {
             },
             makeWorkTypes: { workTypes in
                 metrics.workTypesInputs.append(workTypes)
-                return WorkTypesViewController(workTypes: workTypes)
+                return WorkTypesViewController(viewModel: WorkTypesViewModel(workTypes: workTypes) { id in
+                    do {
+                        return .success(try job.archivingWorkType(id: id))
+                    } catch {
+                        return .failure(.generic)
+                    }
+                })
             },
             makeAddWorkType: { job in
                 AddWorkTypeViewController(

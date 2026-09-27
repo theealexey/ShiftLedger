@@ -123,6 +123,89 @@ struct EditShiftViewModelTests {
         #expect(viewModel.canSave)
     }
 
+    @Test("An archived assigned WorkType remains selected and unchanged Save preserves its ID")
+    func archivedAssignedWorkTypeCanBeSavedUnchanged() throws {
+        let workTypes = try makeWorkTypes()
+        let archived = try workTypes[0].archived()
+        let shift = try makeShift(workTypeID: archived.id)
+        let viewModel = makeViewModel(workTypes: [archived, workTypes[1]], shift: shift)
+
+        #expect(viewModel.selectedWorkTypeID == archived.id)
+        #expect(viewModel.selectedWorkType?.isArchived == true)
+        #expect(viewModel.workTypeOptions.map(\.id) == [archived.id, workTypes[1].id])
+        #expect(viewModel.canSave)
+        #expect(viewModel.save() == .saved(shift))
+    }
+
+    @Test("Archived WorkTypes other than the assigned one cannot be selected")
+    func unrelatedArchivedWorkTypesAreExcluded() throws {
+        let workTypes = try makeWorkTypes()
+        let archived = try workTypes[1].archived()
+        let shift = try makeShift(workTypeID: workTypes[0].id)
+        let viewModel = makeViewModel(workTypes: [workTypes[0], archived], shift: shift)
+
+        #expect(viewModel.workTypeOptions.map(\.id) == [workTypes[0].id])
+        #expect(viewModel.selectWorkType(id: archived.id) == false)
+        #expect(viewModel.selectedWorkTypeID == shift.workTypeID)
+    }
+
+    @Test("An archived assignment can be explicitly reassigned to an active WorkType")
+    func archivedAssignmentCanMoveToActiveWorkType() throws {
+        let workTypes = try makeWorkTypes()
+        let archived = try workTypes[0].archived()
+        let shift = try makeShift(workTypeID: archived.id)
+        let viewModel = makeViewModel(workTypes: [archived, workTypes[1]], shift: shift)
+
+        #expect(viewModel.selectWorkType(id: workTypes[1].id))
+        #expect(try viewModel.makeShift().workTypeID == workTypes[1].id)
+        #expect(try viewModel.makeShift().id == shift.id)
+        #expect(viewModel.selectWorkType(id: archived.id))
+        #expect(try viewModel.makeShift().workTypeID == archived.id)
+    }
+
+    @Test("Multiple active WorkTypes remain available beside only the assigned archived WorkType")
+    func multipleActiveAndCurrentArchivedOptions() throws {
+        let workTypes = try makeWorkTypes()
+        let archived = try workTypes[0].archived()
+        let anotherActive = WorkType(
+            id: UUID(uuid: (0x84, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4)),
+            name: "Another active",
+            basePayBasis: .hourly,
+            payRateHistory: try PayRateHistory(payRates: [
+                try PayRate(amount: 100, effectiveFrom: nil)
+            ])
+        )
+        let otherArchived = try WorkType(
+            id: UUID(uuid: (0x84, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3)),
+            name: "Other archived",
+            basePayBasis: .hourly,
+            payRateHistory: try PayRateHistory(payRates: [
+                try PayRate(amount: 100, effectiveFrom: nil)
+            ])
+        ).archived()
+        let shift = try makeShift(workTypeID: archived.id)
+        let viewModel = makeViewModel(
+            workTypes: [workTypes[1], otherArchived, archived, anotherActive],
+            shift: shift
+        )
+
+        #expect(viewModel.workTypeOptions.map(\.id) == [workTypes[1].id, archived.id, anotherActive.id])
+        #expect(viewModel.selectWorkType(id: otherArchived.id) == false)
+    }
+
+    @Test("Unknown archived assignment never falls back to another archived WorkType")
+    func unknownAssignmentDoesNotSelectArchivedFallback() throws {
+        let workTypes = try makeWorkTypes()
+        let archived = try workTypes[0].archived()
+        let unknownID = UUID(uuid: (0x83, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 9))
+        let shift = try makeShift(workTypeID: unknownID)
+        let viewModel = makeViewModel(workTypes: [archived, workTypes[1]], shift: shift)
+
+        #expect(viewModel.selectedWorkTypeID == nil)
+        #expect(viewModel.selectWorkType(id: archived.id) == false)
+        #expect(viewModel.selectWorkType(id: workTypes[1].id))
+    }
+
     private func makeViewModel(
         workTypes: [WorkType],
         shift: Shift,

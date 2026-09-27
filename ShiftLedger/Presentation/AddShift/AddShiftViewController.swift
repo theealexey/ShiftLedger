@@ -69,7 +69,8 @@ final class AddShiftViewController: UIViewController {
 
     private var selectedWorkTypeText: String {
         guard let selectedWorkType = viewModel.selectedWorkType else {
-            return AddShiftStrings.select
+            return viewModel.workTypeOptions.isEmpty
+                ? AddShiftStrings.noActiveWorkTypes : AddShiftStrings.select
         }
         return selectedWorkType.name ?? AddShiftStrings.unnamedWorkType
     }

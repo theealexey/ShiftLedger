@@ -108,6 +108,9 @@ final class MainCoordinator {
 
     private func showWorkTypes() {
         let viewController = dependencies.makeWorkTypes(job.workTypes)
+        viewController.onArchived = { [weak self] updatedJob in
+            self?.applyWorkTypeArchive(updatedJob)
+        }
         viewController.onAddWorkType = { [weak self, weak viewController] in
             guard let viewController else { return }
             self?.navigate(to: .addWorkType(returningTo: viewController))
@@ -124,6 +127,11 @@ final class MainCoordinator {
             self?.navigate(to: .payRateHistory(workType))
         }
         navigationController.pushViewController(viewController, animated: true)
+    }
+
+    private func applyWorkTypeArchive(_ updatedJob: Job) {
+        job = updatedJob
+        overviewViewController.reload(job: updatedJob)
     }
 
     private func showAddWorkType(returningTo workTypesViewController: WorkTypesViewController) {

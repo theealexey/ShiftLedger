@@ -182,6 +182,39 @@ struct EditShiftViewControllerTests {
       viewController.presentedViewController == nil
     }
   }
+  @Test("Archived assigned WorkType is labelled and remains available in Edit picker")
+  func archivedAssignedWorkTypeIsVisible() async throws {
+    let active = try makeWorkType(
+      id: try #require(UUID(uuidString: "87000000-0000-0000-0000-000000000003")),
+      name: "Active"
+    )
+    let archived = try makeWorkType(
+      id: try #require(UUID(uuidString: "87000000-0000-0000-0000-000000000004")),
+      name: "Archived"
+    ).archived()
+    let shift = try Shift(id: shiftID, workTypeID: archived.id, start: start, end: end)
+    let viewModel = EditShiftViewModel(
+      timeZoneIdentifier: "UTC",
+      workTypes: [active, archived],
+      shift: shift,
+      saveShift: { _ in .success(()) }
+    )
+    let viewController = EditShiftViewController(viewModel: viewModel)
+    let window = makeVisibleWindow(root: viewController)
+    defer { hide(window) }
+
+    let row: UIControl = try requireView("editShift.workType", in: viewController.view)
+    #expect(row.accessibilityValue == "Archived · \(ShiftFormStrings.archived)")
+    row.sendActions(for: .touchUpInside)
+    try await waitUntil { viewController.presentedViewController is UINavigationController }
+    let navigation = try #require(viewController.presentedViewController as? UINavigationController)
+    let picker = try #require(navigation.topViewController as? WorkTypeSelectionViewController)
+    picker.loadViewIfNeeded()
+    #expect(picker.tableView(picker.tableView, numberOfRowsInSection: 0) == 2)
+    let cell = picker.tableView(picker.tableView, cellForRowAt: IndexPath(row: 1, section: 0))
+    #expect(cell.accessibilityValue == ShiftFormStrings.archived)
+    #expect(cell.accessibilityTraits.contains(.selected))
+  }
   @Test("Date pickers сохраняют границы Shift form")
   func datePickersUseEstablishedBounds() async throws {
     let workType = try makeWorkType(

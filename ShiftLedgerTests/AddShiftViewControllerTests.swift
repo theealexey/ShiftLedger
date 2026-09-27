@@ -168,6 +168,26 @@ struct AddShiftViewControllerTests {
         #expect(workType.name == nil)
     }
 
+    @Test("No active WorkTypes shows guidance and disables Save")
+    func onlyArchivedWorkTypeCannotBeUsed() throws {
+        let archived = try makeWorkType(id: testWorkTypeID, name: "Lectures").archived()
+        let viewController = AddShiftViewController(
+            viewModel: AddShiftViewModel(
+                timeZoneIdentifier: timeZoneIdentifier,
+                workTypes: [archived],
+                initialStart: start,
+                initialEnd: end,
+                saveShift: { _ in .success(()) }
+            )
+        )
+        viewController.loadViewIfNeeded()
+
+        let row: UIControl = try requireView("addShift.workType", in: viewController.view)
+        #expect(row.accessibilityValue == AddShiftStrings.noActiveWorkTypes)
+        #expect(row.isUserInteractionEnabled == false)
+        #expect(viewController.navigationItem.rightBarButtonItem?.isEnabled == false)
+    }
+
     private func tapSave(on viewController: AddShiftViewController) throws {
         guard
             let action = viewController.navigationItem.rightBarButtonItem?.action

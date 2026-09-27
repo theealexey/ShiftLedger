@@ -8,7 +8,7 @@ struct WorkTypesViewControllerTests {
     func rendersSuppliedWorkTypes() throws {
         let first = try makeWorkType(id: 1, name: "  Lectures  ", basis: .hourly)
         let second = try makeWorkType(id: 2, name: nil, basis: .fixedPerShift)
-        let viewController = WorkTypesViewController(workTypes: [second, first])
+        let viewController = makeViewController(workTypes: [second, first])
         viewController.loadViewIfNeeded()
 
         #expect(viewController.title == WorkTypesStrings.title)
@@ -52,7 +52,7 @@ struct WorkTypesViewControllerTests {
     func selectingRowOpensActions() throws {
         let first = try makeWorkType(id: 1, name: "Lectures", basis: .hourly)
         let second = try makeWorkType(id: 2, name: "Lectures", basis: .fixedPerShift)
-        let viewController = WorkTypesViewController(workTypes: [first, second])
+        let viewController = makeViewController(workTypes: [first, second])
         let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
         window.rootViewController = viewController
         window.makeKeyAndVisible()
@@ -68,9 +68,10 @@ struct WorkTypesViewControllerTests {
             WorkTypesStrings.rename,
             WorkTypesStrings.changePayRate,
             WorkTypesStrings.payRateHistory,
+            WorkTypesStrings.archive,
             WorkTypesStrings.cancel
         ])
-        #expect(sheet.actions.map(\.style) == [.default, .default, .default, .cancel])
+        #expect(sheet.actions.map(\.style) == [.default, .default, .default, .destructive, .cancel])
         #expect(sheet.popoverPresentationController?.sourceView != nil)
         #expect(viewController.tableView.indexPathForSelectedRow == nil)
         viewController.tableView(viewController.tableView, didSelectRowAt: IndexPath(row: 0, section: 0))
@@ -81,7 +82,7 @@ struct WorkTypesViewControllerTests {
     @Test("Unnamed row uses truthful action-sheet fallback")
     func unnamedRowActionSheet() throws {
         let unnamed = try makeWorkType(id: 1, name: nil, basis: .hourly)
-        let viewController = WorkTypesViewController(workTypes: [unnamed])
+        let viewController = makeViewController(workTypes: [unnamed])
         let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
         window.rootViewController = viewController
         window.makeKeyAndVisible()
@@ -94,7 +95,7 @@ struct WorkTypesViewControllerTests {
     func reloadReplacesRows() throws {
         let first = try makeWorkType(id: 1, name: "Lectures", basis: .hourly)
         let second = try makeWorkType(id: 2, name: "Exams", basis: .fixedPerShift)
-        let viewController = WorkTypesViewController(workTypes: [first])
+        let viewController = makeViewController(workTypes: [first])
         viewController.loadViewIfNeeded()
 
         viewController.reload(workTypes: [second, first])
@@ -110,7 +111,7 @@ struct WorkTypesViewControllerTests {
 
     @Test("Add button exposes localized intent and emits once")
     func addButtonEmitsIntent() throws {
-        let viewController = WorkTypesViewController(workTypes: [])
+        let viewController = makeViewController(workTypes: [])
         var callCount = 0
         viewController.onAddWorkType = { callCount += 1 }
         viewController.loadViewIfNeeded()
@@ -124,6 +125,111 @@ struct WorkTypesViewControllerTests {
         #expect(callCount == 1)
     }
 
+    @Test("Active and archived rows use ordered nonempty sections and archived accessibility status")
+    func groupedRows() throws {
+        let active1 = try makeWorkType(id: 1, name: "A", basis: .hourly)
+        let archived1 = try makeWorkType(id: 2, name: "B", basis: .fixedPerShift).archived()
+        let active2 = try makeWorkType(id: 3, name: "C", basis: .hourly)
+        let archived2 = try makeWorkType(id: 4, name: "D", basis: .hourly).archived()
+        let controller = makeViewController(workTypes: [active1, archived1, active2, archived2])
+        controller.loadViewIfNeeded()
+
+        #expect(controller.numberOfSections(in: controller.tableView) == 2)
+        #expect(controller.tableView(controller.tableView, titleForHeaderInSection: 0) == WorkTypesStrings.activeSection)
+        #expect(controller.tableView(controller.tableView, titleForHeaderInSection: 1) == WorkTypesStrings.archivedSection)
+        let activeRows = (0..<2).map { controller.tableView(controller.tableView, cellForRowAt: IndexPath(row: $0, section: 0)) }
+        let archivedRows = (0..<2).map { controller.tableView(controller.tableView, cellForRowAt: IndexPath(row: $0, section: 1)) }
+        #expect(activeRows.map(\.accessibilityLabel) == ["A", "C"])
+        #expect(archivedRows.map(\.accessibilityLabel) == ["B", "D"])
+        #expect(archivedRows.allSatisfy { $0.accessibilityValue?.contains(WorkTypesStrings.archivedStatus) == true })
+        #expect(activeRows.allSatisfy { $0.accessibilityValue?.contains(WorkTypesStrings.archivedStatus) == false })
+    }
+
+    @Test("Archived row omits Archive but retains existing actions")
+    func archivedActions() throws {
+        let archived = try makeWorkType(id: 1, name: "Lectures", basis: .hourly).archived()
+        let controller = makeViewController(workTypes: [archived])
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+        window.rootViewController = controller
+        window.makeKeyAndVisible()
+        #expect(controller.numberOfSections(in: controller.tableView) == 1)
+        #expect(controller.tableView(controller.tableView, titleForHeaderInSection: 0) == WorkTypesStrings.archivedSection)
+
+        controller.tableView(controller.tableView, didSelectRowAt: IndexPath(row: 0, section: 0))
+
+        let sheet = try #require(controller.presentedViewController as? UIAlertController)
+        #expect(sheet.actions.map(\.title) == [
+            WorkTypesStrings.rename, WorkTypesStrings.changePayRate,
+            WorkTypesStrings.payRateHistory, WorkTypesStrings.cancel
+        ])
+        #expect(sheet.actions.map(\.style) == [.default, .default, .default, .cancel])
+        window.isHidden = true
+    }
+
+    @Test("Archive confirmation explains irreversible effect and cancel is nonmutating")
+    func archiveConfirmation() throws {
+        let workType = try makeWorkType(id: 1, name: "Lectures", basis: .hourly)
+        var calls = 0
+        let controller = WorkTypesViewController(viewModel: WorkTypesViewModel(workTypes: [workType]) { _ in
+            calls += 1
+            return .failure(.generic)
+        })
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+        window.rootViewController = controller
+        window.makeKeyAndVisible()
+
+        controller.presentArchiveConfirmation(for: workType)
+
+        let alert = try #require(controller.presentedViewController as? UIAlertController)
+        #expect(alert.preferredStyle == .alert)
+        #expect(alert.title == String(format: WorkTypesStrings.archiveConfirmationTitle, "Lectures"))
+        #expect(alert.message == WorkTypesStrings.archiveConfirmationMessage)
+        #expect(alert.actions.map(\.title) == [WorkTypesStrings.cancel, WorkTypesStrings.archive])
+        #expect(alert.actions.map(\.style) == [.cancel, .destructive])
+        #expect(calls == 0)
+        window.isHidden = true
+    }
+
+    @Test("Successful archive updates the same list and reports Job without navigation")
+    func successfulArchive() throws {
+        let workType = try makeWorkType(id: 1, name: "Lectures", basis: .hourly)
+        let job = try makeJob(workTypes: [workType])
+        let archivedJob = try job.archivingWorkType(id: workType.id)
+        var calls: [UUID] = []
+        var deliveredJob: Job?
+        let controller = WorkTypesViewController(viewModel: WorkTypesViewModel(workTypes: job.workTypes) { id in
+            calls.append(id)
+            return .success(archivedJob)
+        })
+        controller.onArchived = { deliveredJob = $0 }
+        controller.loadViewIfNeeded()
+
+        controller.archive(workType)
+
+        #expect(calls == [workType.id])
+        #expect(deliveredJob == archivedJob)
+        #expect(controller.numberOfSections(in: controller.tableView) == 1)
+        #expect(controller.tableView(controller.tableView, titleForHeaderInSection: 0) == WorkTypesStrings.archivedSection)
+        #expect(controller.navigationController == nil)
+    }
+
+    @Test("Failed archive keeps active row and shows localized error")
+    func failedArchive() throws {
+        let workType = try makeWorkType(id: 1, name: "Lectures", basis: .hourly)
+        let controller = makeViewController(workTypes: [workType])
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+        window.rootViewController = controller
+        window.makeKeyAndVisible()
+
+        controller.archive(workType)
+
+        #expect(controller.tableView(controller.tableView, titleForHeaderInSection: 0) == WorkTypesStrings.activeSection)
+        let alert = try #require(controller.presentedViewController as? UIAlertController)
+        #expect(alert.title == WorkTypesStrings.archiveErrorTitle)
+        #expect(alert.message == WorkTypesStrings.archiveErrorMessage)
+        window.isHidden = true
+    }
+
     private func makeWorkType(id: UInt8, name: String?, basis: BasePayBasis) throws -> WorkType {
         WorkType(
             id: UUID(uuid: (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, id)),
@@ -132,6 +238,21 @@ struct WorkTypesViewControllerTests {
             payRateHistory: try PayRateHistory(payRates: [
                 try PayRate(amount: 100, effectiveFrom: nil)
             ])
+        )
+    }
+
+    private func makeViewController(workTypes: [WorkType]) -> WorkTypesViewController {
+        WorkTypesViewController(viewModel: WorkTypesViewModel(workTypes: workTypes) { _ in
+            .failure(.generic)
+        })
+    }
+
+    private func makeJob(workTypes: [WorkType]) throws -> Job {
+        try Job(
+            currencyCode: "USD",
+            timeZoneIdentifier: "Europe/Stockholm",
+            payCalculationCycle: .perShift,
+            workTypes: workTypes
         )
     }
 }

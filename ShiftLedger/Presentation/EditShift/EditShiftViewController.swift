@@ -86,7 +86,9 @@ final class EditShiftViewController: UIViewController {
         guard let selectedWorkType = viewModel.selectedWorkType else {
             return AddShiftStrings.select
         }
-        return selectedWorkType.name ?? AddShiftStrings.unnamedWorkType
+        let name = selectedWorkType.name ?? AddShiftStrings.unnamedWorkType
+        return selectedWorkType.isArchived
+            ? "\(name) · \(ShiftFormStrings.archived)" : name
     }
 
     private var canSelectWorkType: Bool {

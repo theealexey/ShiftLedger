@@ -5,11 +5,12 @@ final class WorkTypesViewController: UITableViewController {
     var onRenameWorkType: ((WorkType) -> Void)?
     var onChangePayRate: ((WorkType) -> Void)?
     var onPayRateHistory: ((WorkType) -> Void)?
+    var onArchived: ((Job) -> Void)?
 
-    private var workTypes: [WorkType]
+    private let viewModel: WorkTypesViewModel
 
-    init(workTypes: [WorkType]) {
-        self.workTypes = workTypes
+    init(viewModel: WorkTypesViewModel) {
+        self.viewModel = viewModel
         super.init(style: .insetGrouped)
     }
 
@@ -37,14 +38,23 @@ final class WorkTypesViewController: UITableViewController {
     }
 
     func reload(workTypes: [WorkType]) {
-        self.workTypes = workTypes
+        viewModel.reload(workTypes: workTypes)
         tableView.reloadData()
     }
 
-    override func numberOfSections(in tableView: UITableView) -> Int { 1 }
+    override func numberOfSections(in tableView: UITableView) -> Int { viewModel.sections.count }
+
+    override func tableView(_ tableView: UITableView, titleForHeaderInSection section: Int) -> String? {
+        guard viewModel.sections.indices.contains(section) else { return nil }
+        switch viewModel.sections[section] {
+        case .active: return WorkTypesStrings.activeSection
+        case .archived: return WorkTypesStrings.archivedSection
+        }
+    }
 
     override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        workTypes.count
+        guard viewModel.sections.indices.contains(section) else { return 0 }
+        return viewModel.sections[section].workTypes.count
     }
 
     override func tableView(
@@ -54,7 +64,7 @@ final class WorkTypesViewController: UITableViewController {
         let identifier = "WorkType"
         let cell = tableView.dequeueReusableCell(withIdentifier: identifier)
             ?? UITableViewCell(style: .subtitle, reuseIdentifier: identifier)
-        let workType = workTypes[indexPath.row]
+        let workType = viewModel.sections[indexPath.section].workTypes[indexPath.row]
         let name = workType.name ?? WorkTypesStrings.unnamed
         let basis: String
         switch workType.basePayBasis {
@@ -78,15 +88,18 @@ final class WorkTypesViewController: UITableViewController {
         cell.accessibilityIdentifier = "workTypes.row.\(workType.id.uuidString)"
         cell.isAccessibilityElement = true
         cell.accessibilityLabel = name
-        cell.accessibilityValue = basis
+        cell.accessibilityValue = workType.isArchived
+            ? "\(basis), \(WorkTypesStrings.archivedStatus)" : basis
         cell.accessibilityHint = WorkTypesStrings.actionsHint
         cell.accessibilityTraits.insert(.button)
         return cell
     }
 
     override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
-        guard workTypes.indices.contains(indexPath.row) else { return }
-        let workType = workTypes[indexPath.row]
+        guard viewModel.sections.indices.contains(indexPath.section),
+              viewModel.sections[indexPath.section].workTypes.indices.contains(indexPath.row)
+        else { return }
+        let workType = viewModel.sections[indexPath.section].workTypes[indexPath.row]
         tableView.deselectRow(at: indexPath, animated: true)
         guard presentedViewController == nil else { return }
         let sheet = UIAlertController(
@@ -103,6 +116,11 @@ final class WorkTypesViewController: UITableViewController {
         sheet.addAction(UIAlertAction(title: WorkTypesStrings.payRateHistory, style: .default) { [weak self] _ in
             self?.onPayRateHistory?(workType)
         })
+        if !workType.isArchived {
+            sheet.addAction(UIAlertAction(title: WorkTypesStrings.archive, style: .destructive) { [weak self] _ in
+                self?.presentArchiveConfirmation(for: workType)
+            })
+        }
         sheet.addAction(UIAlertAction(title: WorkTypesStrings.cancel, style: .cancel))
         if let popover = sheet.popoverPresentationController {
             let cell = tableView.cellForRow(at: indexPath)
@@ -114,5 +132,37 @@ final class WorkTypesViewController: UITableViewController {
 
     @objc private func addTapped() {
         onAddWorkType?()
+    }
+
+    func presentArchiveConfirmation(for workType: WorkType) {
+        let name = workType.name ?? WorkTypesStrings.unnamed
+        let alert = UIAlertController(
+            title: String(format: WorkTypesStrings.archiveConfirmationTitle, name),
+            message: WorkTypesStrings.archiveConfirmationMessage,
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: WorkTypesStrings.cancel, style: .cancel))
+        alert.addAction(UIAlertAction(title: WorkTypesStrings.archive, style: .destructive) { [weak self] _ in
+            self?.archive(workType)
+        })
+        present(alert, animated: true)
+    }
+
+    func archive(_ workType: WorkType) {
+        switch viewModel.archive(id: workType.id) {
+        case let .archived(job):
+            tableView.reloadData()
+            onArchived?(job)
+        case .failed:
+            let alert = UIAlertController(
+                title: WorkTypesStrings.archiveErrorTitle,
+                message: WorkTypesStrings.archiveErrorMessage,
+                preferredStyle: .alert
+            )
+            alert.addAction(UIAlertAction(title: WorkTypesStrings.ok, style: .default))
+            present(alert, animated: true)
+        case .ignored:
+            break
+        }
     }
 }

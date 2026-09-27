@@ -29,8 +29,11 @@ final class EditShiftViewModel {
     ) {
         self.timeZoneIdentifier = timeZoneIdentifier
         shiftID = shift.id
+        let selectableWorkTypes = workTypes.filter {
+            !$0.isArchived || $0.id == shift.workTypeID
+        }
         formState = ShiftFormState(
-            workTypes: workTypes,
+            workTypes: selectableWorkTypes,
             selectedWorkTypeID: shift.workTypeID,
             start: shift.start,
             end: shift.end,

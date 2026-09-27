@@ -36,9 +36,10 @@ final class AddShiftViewModel {
         makeID: @escaping () -> UUID = UUID.init
     ) {
         self.timeZoneIdentifier = timeZoneIdentifier
+        let activeWorkTypes = workTypes.filter { !$0.isArchived }
         formState = ShiftFormState(
-            workTypes: workTypes,
-            selectedWorkTypeID: workTypes.count == 1 ? workTypes[0].id : nil,
+            workTypes: activeWorkTypes,
+            selectedWorkTypeID: activeWorkTypes.count == 1 ? activeWorkTypes[0].id : nil,
             start: initialStart,
             end: initialEnd,
             isUnpaidBreakEnabled: initialUnpaidBreakEnabled,

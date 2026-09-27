@@ -47,7 +47,7 @@ final class WorkTypeSelectionViewController: UITableViewController {
     ) -> UITableViewCell {
         let reuseIdentifier = "WorkTypeOption"
         let cell = tableView.dequeueReusableCell(withIdentifier: reuseIdentifier)
-            ?? UITableViewCell(style: .default, reuseIdentifier: reuseIdentifier)
+            ?? UITableViewCell(style: .subtitle, reuseIdentifier: reuseIdentifier)
         let option = options[indexPath.row]
         let isSelected = option.id == selectedWorkTypeID
 
@@ -55,8 +55,15 @@ final class WorkTypeSelectionViewController: UITableViewController {
         cell.textLabel?.font = UIFont.preferredFont(forTextStyle: .body)
         cell.textLabel?.adjustsFontForContentSizeCategory = true
         cell.textLabel?.numberOfLines = 0
+        cell.detailTextLabel?.text = option.isArchived ? ShiftFormStrings.archived : nil
+        cell.detailTextLabel?.font = UIFont.preferredFont(forTextStyle: .subheadline)
+        cell.detailTextLabel?.adjustsFontForContentSizeCategory = true
+        cell.detailTextLabel?.numberOfLines = 0
+        cell.detailTextLabel?.textColor = .secondaryLabel
         cell.accessoryType = isSelected ? .checkmark : .none
         cell.accessibilityIdentifier = "addShift.workTypeOption.\(option.id.uuidString)"
+        cell.accessibilityLabel = option.name ?? AddShiftStrings.unnamedWorkType
+        cell.accessibilityValue = option.isArchived ? ShiftFormStrings.archived : nil
         if isSelected {
             cell.accessibilityTraits.insert(.selected)
         } else {

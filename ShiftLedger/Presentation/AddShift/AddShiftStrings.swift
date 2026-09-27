@@ -7,6 +7,7 @@ enum AddShiftStrings {
     static var end: String { String(localized: "addShift.end", table: "Localizable") }
     static var select: String { String(localized: "addShift.select", table: "Localizable") }
     static var workType: String { String(localized: "addShift.workType", table: "Localizable") }
+    static var noActiveWorkTypes: String { String(localized: "addShift.noActiveWorkTypes", table: "Localizable") }
     static var unnamedWorkType: String { String(localized: "addShift.workType.unnamed", table: "Localizable") }
     static var workTypeAccessibilityHint: String { String(localized: "addShift.workType.accessibilityHint", table: "Localizable") }
     static var timeZonePrefix: String { String(localized: "addShift.timeZone.prefix", table: "Localizable") }

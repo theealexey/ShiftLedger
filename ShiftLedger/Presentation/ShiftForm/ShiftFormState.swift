@@ -3,6 +3,13 @@ import Foundation
 struct ShiftFormWorkTypeOption: Equatable {
     let id: UUID
     let name: String?
+    let isArchived: Bool
+
+    init(id: UUID, name: String?, isArchived: Bool = false) {
+        self.id = id
+        self.name = name
+        self.isArchived = isArchived
+    }
 }
 
 enum ShiftFormValidationError: Error, Equatable {
@@ -35,7 +42,7 @@ struct ShiftFormState {
         breakEnd: Date? = nil
     ) {
         workTypeOptions = workTypes.map {
-            ShiftFormWorkTypeOption(id: $0.id, name: $0.name)
+            ShiftFormWorkTypeOption(id: $0.id, name: $0.name, isArchived: $0.isArchived)
         }
         self.selectedWorkTypeID = workTypeOptions.contains(where: {
             $0.id == selectedWorkTypeID
