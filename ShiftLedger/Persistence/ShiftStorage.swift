@@ -136,6 +136,22 @@ final class ShiftStorage {
         }
     }
 
+    func delete(id shiftID: UUID) throws {
+        let job = try singleJob()
+        _ = try workTypes(for: job)
+        let target = try uniqueShift(id: shiftID, in: try fetchShifts())
+        _ = try validatedWorkType(of: target, job: job)
+
+        context.delete(target)
+
+        do {
+            try context.save()
+        } catch {
+            context.rollback()
+            throw ShiftStorageError.saveFailed(underlying: error)
+        }
+    }
+
     func loadAll() throws -> [Shift] {
         let job = try singleJob()
         _ = try workTypes(for: job)

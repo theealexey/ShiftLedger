@@ -554,6 +554,288 @@ struct ShiftStorageTests {
         #expect(stack.viewContext.hasChanges == false)
     }
 
+    @Test("Delete removes only the exact Shift and preserves the persisted graph")
+    func deleteRemovesOnlyExactShiftAndPreservesGraph() async throws {
+        let storeURL = try makeTemporaryStoreURL()
+        var stacks: [CoreDataStack] = []
+        defer { removeTemporaryStoreDirectory(for: storeURL, stacks: stacks) }
+
+        let stack = try await makeStack(storeURL: storeURL, stacks: &stacks)
+        let jobStorage = JobStorage(stack: stack)
+        try jobStorage.save(try makeMultiWorkTypeJob())
+        let target = try makeShift(
+            id: "7C000000-0000-0000-0000-000000000001",
+            start: 10 * 60 * 60,
+            workTypeID: firstWorkTypeID
+        )
+        let unrelated = try makeShift(
+            id: "7C000000-0000-0000-0000-000000000002",
+            start: 30 * 60 * 60,
+            workTypeID: secondWorkTypeID
+        )
+        let storage = ShiftStorage(stack: stack)
+        try storage.save(target)
+        try storage.save(unrelated)
+
+        let jobBefore = try #require(try jobStorage.load())
+        let jobEntityBefore = try #require(try fetchOnlyJob(in: stack.viewContext))
+        let jobObjectID = jobEntityBefore.objectID
+        let workTypeObjectIDs = Dictionary(
+            uniqueKeysWithValues: try fetchWorkTypes(in: stack.viewContext).map { ($0.id, $0.objectID) }
+        )
+        let payRateObjectIDs = Set(try fetchPayRates(in: stack.viewContext).map(\.objectID))
+        let shiftsBefore = try fetchShifts(in: stack.viewContext)
+        let targetObjectID = try #require(shiftsBefore.first { $0.id == target.id }).objectID
+        let unrelatedObjectID = try #require(shiftsBefore.first { $0.id == unrelated.id }).objectID
+
+        try storage.delete(id: target.id)
+
+        let shiftsAfter = try fetchShifts(in: stack.viewContext)
+        let persistedJob = try #require(try fetchOnlyJob(in: stack.viewContext))
+        let persistedUnrelated = try #require(shiftsAfter.first { $0.id == unrelated.id })
+        let persistedWorkTypes = try fetchWorkTypes(in: stack.viewContext)
+        let targetWorkType = try #require(
+            persistedWorkTypes.first { $0.id == firstWorkTypeID }
+        )
+        let unrelatedWorkType = try #require(
+            persistedWorkTypes.first { $0.id == secondWorkTypeID }
+        )
+        let targetWorkTypeShiftObjectIDs = Set(
+            (targetWorkType.shifts ?? NSSet()).compactMap { ($0 as? ShiftEntity)?.objectID }
+        )
+        let unrelatedWorkTypeShiftObjectIDs = Set(
+            (unrelatedWorkType.shifts ?? NSSet()).compactMap { ($0 as? ShiftEntity)?.objectID }
+        )
+        #expect(shiftsAfter.count == 1)
+        #expect(shiftsAfter.contains { $0.objectID == targetObjectID } == false)
+        #expect(persistedUnrelated.objectID == unrelatedObjectID)
+        #expect(persistedUnrelated.job?.objectID == jobObjectID)
+        #expect(persistedUnrelated.workType?.objectID == workTypeObjectIDs[secondWorkTypeID])
+        #expect(persistedJob.objectID == jobObjectID)
+        #expect(persistedJob.shifts?.count == 1)
+        #expect(persistedJob.shifts?.contains(persistedUnrelated) == true)
+        #expect(targetWorkType.objectID == workTypeObjectIDs[firstWorkTypeID])
+        #expect(targetWorkType.shifts?.count == 0)
+        #expect(targetWorkTypeShiftObjectIDs.contains(targetObjectID) == false)
+        #expect(unrelatedWorkType.objectID == workTypeObjectIDs[secondWorkTypeID])
+        #expect(unrelatedWorkType.shifts?.contains(persistedUnrelated) == true)
+        #expect(unrelatedWorkTypeShiftObjectIDs.contains(targetObjectID) == false)
+        #expect(
+            Dictionary(
+                uniqueKeysWithValues: persistedWorkTypes.map { ($0.id, $0.objectID) }
+            ) == workTypeObjectIDs
+        )
+        #expect(Set(try fetchPayRates(in: stack.viewContext).map(\.objectID)) == payRateObjectIDs)
+        #expect(try jobStorage.load() == jobBefore)
+        #expect(try storage.loadAll() == [unrelated])
+        #expect(stack.viewContext.hasChanges == false)
+    }
+
+    @Test("Deleted Shift remains absent after SQLite close and reopen")
+    func deleteSurvivesSQLiteReopen() async throws {
+        let storeURL = try makeTemporaryStoreURL()
+        var stacks: [CoreDataStack] = []
+        defer { removeTemporaryStoreDirectory(for: storeURL, stacks: stacks) }
+
+        let stackA = try await makeStack(storeURL: storeURL, stacks: &stacks)
+        let job = try makeMultiWorkTypeJob()
+        try JobStorage(stack: stackA).save(job)
+        let target = try makeShift(
+            id: "7D000000-0000-0000-0000-000000000001",
+            workTypeID: firstWorkTypeID
+        )
+        let remaining = try makeShift(
+            id: "7D000000-0000-0000-0000-000000000002",
+            start: 30 * 60 * 60,
+            workTypeID: secondWorkTypeID
+        )
+        let storage = ShiftStorage(stack: stackA)
+        try storage.save(target)
+        try storage.save(remaining)
+        try storage.delete(id: target.id)
+        try close(stackA)
+
+        let stackB = try await makeStack(storeURL: storeURL, stacks: &stacks)
+        #expect(try ShiftStorage(stack: stackB).loadAll() == [remaining])
+        #expect(try JobStorage(stack: stackB).load() == job)
+        #expect(try fetchShifts(in: stackB.viewContext).count == 1)
+        #expect(try fetchWorkTypes(in: stackB.viewContext).count == 2)
+        #expect(try fetchPayRates(in: stackB.viewContext).count == 2)
+        #expect(stackB.viewContext.hasChanges == false)
+    }
+
+    @Test("Delete accepts a Shift assigned to an archived WorkType")
+    func deleteAcceptsArchivedWorkTypeAssignment() async throws {
+        let storeURL = try makeTemporaryStoreURL()
+        var stacks: [CoreDataStack] = []
+        defer { removeTemporaryStoreDirectory(for: storeURL, stacks: stacks) }
+
+        let stack = try await makeStack(storeURL: storeURL, stacks: &stacks)
+        let jobStorage = JobStorage(stack: stack)
+        try jobStorage.save(try makeMultiWorkTypeJob())
+        let target = try makeShift(
+            id: "7E000000-0000-0000-0000-000000000001",
+            workTypeID: firstWorkTypeID
+        )
+        let storage = ShiftStorage(stack: stack)
+        try storage.save(target)
+        let archivedJob = try jobStorage.archiveWorkType(id: firstWorkTypeID)
+        let workTypeObjectIDs = Set(try fetchWorkTypes(in: stack.viewContext).map(\.objectID))
+        let payRateObjectIDs = Set(try fetchPayRates(in: stack.viewContext).map(\.objectID))
+
+        try storage.delete(id: target.id)
+
+        #expect(try storage.loadAll().isEmpty)
+        #expect(try jobStorage.load() == archivedJob)
+        #expect(Set(try fetchWorkTypes(in: stack.viewContext).map(\.objectID)) == workTypeObjectIDs)
+        #expect(Set(try fetchPayRates(in: stack.viewContext).map(\.objectID)) == payRateObjectIDs)
+        #expect(stack.viewContext.hasChanges == false)
+    }
+
+    @Test("Delete of an unknown Shift returns exact shiftNotFound without mutation")
+    func deleteRejectsUnknownShiftWithoutMutation() async throws {
+        let storeURL = try makeTemporaryStoreURL()
+        var stacks: [CoreDataStack] = []
+        defer { removeTemporaryStoreDirectory(for: storeURL, stacks: stacks) }
+
+        let stack = try await makeStack(storeURL: storeURL, stacks: &stacks)
+        try JobStorage(stack: stack).save(try makeJob())
+        let existing = try makeShift(id: "7F000000-0000-0000-0000-000000000001")
+        let missingID = UUID(uuid: (0x7F, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2))
+        let storage = ShiftStorage(stack: stack)
+        try storage.save(existing)
+        let objectID = try #require(try fetchShifts(in: stack.viewContext).first).objectID
+
+        do {
+            try storage.delete(id: missingID)
+            Issue.record("An unknown Shift was deleted")
+        } catch ShiftStorageError.shiftNotFound(let shiftID) {
+            #expect(shiftID == missingID)
+        }
+
+        #expect(try fetchShifts(in: stack.viewContext).first?.objectID == objectID)
+        #expect(try storage.loadAll() == [existing])
+        #expect(stack.viewContext.hasChanges == false)
+    }
+
+    @Test("Delete rejects duplicate persisted Shift identity without choosing a target")
+    func deleteRejectsDuplicateShiftIdentity() async throws {
+        let storeURL = try makeTemporaryStoreURL()
+        var stacks: [CoreDataStack] = []
+        defer { removeTemporaryStoreDirectory(for: storeURL, stacks: stacks) }
+
+        let stack = try await makeStack(storeURL: storeURL, stacks: &stacks)
+        try JobStorage(stack: stack).save(try makeJob())
+        let job = try #require(try fetchOnlyJob(in: stack.viewContext))
+        let workType = try onlyWorkType(for: job)
+        let duplicateID = UUID(uuid: (0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1))
+        let first = try insertShiftEntity(
+            id: duplicateID,
+            job: job,
+            workType: workType,
+            start: Date(timeIntervalSinceReferenceDate: 10 * 60 * 60),
+            end: Date(timeIntervalSinceReferenceDate: 18 * 60 * 60),
+            in: stack.viewContext
+        )
+        let second = try insertShiftEntity(
+            id: duplicateID,
+            job: job,
+            workType: workType,
+            start: Date(timeIntervalSinceReferenceDate: 30 * 60 * 60),
+            end: Date(timeIntervalSinceReferenceDate: 38 * 60 * 60),
+            in: stack.viewContext
+        )
+        try stack.viewContext.save()
+        let objectIDs = Set([first.objectID, second.objectID])
+
+        do {
+            try ShiftStorage(stack: stack).delete(id: duplicateID)
+            Issue.record("One duplicate Shift was arbitrarily deleted")
+        } catch ShiftStorageError.corruptedData(.duplicateShiftIdentity(let shiftID)) {
+            #expect(shiftID == duplicateID)
+        }
+
+        #expect(Set(try fetchShifts(in: stack.viewContext).map(\.objectID)) == objectIDs)
+        #expect(stack.viewContext.hasChanges == false)
+    }
+
+    @Test("Delete without a Job returns exact jobNotFound")
+    func deleteRejectsEmptyStore() async throws {
+        let storeURL = try makeTemporaryStoreURL()
+        var stacks: [CoreDataStack] = []
+        defer { removeTemporaryStoreDirectory(for: storeURL, stacks: stacks) }
+
+        let stack = try await makeStack(storeURL: storeURL, stacks: &stacks)
+
+        do {
+            try ShiftStorage(stack: stack).delete(id: UUID())
+            Issue.record("Delete succeeded without a Job")
+        } catch ShiftStorageError.jobNotFound {
+        }
+
+        #expect(try fetchShifts(in: stack.viewContext).isEmpty)
+        #expect(stack.viewContext.hasChanges == false)
+    }
+
+    @Test("Delete with multiple Jobs returns exact multipleJobsFound")
+    func deleteRejectsMultipleJobs() async throws {
+        let storeURL = try makeTemporaryStoreURL()
+        var stacks: [CoreDataStack] = []
+        defer { removeTemporaryStoreDirectory(for: storeURL, stacks: stacks) }
+
+        let stack = try await makeStack(storeURL: storeURL, stacks: &stacks)
+        _ = try insertPersistedJob(
+            id: UUID(uuid: (0x81, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1)),
+            in: stack.viewContext
+        )
+        _ = try insertPersistedJob(
+            id: UUID(uuid: (0x81, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2)),
+            in: stack.viewContext
+        )
+        try stack.viewContext.save()
+
+        do {
+            try ShiftStorage(stack: stack).delete(id: UUID())
+            Issue.record("Delete succeeded with multiple Jobs")
+        } catch ShiftStorageError.multipleJobsFound {
+        }
+
+        #expect(try fetchJobs(in: stack.viewContext).count == 2)
+        #expect(stack.viewContext.hasChanges == false)
+    }
+
+    @Test("Delete rejects a corrupted target relationship without mutation")
+    func deleteRejectsCorruptedTargetWithoutMutation() async throws {
+        let storeURL = try makeTemporaryStoreURL()
+        var stacks: [CoreDataStack] = []
+        defer { removeTemporaryStoreDirectory(for: storeURL, stacks: stacks) }
+
+        let stack = try await makeStack(storeURL: storeURL, stacks: &stacks)
+        try JobStorage(stack: stack).save(try makeJob())
+        let job = try #require(try fetchOnlyJob(in: stack.viewContext))
+        let targetID = UUID(uuid: (0x82, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1))
+        let target = try insertShiftEntity(
+            id: targetID,
+            job: job,
+            workType: nil,
+            start: Date(timeIntervalSinceReferenceDate: 10 * 60 * 60),
+            end: Date(timeIntervalSinceReferenceDate: 18 * 60 * 60),
+            in: stack.viewContext
+        )
+        try stack.viewContext.save()
+        let objectID = target.objectID
+
+        do {
+            try ShiftStorage(stack: stack).delete(id: targetID)
+            Issue.record("A corrupted Shift was deleted")
+        } catch ShiftStorageError.corruptedData(.missingShiftWorkType(let shiftID)) {
+            #expect(shiftID == targetID)
+        }
+
+        #expect(try fetchShifts(in: stack.viewContext).first?.objectID == objectID)
+        #expect(stack.viewContext.hasChanges == false)
+    }
+
     @Test("Sole WorkType с произвольной identity сохраняет Shift assignment")
     func roundTripsSoleArbitraryWorkTypeAssignment() async throws {
         let storeURL = try makeTemporaryStoreURL()
@@ -984,6 +1266,10 @@ struct ShiftStorageTests {
 
     private func fetchShifts(in context: NSManagedObjectContext) throws -> [ShiftEntity] {
         try context.fetch(NSFetchRequest<ShiftEntity>(entityName: "ShiftEntity"))
+    }
+
+    private func fetchPayRates(in context: NSManagedObjectContext) throws -> [PayRateEntity] {
+        try context.fetch(NSFetchRequest<PayRateEntity>(entityName: "PayRateEntity"))
     }
 
     private func onlyWorkType(for job: JobEntity) throws -> WorkTypeEntity {
