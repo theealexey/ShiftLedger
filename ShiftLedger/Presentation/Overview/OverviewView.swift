@@ -44,6 +44,7 @@ final class OverviewView: UIView, UIScrollViewDelegate {
     private let mainStack = UIStackView()
 
     private let periodRailContainer = UIStackView()
+    private var showsPeriodNavigation = false
     private let periodRailViewport = UIView()
     private let periodRailScrollView = UIScrollView()
     private let periodRailStack = UIStackView()
@@ -103,12 +104,15 @@ final class OverviewView: UIView, UIScrollViewDelegate {
         expectedGrossContext: String,
         period: String,
         periodItems: [PeriodItem],
+        showPeriodNavigation: Bool,
         shiftCount: Int,
         shiftCards: [ShiftCard],
         canNavigatePrevious: Bool,
         canNavigateNext: Bool,
         canCheckPaycheck: Bool
     ) {
+        showsPeriodNavigation = showPeriodNavigation
+        periodRailContainer.accessibilityElementsHidden = !showPeriodNavigation
         expectedGrossAmountLabel.text = expectedGross
         expectedGrossAmountLabel.accessibilityLabel = "\(expectedGrossContext), \(expectedGross)"
         expectedGrossLabel.text = expectedGrossContext
@@ -542,7 +546,7 @@ final class OverviewView: UIView, UIScrollViewDelegate {
         empty: Bool,
         error: Bool
     ) {
-        periodRailContainer.isHidden = !content
+        periodRailContainer.isHidden = !content || !showsPeriodNavigation
         contentCard.isHidden = !content
         shiftHistoryStack.isHidden = !shiftHistory
         checkPaycheckButton.isHidden = !checkPaycheck

@@ -9,7 +9,7 @@ struct OverviewViewControllerTests {
     @Test("Normal rail centers real periods without partial neighboring titles")
     func normalRailHasNoDuplicatePeriod() throws {
         let subject = try makeSubject(
-            job: makeJob(cycle: .perShift),
+            job: makeJob(cycle: .scheduled(.calendarMonthly)),
             shifts: [
                 makeShift(id: 1, month: 9, day: 10),
                 makeShift(id: 2, month: 9, day: 11),
@@ -25,18 +25,19 @@ struct OverviewViewControllerTests {
         let fallback: UILabel = try requireView(identifier: "overview.period.label", in: root)
         #expect(isEffectivelyHidden(fallback))
 
-        func expectRail(selectedIndex: Int) throws {
+        func expectRail() throws {
             window.layoutIfNeeded()
             root.layoutIfNeeded()
             let rail: UIScrollView = try requireView(identifier: "overview.period.rail", in: root)
             #expect(!isEffectivelyHidden(rail))
             let layoutEpsilon: CGFloat = 1
-            for index in 0..<3 {
+            let content = try requireContent(subject.viewModel.state)
+            for (index, period) in content.railPeriods.enumerated() {
                 let item: UIControl = try requireView(identifier: "overview.period.item.\(index)", in: rail)
                 let title: UILabel = try requireView(identifier: "overview.period.item.title", in: item)
                 let visibleTitleWidth = title.convert(title.bounds, to: rail)
                     .intersection(rail.bounds).width
-                if index == selectedIndex {
+                if period.period == content.selectedPeriod {
                     #expect(item.accessibilityTraits.contains(.selected))
                     #expect(abs(item.convert(item.bounds, to: rail).midX - rail.bounds.midX) < layoutEpsilon)
                     #expect(visibleTitleWidth + layoutEpsilon >= title.bounds.width)
@@ -52,13 +53,13 @@ struct OverviewViewControllerTests {
 
         let previous: UIButton = try requireView(identifier: "overview.period.previous", in: root)
         let next: UIButton = try requireView(identifier: "overview.period.next", in: root)
+        try expectRail()
         previous.sendActions(for: .touchUpInside)
+        try expectRail()
         previous.sendActions(for: .touchUpInside)
-        try expectRail(selectedIndex: 0)
+        try expectRail()
         next.sendActions(for: .touchUpInside)
-        try expectRail(selectedIndex: 1)
-        next.sendActions(for: .touchUpInside)
-        try expectRail(selectedIndex: 2)
+        try expectRail()
     }
 
     @Test("Accessibility period uses full-width text above navigation and reverses with traits")
@@ -116,6 +117,53 @@ struct OverviewViewControllerTests {
         #expect(previous.isEnabled)
     }
 
+    @Test("Per-shift navigation consumes no layout or accessibility space", arguments: [false, true])
+    func perShiftNavigationIsAbsent(_ accessibilitySize: Bool) throws {
+        let older = try makeShift(id: 1, month: 9, day: 10)
+        let latest = try makeShift(id: 2, month: 9, day: 20)
+        let subject = try makeSubject(job: makeJob(cycle: .perShift), shifts: [latest, older])
+        subject.viewController.traitOverrides.preferredContentSizeCategory = accessibilitySize
+            ? .accessibilityExtraExtraLarge : .large
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+        window.rootViewController = subject.viewController
+        window.isHidden = false
+        defer { window.isHidden = true }
+        window.layoutIfNeeded()
+        let root = try requireRootView(subject.viewController)
+        root.layoutIfNeeded()
+        let period: UILabel = try requireView(identifier: "overview.period.label", in: root)
+        let container = try #require(period.superview as? UIStackView)
+        #expect(container.isHidden)
+        #expect(container.accessibilityElementsHidden)
+        for identifier in ["overview.period.label", "overview.period.previous", "overview.period.rail", "overview.period.next"] {
+            let element: UIView = try requireView(identifier: identifier, in: root)
+            #expect(isEffectivelyHidden(element))
+        }
+        let hero: UIView = try requireView(identifier: "overview.expectedGross.hero", in: root)
+        let stack = try #require(hero.superview as? UIStackView)
+        #expect(abs(hero.frame.minY - stack.bounds.minY) < 0.5)
+        #expect(shiftCardIdentifiers(in: root) == [latest.id, older.id])
+        #expect(visibleFrontCardIdentifiers(in: root) == [latest.id])
+        let count: UILabel = try requireView(identifier: "overview.shiftCount.value", in: root)
+        #expect(count.text == "2")
+        let content = try requireContent(subject.viewModel.state)
+        #expect(content.selectedShiftID == latest.id)
+        #expect(content.expandedShiftID == nil)
+        if accessibilitySize {
+            let cards: [UIView] = try [latest, older].map {
+                try requireView(identifier: "overview.shift.\($0.id.uuidString)", in: root)
+            }
+            expectAccessibleDocumentOrder(cards, in: window)
+        }
+        subject.viewController.traitOverrides.preferredContentSizeCategory = accessibilitySize
+            ? .large : .accessibilityExtraExtraLarge
+        window.layoutIfNeeded()
+        root.layoutIfNeeded()
+        #expect(container.isHidden)
+        #expect(container.accessibilityElementsHidden)
+        #expect(abs(hero.frame.minY - stack.bounds.minY) < 0.5)
+    }
+
     @Test("Hero currency context and the single Shift heading are explicit")
     func heroAndShiftHeadingHaveOneHierarchy() throws {
         let subject = try makeSubject(job: makeJob(cycle: .scheduled(.calendarMonthly)), shifts: [makeShift(id: 1, month: 9, day: 10)])
@@ -171,7 +219,7 @@ struct OverviewViewControllerTests {
         #expect(background.resolvedColor(with: dark) == ShiftLedgerColors.backgroundSecondary.resolvedColor(with: dark))
     }
 
-    @Test("Tapping a scheduled rail item changes only the selected calculation, not Shift history")
+    @Test("Tapping a scheduled rail item updates payroll, count, and visible cards together")
     func scheduledRailTapUpdatesVisibleContent() throws {
         let job = try makeJob(cycle: .scheduled(.calendarMonthly))
         let august = try makeShift(id: 1, month: 8, day: 20)
@@ -180,6 +228,7 @@ struct OverviewViewControllerTests {
         var receivedPeriod: PayCalculationPeriod?
         subject.viewController.onCheckPaycheck = { receivedPeriod = $0 }
         subject.viewController.loadViewIfNeeded()
+        #expect(shiftCardIdentifiers(in: try requireRootView(subject.viewController)) == [september.id])
         let railItem: UIControl = try requireView(
             identifier: "overview.period.item.0",
             in: try requireRootView(subject.viewController)
@@ -193,7 +242,10 @@ struct OverviewViewControllerTests {
             endExclusive: try LocalDate(year: 2026, month: 9, day: 1)
         )))
         #expect(content.expectedBreakdown?.shiftBreakdowns.map(\.shift) == [august])
-        #expect(shiftCardIdentifiers(in: try requireRootView(subject.viewController)) == [september.id, august.id])
+        #expect(shiftCardIdentifiers(in: try requireRootView(subject.viewController)) == [august.id])
+        let count: UILabel = try requireView(identifier: "overview.shiftCount.value", in: try requireRootView(subject.viewController))
+        #expect(count.text == "1")
+        #expect(content.shiftHistoryBreakdowns == content.expectedBreakdown?.shiftBreakdowns)
         let selectedRailItem: UIControl = try requireView(
             identifier: "overview.period.item.1",
             in: try requireRootView(subject.viewController)
@@ -222,7 +274,7 @@ struct OverviewViewControllerTests {
         #expect(label.text?.contains("30") == true)
     }
 
-    @Test("Shift count represents every persisted Shift in history")
+    @Test("Scheduled Shift count represents only the selected period")
     func shiftCountUsesAllPersistedShifts() throws {
         let job = try makeJob(cycle: .scheduled(.calendarMonthly))
         let august = try makeShift(id: 1, month: 8, day: 20)
@@ -235,15 +287,14 @@ struct OverviewViewControllerTests {
             identifier: "overview.shiftCount.value",
             in: try requireRootView(subject.viewController)
         )
-        #expect(label.text == "2")
+        #expect(label.text == "1")
         let content = try requireContent(subject.viewModel.state)
-        #expect(content.totalStoredShiftCount == 2)
-        #expect(content.shiftHistoryBreakdowns.count == 2)
+        #expect(content.shiftHistoryBreakdowns.map(\.shift) == [september])
     }
 
     @Test("Shift history renders every persisted Shift in deterministic reverse chronology")
     func shiftHistoryRendersAllPersistedCardsInReverseChronology() throws {
-        let job = try makeJob(cycle: .scheduled(.calendarMonthly))
+        let job = try makeJob(cycle: .perShift)
         let older = try makeShift(id: 1, month: 8, day: 10)
         let newer = try makeShift(id: 2, month: 9, day: 20)
         let subject = try makeSubject(job: job, shifts: [older, newer])
@@ -655,7 +706,7 @@ struct OverviewViewControllerTests {
         #expect(amount.frame.intersects(date.frame) == false)
     }
 
-    @Test("Per-shift period selection leaves every persisted card in the history stack")
+    @Test("Per-shift card selection drives payroll while retaining every persisted card")
     func perShiftPeriodSelectionKeepsAllPersistedCards() throws {
         let job = try makeJob(cycle: .perShift)
         let older = try makeShift(id: 1, month: 9, day: 10)
@@ -664,14 +715,16 @@ struct OverviewViewControllerTests {
         subject.viewController.loadViewIfNeeded()
 
         #expect(shiftCardIdentifiers(in: try requireRootView(subject.viewController)) == [newer.id, older.id])
-        let firstPeriod: UIControl = try requireView(
-            identifier: "overview.period.item.0",
+        let olderCard: UIControl = try requireView(
+            identifier: "overview.shift.\(older.id.uuidString)",
             in: try requireRootView(subject.viewController)
         )
-        firstPeriod.sendActions(for: .touchUpInside)
+        olderCard.sendActions(for: .touchUpInside)
 
         let content = try requireContent(subject.viewModel.state)
         #expect(content.selectedPeriod == .perShift(shiftID: older.id))
+        #expect(content.selectedShiftID == older.id)
+        #expect(content.expandedShiftID == older.id)
         #expect(content.expectedBreakdown?.shiftBreakdowns.map(\.shift) == [older])
         #expect(content.shiftHistoryBreakdowns.map(\.shift) == [older, newer])
         #expect(shiftCardIdentifiers(in: try requireRootView(subject.viewController)) == [newer.id, older.id])
@@ -680,6 +733,22 @@ struct OverviewViewControllerTests {
             in: try requireRootView(subject.viewController)
         )
         #expect(count.text == "2")
+        #expect(visibleFrontCardIdentifiers(in: try requireRootView(subject.viewController)) == [older.id])
+        var receivedPeriod: PayCalculationPeriod?
+        subject.viewController.onCheckPaycheck = { receivedPeriod = $0 }
+        let check: UIButton = try requireView(identifier: "overview.checkPaycheck", in: try requireRootView(subject.viewController))
+        check.sendActions(for: .touchUpInside)
+        #expect(receivedPeriod == .perShift(shiftID: older.id))
+        for expectedExpandedID in [nil, older.id] as [UUID?] {
+            olderCard.sendActions(for: .touchUpInside)
+            let updated = try requireContent(subject.viewModel.state)
+            #expect(updated.expandedShiftID == expectedExpandedID)
+            #expect(updated.selectedShiftID == older.id)
+            #expect(updated.selectedPeriod == .perShift(shiftID: older.id))
+            #expect(updated.expectedBreakdown == content.expectedBreakdown)
+            check.sendActions(for: .touchUpInside)
+            #expect(receivedPeriod == updated.selectedPeriod)
+        }
     }
 
     @Test("Shift history renders an unpaid-break indicator only when the Shift contains one")
@@ -1236,7 +1305,7 @@ struct OverviewViewControllerTests {
     @Test("Scheduled zero-shift period renders an honest Shift history empty state")
     func scheduledZeroShiftPeriodRendersShiftHistoryEmptyState() throws {
         let job = try makeJob(cycle: .scheduled(.calendarMonthly))
-        let subject = try makeSubject(job: job, shifts: [])
+        let subject = try makeSubject(job: job, shifts: [makeShift(id: 1, month: 8, day: 10)])
 
         subject.viewController.loadViewIfNeeded()
 
@@ -1246,6 +1315,48 @@ struct OverviewViewControllerTests {
         )
         #expect(isEffectivelyHidden(label) == false)
         #expect(label.text == OverviewStrings.shiftHistoryEmpty)
+        let root = try requireRootView(subject.viewController)
+        #expect(shiftCardIdentifiers(in: root).isEmpty)
+        let count: UILabel = try requireView(identifier: "overview.shiftCount.value", in: root)
+        #expect(count.text == "0")
+        let amount: UILabel = try requireView(identifier: "overview.expectedGross.amount", in: root)
+        #expect(amount.text == OverviewFormatting.heroAmount(.zero, currencyCode: job.currencyCode, locale: displayLocale))
+        let check: UIButton = try requireView(identifier: "overview.checkPaycheck", in: root)
+        #expect(check.isEnabled)
+        #expect(!isEffectivelyHidden(check))
+        let rail: UIScrollView = try requireView(identifier: "overview.period.rail", in: root)
+        #expect(!isEffectivelyHidden(rail))
+    }
+
+    @Test("Per-shift post-save reload selects the persisted card and its paycheck period")
+    func perShiftPostSaveReloadUpdatesCardAndPaycheck() throws {
+        let existing = try makeShift(id: 1, month: 9, day: 10)
+        let saved = try makeShift(id: 2, month: 9, day: 20)
+        var calls = 0
+        let subject = makeSubject(job: try makeJob(cycle: .perShift), loadShifts: {
+            calls += 1
+            return calls == 2 ? [existing, saved] : [existing]
+        })
+        subject.viewController.loadViewIfNeeded()
+        subject.viewController.reload(selectingShiftID: saved.id)
+        #expect(calls == 2)
+        let content = try requireContent(subject.viewModel.state)
+        #expect(content.selectedPeriod == .perShift(shiftID: saved.id))
+        #expect(content.selectedShiftID == saved.id)
+        #expect(content.expandedShiftID == saved.id)
+        let root = try requireRootView(subject.viewController)
+        #expect(visibleFrontCardIdentifiers(in: root) == [saved.id])
+        var receivedPeriod: PayCalculationPeriod?
+        subject.viewController.onCheckPaycheck = { receivedPeriod = $0 }
+        let check: UIButton = try requireView(identifier: "overview.checkPaycheck", in: root)
+        check.sendActions(for: .touchUpInside)
+        #expect(receivedPeriod == .perShift(shiftID: saved.id))
+        subject.viewController.reload()
+        let fallback = try requireContent(subject.viewModel.state)
+        #expect(fallback.selectedShiftID == existing.id)
+        #expect(fallback.expandedShiftID == nil)
+        #expect(visibleFrontCardIdentifiers(in: root) == [existing.id])
+        #expect(shiftCardIdentifiers(in: root) == [existing.id])
     }
 
     @Test("Previous button follows ViewModel navigation state")
@@ -1849,6 +1960,7 @@ struct OverviewViewControllerTests {
             expectedGrossContext: "Expected gross · EUR",
             period: "September 2026",
             periodItems: [],
+            showPeriodNavigation: false,
             shiftCount: cards.count,
             shiftCards: cards,
             canNavigatePrevious: true,

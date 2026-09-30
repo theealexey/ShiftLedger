@@ -158,6 +158,7 @@ final class OverviewViewController: UIViewController {
                 expectedGrossContext: OverviewStrings.expectedGrossContext(currencyCode: currencyCode),
                 period: periodText,
                 periodItems: railItems(from: content.railPeriods, selectedPeriod: period),
+                showPeriodNavigation: content.showPeriodNavigation,
                 shiftCount: content.shiftHistoryBreakdowns.count,
                 shiftCards: cards,
                 canNavigatePrevious: content.canNavigatePrevious,
@@ -165,7 +166,8 @@ final class OverviewViewController: UIViewController {
                 canCheckPaycheck: true
             )
 
-            if let selectedShiftID = content.selectedShiftID {
+            if let selectedShiftID = content.selectedShiftID,
+               content.expandedShiftID != nil {
                 overviewView.focusShiftCard(with: selectedShiftID)
             }
         default:
@@ -243,16 +245,8 @@ final class OverviewViewController: UIViewController {
                 timeZoneIdentifier: timeZoneIdentifier,
                 locale: displayLocale
             )
-        case let .perShift(shiftID):
-            guard let shift = railPeriod.shift, shift.id == shiftID else {
-                return nil
-            }
-
-            return OverviewFormatting.compactPerShiftPeriod(
-                shift,
-                timeZoneIdentifier: timeZoneIdentifier,
-                locale: displayLocale
-            )
+        case .perShift:
+            return nil
         }
     }
 
