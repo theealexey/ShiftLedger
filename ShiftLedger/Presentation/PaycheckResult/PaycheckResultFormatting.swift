@@ -119,6 +119,10 @@ enum PaycheckResultFormatting {
         currencyCode: String,
         locale: Locale
     ) -> String {
+        rate(currency(amount, currencyCode: currencyCode, locale: locale), basis: basis)
+    }
+
+    private static func rate(_ formattedAmount: String, basis: BasePayBasis) -> String {
         let unit = switch basis {
         case .hourly:
             PaycheckResultStrings.rateHour
@@ -126,7 +130,7 @@ enum PaycheckResultFormatting {
             PaycheckResultStrings.rateShift
         }
 
-        return "\(currency(amount, currencyCode: currencyCode, locale: locale)) / \(unit)"
+        return "\(formattedAmount) / \(unit)"
     }
 
     static func renderModel(
@@ -136,6 +140,7 @@ enum PaycheckResultFormatting {
         workTypes: [WorkType],
         locale: Locale
     ) -> PaycheckResultView.RenderModel {
+        let context = monetaryContext(comparison: comparison, currencyCode: currencyCode, locale: locale)
         let rows = comparison.expected.shiftBreakdowns.map { breakdown in
             PaycheckResultView.BreakdownRow(
                 workTypeName: workTypes.first(where: { $0.id == breakdown.shift.workTypeID })?.name
@@ -147,39 +152,141 @@ enum PaycheckResultFormatting {
                 ),
                 duration: paidDuration(breakdown.paidDuration),
                 rate: rate(
-                    amount: breakdown.appliedPayRate.amount,
-                    basis: breakdown.basePayBasis,
-                    currencyCode: currencyCode,
-                    locale: locale
+                    context.string(breakdown.appliedPayRate.amount),
+                    basis: breakdown.basePayBasis
                 ),
-                amount: currency(
-                    breakdown.basePay,
-                    currencyCode: currencyCode,
-                    locale: locale
-                )
+                amount: context.string(breakdown.basePay)
             )
         }
 
         return PaycheckResultView.RenderModel(
-            expected: currency(
-                comparison.expected.expectedGross,
-                currencyCode: currencyCode,
-                locale: locale
-            ),
-            actual: currency(
-                comparison.actualGross.amount,
-                currencyCode: currencyCode,
-                locale: locale
-            ),
-            difference: difference(
-                comparison.difference,
-                currencyCode: currencyCode,
-                locale: locale
-            ),
+            expected: context.string(comparison.expected.expectedGross),
+            actual: context.string(comparison.actualGross.amount),
+            difference: context.string(comparison.difference, signed: true),
             explanation: explanation(for: comparison.difference),
             breakdownRows: rows,
             emptyBreakdownMessage: rows.isEmpty ? PaycheckResultStrings.breakdownEmpty : nil
         )
+    }
+
+    private struct MonetaryValues {
+        let expected: Decimal
+        let actual: Decimal
+        let difference: Decimal
+        let breakdownAmounts: [Decimal]
+        let rates: [Decimal]
+
+        var all: [Decimal] { [expected, actual, difference] + breakdownAmounts + rates }
+
+        func rounded(to digits: Int) -> MonetaryValues {
+            MonetaryValues(
+                expected: roundedDecimal(expected, digits: digits),
+                actual: roundedDecimal(actual, digits: digits),
+                difference: roundedDecimal(difference, digits: digits),
+                breakdownAmounts: breakdownAmounts.map { roundedDecimal($0, digits: digits) },
+                rates: rates.map { roundedDecimal($0, digits: digits) }
+            )
+        }
+
+        var reconciles: Bool {
+            var sum = Decimal.zero
+            for value in breakdownAmounts {
+                var lhs = sum
+                var rhs = value
+                guard NSDecimalAdd(&sum, &lhs, &rhs, .bankers) == .noError else { return false }
+            }
+            var roundedActual = actual
+            var roundedExpected = expected
+            var subtraction = Decimal.zero
+            return sum == expected
+                && NSDecimalSubtract(&subtraction, &roundedActual, &roundedExpected, .bankers) == .noError
+                && subtraction == difference
+        }
+    }
+
+    // A nil precision/formatter selects exact text for every amount and rate.
+    private struct MonetaryContext {
+        let currencyCode: String
+        let fractionDigits: Int?
+        let formatter: NumberFormatter?
+
+        func string(_ source: Decimal, signed: Bool = false) -> String {
+            guard let fractionDigits, let formatter else {
+                return exactFallback(source, currencyCode: currencyCode, includePositiveSign: signed)
+            }
+            let amount = roundedDecimal(source, digits: fractionDigits)
+            let text = signed ? signedCurrency(amount, using: formatter) : formattedCurrency(amount, using: formatter)
+            return text ?? exactFallback(source, currencyCode: currencyCode, includePositiveSign: signed)
+        }
+    }
+
+    private static func roundedDecimal(_ value: Decimal, digits: Int) -> Decimal {
+        var source = value
+        var result = Decimal.zero
+        NSDecimalRound(&result, &source, digits, .bankers)
+        return result
+    }
+
+    // One display context for the entire Result; the Domain values remain exact.
+    private static func monetaryContext(
+        comparison: PaycheckComparison,
+        currencyCode: String,
+        locale: Locale
+    ) -> MonetaryContext {
+        let values = MonetaryValues(
+            expected: comparison.expected.expectedGross,
+            actual: comparison.actualGross.amount,
+            difference: comparison.difference,
+            breakdownAmounts: comparison.expected.shiftBreakdowns.map(\.basePay),
+            rates: comparison.expected.shiftBreakdowns.map { $0.appliedPayRate.amount }
+        )
+        let formatter = currencyFormatter(currencyCode: currencyCode, locale: locale)
+        formatter.roundingMode = .halfEven
+        let normalDigits = formatter.maximumFractionDigits
+        let exactDigits = values.all.reduce(normalDigits) { max($0, -$1.exponent) }
+
+        if normalDigits >= 0 {
+            for digits in normalDigits...exactDigits {
+                let rounded = values.rounded(to: digits)
+                guard rounded.all.allSatisfy({ !$0.isNaN }), rounded.reconciles,
+                      zip(values.all, rounded.all).allSatisfy({ source, display in
+                          source == .zero || display != .zero
+                      })
+                else { continue }
+
+                formatter.maximumFractionDigits = digits
+                if digits > normalDigits { formatter.minimumFractionDigits = digits }
+                // NumberFormatter must not lose significant digits even for extreme Decimals.
+                guard rounded.all.allSatisfy({ value in
+                    guard let string = formattedCurrency(value, using: formatter) else { return false }
+                    return displayedDecimal(string, using: formatter, negative: value < .zero) == value
+                }) else { continue }
+                return MonetaryContext(currencyCode: currencyCode, fractionDigits: digits, formatter: formatter)
+            }
+        }
+
+        return MonetaryContext(currencyCode: currencyCode, fractionDigits: nil, formatter: nil)
+    }
+
+    private static func displayedDecimal(
+        _ string: String,
+        using formatter: NumberFormatter,
+        negative: Bool
+    ) -> Decimal? {
+        let prefix = negative ? formatter.negativePrefix : formatter.positivePrefix
+        let suffix = negative ? formatter.negativeSuffix : formatter.positiveSuffix
+        var number = string
+        if let prefix, number.hasPrefix(prefix) { number.removeFirst(prefix.count) }
+        if let suffix, number.hasSuffix(suffix) { number.removeLast(suffix.count) }
+        number = number.replacingOccurrences(of: formatter.currencyGroupingSeparator ?? ",", with: "")
+            .replacingOccurrences(of: formatter.currencyDecimalSeparator ?? ".", with: ".")
+        let normalized = number.map { character -> String in
+            character.wholeNumberValue.map(String.init) ?? String(character)
+        }.joined()
+        guard let magnitude = Decimal(string: normalized, locale: Locale(identifier: "en_US_POSIX")) else {
+            return nil
+        }
+        return negative ? -magnitude : magnitude
     }
 
     private static func currencyFormatter(currencyCode: String, locale: Locale) -> NumberFormatter {
@@ -206,6 +313,8 @@ enum PaycheckResultFormatting {
     }
 
     private static func signedCurrency(_ amount: Decimal, using formatter: NumberFormatter) -> String? {
+        let originalPrefix = formatter.positivePrefix
+        defer { formatter.positivePrefix = originalPrefix }
         if amount > .zero {
             formatter.positivePrefix = "+" + (formatter.positivePrefix ?? "")
         }
