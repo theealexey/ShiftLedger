@@ -187,11 +187,19 @@ final class MainCoordinator {
         viewController.onSaved = { [weak self] updatedShift in
             self?.completeEditShift(updatedShift)
         }
+        viewController.onDeleted = { [weak self] _ in
+            self?.completeDeleteShift()
+        }
         navigationController.pushViewController(viewController, animated: true)
     }
 
     private func completeEditShift(_ shift: Shift) {
         overviewViewController.reload(selectingShiftID: shift.id)
+        navigationController.popToViewController(overviewViewController, animated: true)
+    }
+
+    private func completeDeleteShift() {
+        overviewViewController.reload()
         navigationController.popToViewController(overviewViewController, animated: true)
     }
 

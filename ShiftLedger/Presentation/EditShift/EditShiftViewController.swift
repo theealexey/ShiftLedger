@@ -2,13 +2,13 @@ import UIKit
 
 final class EditShiftViewController: UIViewController {
     var onSaved: ((Shift) -> Void)?
+    var onDeleted: ((UUID) -> Void)?
 
     private let viewModel: EditShiftViewModel
     private let displayLocale: Locale
     private let dateFormattingLocale: Locale
-    private let editShiftView = ShiftFormView(
-        identifiers: ShiftFormIdentifiers(prefix: "editShift")
-    )
+    private let editShiftView = EditShiftView()
+    private var shiftFormView: ShiftFormView { editShiftView.shiftFormView }
 
     init(
         viewModel: EditShiftViewModel,
@@ -45,15 +45,16 @@ final class EditShiftViewController: UIViewController {
     }
 
     private func bindView() {
-        editShiftView.onWorkTypeTapped = { [weak self] in self?.presentWorkTypePicker() }
-        editShiftView.onStartTapped = { [weak self] in self?.presentPicker(for: .start) }
-        editShiftView.onEndTapped = { [weak self] in self?.presentPicker(for: .end) }
-        editShiftView.onBreakStartTapped = { [weak self] in self?.presentPicker(for: .breakStart) }
-        editShiftView.onBreakEndTapped = { [weak self] in self?.presentPicker(for: .breakEnd) }
-        editShiftView.onBreakEnabledChanged = { [weak self] enabled in
+        shiftFormView.onWorkTypeTapped = { [weak self] in self?.presentWorkTypePicker() }
+        shiftFormView.onStartTapped = { [weak self] in self?.presentPicker(for: .start) }
+        shiftFormView.onEndTapped = { [weak self] in self?.presentPicker(for: .end) }
+        shiftFormView.onBreakStartTapped = { [weak self] in self?.presentPicker(for: .breakStart) }
+        shiftFormView.onBreakEndTapped = { [weak self] in self?.presentPicker(for: .breakEnd) }
+        shiftFormView.onBreakEnabledChanged = { [weak self] enabled in
             self?.viewModel.setUnpaidBreakEnabled(enabled)
             self?.render()
         }
+        editShiftView.onDeleteTapped = { [weak self] in self?.presentDeleteConfirmation() }
     }
 
     private func render() {
@@ -63,7 +64,7 @@ final class EditShiftViewController: UIViewController {
         )
         let timeZoneText = "\(AddShiftStrings.timeZonePrefix) \(timeZoneName)"
 
-        editShiftView.render(
+        shiftFormView.render(
             workTypeText: selectedWorkTypeText,
             canSelectWorkType: canSelectWorkType,
             startText: formatted(viewModel.start),
@@ -80,6 +81,7 @@ final class EditShiftViewController: UIViewController {
         )
 
         navigationItem.rightBarButtonItem?.isEnabled = viewModel.canSave
+        editShiftView.setDeleteEnabled(viewModel.isSaving == false && viewModel.isDeleting == false)
     }
 
     private var selectedWorkTypeText: String {
@@ -232,6 +234,56 @@ final class EditShiftViewController: UIViewController {
         let alert = UIAlertController(
             title: isOverlap ? EditShiftStrings.overlapTitle : EditShiftStrings.genericErrorTitle,
             message: isOverlap ? EditShiftStrings.overlapMessage : EditShiftStrings.genericErrorMessage,
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: EditShiftStrings.alertOK, style: .default))
+        present(alert, animated: true)
+    }
+
+    private func presentDeleteConfirmation() {
+        let alert = UIAlertController(
+            title: EditShiftStrings.deleteConfirmationTitle,
+            message: EditShiftStrings.deleteConfirmationMessage,
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: EditShiftStrings.cancel, style: .cancel))
+        alert.addAction(UIAlertAction(
+            title: EditShiftStrings.delete,
+            style: .destructive
+        ) { [weak self] _ in
+            self?.performConfirmedDelete()
+        })
+        present(alert, animated: true)
+    }
+
+    func performConfirmedDelete() {
+        let result = viewModel.delete()
+        render()
+
+        let complete = { [weak self] in
+            guard let self else { return }
+            switch result {
+            case let .deleted(id):
+                onDeleted?(id)
+            case .failed(.generic):
+                presentDeleteError()
+            case .ignored:
+                break
+            }
+        }
+
+        if presentedViewController is UIAlertController {
+            dismiss(animated: true, completion: complete)
+        } else {
+            complete()
+        }
+    }
+
+    private func presentDeleteError() {
+        guard viewIfLoaded?.window != nil else { return }
+        let alert = UIAlertController(
+            title: EditShiftStrings.deleteErrorTitle,
+            message: EditShiftStrings.deleteErrorMessage,
             preferredStyle: .alert
         )
         alert.addAction(UIAlertAction(title: EditShiftStrings.alertOK, style: .default))

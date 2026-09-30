@@ -309,6 +309,69 @@ struct MainCoordinatorTests {
         #expect(harness.metrics.overviewLoadCount == 3)
     }
 
+    @Test("Delete Shift reloads persistence and returns to the same Overview root")
+    func deleteShiftReturnsToSameOverviewWithoutDeletedCard() throws {
+        let harness = try makeHarness(cycle: .perShift)
+        harness.coordinator.start()
+        harness.overview.loadViewIfNeeded()
+        let deletedShift = try makeShift()
+        let remainingStart = deletedShift.end.addingTimeInterval(3_600)
+        let remainingShift = try Shift(
+            workTypeID: testWorkTypeID,
+            start: remainingStart,
+            end: remainingStart.addingTimeInterval(3_600)
+        )
+        harness.metrics.overviewShifts = [deletedShift, remainingShift]
+        harness.overview.reload(selectingShiftID: deletedShift.id)
+        let originalOverview = harness.overview
+
+        harness.overview.onEditShift?(deletedShift)
+        let edit = try #require(
+            harness.navigationController.topViewController as? EditShiftViewController
+        )
+        harness.metrics.overviewShifts = [remainingShift]
+        edit.onDeleted?(deletedShift.id)
+
+        #expect(harness.navigationController.topViewController === originalOverview)
+        #expect(harness.navigationController.viewControllers.count == 1)
+        #expect(harness.navigationController.viewControllers.first === originalOverview)
+        #expect(harness.metrics.overviewLoadCount == 3)
+        #expect(findView(
+            "overview.shift.\(deletedShift.id.uuidString)",
+            in: originalOverview.view
+        ) == nil)
+        #expect(findView(
+            "overview.shift.\(remainingShift.id.uuidString)",
+            in: originalOverview.view
+        ) != nil)
+    }
+
+    @Test("Deleting the sole Shift keeps the canonical Overview and renders its empty state")
+    func deleteSoleShiftReturnsToOverviewEmptyState() throws {
+        let harness = try makeHarness(cycle: .perShift)
+        harness.coordinator.start()
+        harness.overview.loadViewIfNeeded()
+        let shift = try makeShift()
+        harness.metrics.overviewShifts = [shift]
+        harness.overview.reload(selectingShiftID: shift.id)
+        let originalOverview = harness.overview
+
+        harness.overview.onEditShift?(shift)
+        let edit = try #require(
+            harness.navigationController.topViewController as? EditShiftViewController
+        )
+        harness.metrics.overviewShifts = []
+        edit.onDeleted?(shift.id)
+
+        #expect(harness.navigationController.topViewController === originalOverview)
+        #expect(harness.navigationController.viewControllers.count == 1)
+        #expect(findView("overview.empty.container", in: originalOverview.view) != nil)
+        #expect(findView(
+            "overview.shift.\(shift.id.uuidString)",
+            in: originalOverview.view
+        ) == nil)
+    }
+
     @Test("Comparison failure remains on Actual Gross with a neutral localized alert")
     func comparisonFailureStaysOnEntry() throws {
         let harness = try makeHarness(prepareComparison: { _, _, _ in
@@ -423,7 +486,8 @@ struct MainCoordinatorTests {
                         timeZoneIdentifier: job.timeZoneIdentifier,
                         workTypes: job.workTypes,
                         shift: shift,
-                        saveShift: { _ in .success(()) }
+                        saveShift: { _ in .success(()) },
+                        deleteShift: { _ in .success(()) }
                     )
                 )
             },
@@ -523,6 +587,18 @@ struct MainCoordinatorTests {
         }
 
         return try #require(find(in: root))
+    }
+
+    private func findView(_ identifier: String, in root: UIView) -> UIView? {
+        if root.accessibilityIdentifier == identifier {
+            return root
+        }
+        for subview in root.subviews {
+            if let match = findView(identifier, in: subview) {
+                return match
+            }
+        }
+        return nil
     }
 }
 

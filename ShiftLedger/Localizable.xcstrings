@@ -660,6 +660,41 @@
         "ru" : { "stringUnit" : { "state" : "translated", "value" : "Сохранить" } }
       }
     },
+    "editShift.delete" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Delete Shift" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Удалить смену" } }
+      }
+    },
+    "editShift.delete.confirmation.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Delete this shift?" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Удалить эту смену?" } }
+      }
+    },
+    "editShift.delete.confirmation.message" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "This shift will be permanently removed from your history and expected pay calculations. This can’t be undone." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Смена будет навсегда удалена из истории и расчёта ожидаемой зарплаты. Отменить это действие нельзя." } }
+      }
+    },
+    "editShift.delete.error.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Couldn’t delete shift" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Не удалось удалить смену" } }
+      }
+    },
+    "editShift.delete.error.message" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "The shift wasn’t deleted. Try again." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Смена не удалена. Попробуйте ещё раз." } }
+      }
+    },
     "editShift.error.overlap.title" : {
       "extractionState" : "manual",
       "localizations" : {

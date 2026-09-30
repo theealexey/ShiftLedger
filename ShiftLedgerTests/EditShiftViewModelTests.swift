@@ -206,16 +206,169 @@ struct EditShiftViewModelTests {
         #expect(viewModel.selectWorkType(id: workTypes[1].id))
     }
 
+    @Test("Delete passes the exact original Shift identity once")
+    func deleteUsesOriginalIdentity() throws {
+        let workTypes = try makeWorkTypes()
+        let shift = try makeShift(workTypeID: workTypes[0].id)
+        var deletedIDs: [UUID] = []
+        let viewModel = makeViewModel(
+            workTypes: workTypes,
+            shift: shift,
+            deleteShift: { id in
+                deletedIDs.append(id)
+                return .success(())
+            }
+        )
+
+        #expect(viewModel.delete() == .deleted(shiftID))
+        #expect(deletedIDs == [shiftID])
+    }
+
+    @Test("Delete ignores invalid unsaved form changes and keeps the original Shift identity")
+    func deleteIgnoresUnsavedInvalidForm() throws {
+        let workTypes = try makeWorkTypes()
+        let shift = try makeShift(workTypeID: workTypes[0].id)
+        var deletedID: UUID?
+        let viewModel = makeViewModel(
+            workTypes: workTypes,
+            shift: shift,
+            deleteShift: { id in
+                deletedID = id
+                return .success(())
+            }
+        )
+        let changedStart = start.addingTimeInterval(86_400)
+
+        #expect(viewModel.selectWorkType(id: workTypes[1].id))
+        viewModel.setStart(changedStart)
+        viewModel.setEnd(changedStart)
+        viewModel.setUnpaidBreakEnabled(true)
+        viewModel.setBreakStart(changedStart)
+        viewModel.setBreakEnd(changedStart)
+
+        #expect(viewModel.canSave == false)
+        #expect(viewModel.delete() == .deleted(shiftID))
+        #expect(deletedID == shiftID)
+    }
+
+    @Test("Successful Delete is terminal for duplicate Delete and Save")
+    func successfulDeleteBlocksFurtherOperations() throws {
+        let workTypes = try makeWorkTypes()
+        let shift = try makeShift(workTypeID: workTypes[0].id)
+        var deleteCalls = 0
+        var saveCalls = 0
+        let viewModel = makeViewModel(
+            workTypes: workTypes,
+            shift: shift,
+            saveShift: { _ in
+                saveCalls += 1
+                return .success(())
+            },
+            deleteShift: { _ in
+                deleteCalls += 1
+                return .success(())
+            }
+        )
+
+        #expect(viewModel.delete() == .deleted(shiftID))
+        #expect(viewModel.delete() == .ignored)
+        #expect(viewModel.save() == .ignored)
+        #expect(deleteCalls == 1)
+        #expect(saveCalls == 0)
+    }
+
+    @Test("Delete failure preserves form and allows retry")
+    func deleteFailurePreservesFormAndAllowsRetry() throws {
+        let workTypes = try makeWorkTypes()
+        let shift = try makeShift(workTypeID: workTypes[0].id)
+        var outcomes: [Result<Void, EditShiftDeleteFailure>] = [
+            .failure(.generic),
+            .success(())
+        ]
+        let viewModel = makeViewModel(
+            workTypes: workTypes,
+            shift: shift,
+            deleteShift: { _ in outcomes.removeFirst() }
+        )
+        let changedStart = start.addingTimeInterval(86_400)
+        let changedEnd = changedStart.addingTimeInterval(10_800)
+
+        #expect(viewModel.selectWorkType(id: workTypes[1].id))
+        viewModel.setStart(changedStart)
+        viewModel.setEnd(changedEnd)
+
+        #expect(viewModel.delete() == .failed(.generic))
+        #expect(viewModel.isDeleting == false)
+        #expect(viewModel.selectedWorkTypeID == workTypes[1].id)
+        #expect(viewModel.start == changedStart)
+        #expect(viewModel.end == changedEnd)
+        #expect(viewModel.delete() == .deleted(shiftID))
+    }
+
+    @Test("Save cannot start while Delete is active")
+    func saveIsIgnoredDuringDelete() throws {
+        let workTypes = try makeWorkTypes()
+        let shift = try makeShift(workTypeID: workTypes[0].id)
+        var nestedSaveResult: EditShiftSaveResult?
+        var saveCalls = 0
+        var capturedViewModel: EditShiftViewModel?
+        let viewModel = makeViewModel(
+            workTypes: workTypes,
+            shift: shift,
+            saveShift: { _ in
+                saveCalls += 1
+                return .success(())
+            },
+            deleteShift: { _ in
+                nestedSaveResult = capturedViewModel?.save()
+                return .success(())
+            }
+        )
+        capturedViewModel = viewModel
+
+        #expect(viewModel.delete() == .deleted(shiftID))
+        #expect(nestedSaveResult == .ignored)
+        #expect(saveCalls == 0)
+    }
+
+    @Test("Delete cannot start while Save is active")
+    func deleteIsIgnoredDuringSave() throws {
+        let workTypes = try makeWorkTypes()
+        let shift = try makeShift(workTypeID: workTypes[0].id)
+        var nestedDeleteResult: EditShiftDeleteResult?
+        var deleteCalls = 0
+        var capturedViewModel: EditShiftViewModel?
+        let viewModel = makeViewModel(
+            workTypes: workTypes,
+            shift: shift,
+            saveShift: { _ in
+                nestedDeleteResult = capturedViewModel?.delete()
+                return .success(())
+            },
+            deleteShift: { _ in
+                deleteCalls += 1
+                return .success(())
+            }
+        )
+        capturedViewModel = viewModel
+
+        #expect(viewModel.save() == .saved(shift))
+        #expect(nestedDeleteResult == .ignored)
+        #expect(deleteCalls == 0)
+    }
+
     private func makeViewModel(
         workTypes: [WorkType],
         shift: Shift,
-        saveShift: @escaping (Shift) -> Result<Void, EditShiftSaveFailure> = { _ in .success(()) }
+        saveShift: @escaping (Shift) -> Result<Void, EditShiftSaveFailure> = { _ in .success(()) },
+        deleteShift: @escaping (UUID) -> Result<Void, EditShiftDeleteFailure> = { _ in .success(()) }
     ) -> EditShiftViewModel {
         EditShiftViewModel(
             timeZoneIdentifier: "Europe/Stockholm",
             workTypes: workTypes,
             shift: shift,
-            saveShift: saveShift
+            saveShift: saveShift,
+            deleteShift: deleteShift
         )
     }
 

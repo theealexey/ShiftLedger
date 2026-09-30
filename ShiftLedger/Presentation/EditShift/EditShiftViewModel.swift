@@ -12,20 +12,33 @@ enum EditShiftSaveResult: Equatable {
     case ignored
 }
 
+enum EditShiftDeleteFailure: Error, Equatable {
+    case generic
+}
+
+enum EditShiftDeleteResult: Equatable {
+    case deleted(UUID)
+    case failed(EditShiftDeleteFailure)
+    case ignored
+}
+
 @MainActor
 final class EditShiftViewModel {
     private let shiftID: UUID
     private let saveShift: (Shift) -> Result<Void, EditShiftSaveFailure>
+    private let deleteShift: (UUID) -> Result<Void, EditShiftDeleteFailure>
     private var formState: ShiftFormState
 
     private(set) var isSaving = false
+    private(set) var isDeleting = false
     let timeZoneIdentifier: String
 
     init(
         timeZoneIdentifier: String,
         workTypes: [WorkType],
         shift: Shift,
-        saveShift: @escaping (Shift) -> Result<Void, EditShiftSaveFailure>
+        saveShift: @escaping (Shift) -> Result<Void, EditShiftSaveFailure>,
+        deleteShift: @escaping (UUID) -> Result<Void, EditShiftDeleteFailure>
     ) {
         self.timeZoneIdentifier = timeZoneIdentifier
         shiftID = shift.id
@@ -42,6 +55,7 @@ final class EditShiftViewModel {
             breakEnd: shift.unpaidBreak?.end
         )
         self.saveShift = saveShift
+        self.deleteShift = deleteShift
     }
 
     var start: Date? { formState.start }
@@ -53,7 +67,9 @@ final class EditShiftViewModel {
     var workTypeOptions: [ShiftFormWorkTypeOption] { formState.workTypeOptions }
     var selectedWorkType: ShiftFormWorkTypeOption? { formState.selectedWorkType }
     var validationError: ShiftValidationError? { formState.validationError }
-    var canSave: Bool { formState.canBuildShift && isSaving == false }
+    var canSave: Bool {
+        formState.canBuildShift && isSaving == false && isDeleting == false
+    }
 
     func setStart(_ value: Date?) {
         formState.setStart(value)
@@ -84,7 +100,7 @@ final class EditShiftViewModel {
     }
 
     func save() -> EditShiftSaveResult {
-        guard isSaving == false else { return .ignored }
+        guard isSaving == false, isDeleting == false else { return .ignored }
         guard canSave else { return .invalid }
 
         let shift: Shift
@@ -100,6 +116,19 @@ final class EditShiftViewModel {
             return .saved(shift)
         case let .failure(failure):
             isSaving = false
+            return .failed(failure)
+        }
+    }
+
+    func delete() -> EditShiftDeleteResult {
+        guard isSaving == false, isDeleting == false else { return .ignored }
+
+        isDeleting = true
+        switch deleteShift(shiftID) {
+        case .success:
+            return .deleted(shiftID)
+        case let .failure(failure):
+            isDeleting = false
             return .failed(failure)
         }
     }

@@ -14,6 +14,9 @@ enum EditShiftAssembly {
             shift: shift,
             saveShift: { updatedShift in
                 update(updatedShift, using: shiftStorage)
+            },
+            deleteShift: { shiftID in
+                delete(shiftID, using: shiftStorage)
             }
         )
         return EditShiftViewController(viewModel: viewModel)
@@ -28,6 +31,18 @@ enum EditShiftAssembly {
             return .success(())
         } catch ShiftStorageError.overlappingShift {
             return .failure(.overlap)
+        } catch {
+            return .failure(.generic)
+        }
+    }
+
+    private static func delete(
+        _ shiftID: UUID,
+        using storage: ShiftStorage
+    ) -> Result<Void, EditShiftDeleteFailure> {
+        do {
+            try storage.delete(id: shiftID)
+            return .success(())
         } catch {
             return .failure(.generic)
         }

@@ -38,7 +38,8 @@ struct EditShiftViewControllerTests {
       saveShift: { updated in
         saved = updated
         return .success(())
-      }
+      },
+      deleteShift: { _ in .success(()) }
     )
     let dateFormattingLocale = Locale(identifier: "en_US")
     let viewController = EditShiftViewController(
@@ -144,7 +145,8 @@ struct EditShiftViewControllerTests {
       timeZoneIdentifier: "UTC",
       workTypes: [first, second],
       shift: shift,
-      saveShift: { _ in .success(()) }
+      saveShift: { _ in .success(()) },
+      deleteShift: { _ in .success(()) }
     )
     let viewController = EditShiftViewController(viewModel: viewModel)
     let window = makeVisibleWindow(root: viewController)
@@ -197,7 +199,8 @@ struct EditShiftViewControllerTests {
       timeZoneIdentifier: "UTC",
       workTypes: [active, archived],
       shift: shift,
-      saveShift: { _ in .success(()) }
+      saveShift: { _ in .success(()) },
+      deleteShift: { _ in .success(()) }
     )
     let viewController = EditShiftViewController(viewModel: viewModel)
     let window = makeVisibleWindow(root: viewController)
@@ -239,7 +242,8 @@ struct EditShiftViewControllerTests {
         timeZoneIdentifier: "UTC",
         workTypes: [workType],
         shift: shift,
-        saveShift: { _ in .success(()) }
+        saveShift: { _ in .success(()) },
+        deleteShift: { _ in .success(()) }
       )
     )
     let window = makeVisibleWindow(root: viewController)
@@ -301,7 +305,8 @@ struct EditShiftViewControllerTests {
       timeZoneIdentifier: "UTC",
       workTypes: [workType],
       shift: shift,
-      saveShift: { _ in .success(()) }
+      saveShift: { _ in .success(()) },
+      deleteShift: { _ in .success(()) }
     )
     let viewController = EditShiftViewController(viewModel: viewModel)
     let window = makeVisibleWindow(root: viewController)
@@ -370,7 +375,8 @@ struct EditShiftViewControllerTests {
         timeZoneIdentifier: "UTC",
         workTypes: [workType],
         shift: shift,
-        saveShift: { _ in .success(()) }
+        saveShift: { _ in .success(()) },
+        deleteShift: { _ in .success(()) }
       )
     )
     viewController.traitOverrides.preferredContentSizeCategory = .large
@@ -467,6 +473,156 @@ struct EditShiftViewControllerTests {
         == true
     )
   }
+
+  @Test("Delete control is localized, destructive, reachable, and independent of form validity")
+  func deleteControlLayoutAndInvalidFormAvailability() throws {
+    let workType = try makeWorkType(
+      id: UUID(
+        uuid: (0x8d, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1)
+      ),
+      name: "Lectures"
+    )
+    let shift = try Shift(
+      id: shiftID,
+      workTypeID: workType.id,
+      start: start,
+      end: end
+    )
+    let viewModel = EditShiftViewModel(
+      timeZoneIdentifier: "UTC",
+      workTypes: [workType],
+      shift: shift,
+      saveShift: { _ in .success(()) },
+      deleteShift: { _ in .success(()) }
+    )
+    viewModel.setEnd(start)
+    let viewController = EditShiftViewController(viewModel: viewModel)
+    let window = makeVisibleWindow(root: viewController)
+    defer { hide(window) }
+
+    let deleteButton: UIButton = try requireView("editShift.delete", in: viewController.view)
+    let screen: UIScrollView = try requireView("editShift.screen", in: viewController.view)
+    #expect(deleteButton.configuration?.title == EditShiftStrings.delete)
+    #expect(deleteButton.accessibilityLabel == EditShiftStrings.delete)
+    #expect(deleteButton.accessibilityTraits.contains(.button))
+    #expect(deleteButton.configuration?.baseForegroundColor == ShiftLedgerColors.statusNegative)
+    #expect(deleteButton.bounds.height >= 44)
+    #expect(deleteButton.isEnabled)
+    #expect(viewController.navigationItem.rightBarButtonItem?.isEnabled == false)
+
+    func expectNoOverlap() {
+      let screenFrame = screen.convert(screen.bounds, to: viewController.view)
+      let buttonFrame = deleteButton.convert(deleteButton.bounds, to: viewController.view)
+      #expect(screenFrame.maxY + 12 <= buttonFrame.minY + 0.5)
+      #expect(buttonFrame.maxY <= viewController.view.safeAreaLayoutGuide.layoutFrame.maxY)
+    }
+
+    expectNoOverlap()
+    viewController.traitOverrides.preferredContentSizeCategory =
+      .accessibilityExtraExtraExtraLarge
+    window.layoutIfNeeded()
+    viewController.view.layoutIfNeeded()
+    #expect(deleteButton.bounds.height >= 44)
+    #expect(deleteButton.titleLabel?.numberOfLines == 0)
+    #expect(deleteButton.isEnabled)
+    expectNoOverlap()
+  }
+
+  @Test("Delete presents exact destructive confirmation")
+  func deleteConfirmationIsLocalizedAndDestructive() async throws {
+    let workType = try makeWorkType(
+      id: UUID(
+        uuid: (0x8e, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1)
+      ),
+      name: "Lectures"
+    )
+    let shift = try Shift(id: shiftID, workTypeID: workType.id, start: start, end: end)
+    let viewController = EditShiftViewController(
+      viewModel: EditShiftViewModel(
+        timeZoneIdentifier: "UTC",
+        workTypes: [workType],
+        shift: shift,
+        saveShift: { _ in .success(()) },
+        deleteShift: { _ in .success(()) }
+      )
+    )
+    let window = makeVisibleWindow(root: viewController)
+    defer { hide(window) }
+
+    let deleteButton: UIButton = try requireView("editShift.delete", in: viewController.view)
+    deleteButton.sendActions(for: .touchUpInside)
+    try await waitUntil { viewController.presentedViewController is UIAlertController }
+    let alert = try #require(viewController.presentedViewController as? UIAlertController)
+
+    #expect(alert.title == EditShiftStrings.deleteConfirmationTitle)
+    #expect(alert.message == EditShiftStrings.deleteConfirmationMessage)
+    #expect(alert.preferredStyle == .alert)
+    #expect(alert.actions.count == 2)
+    #expect(alert.actions.contains {
+      $0.title == EditShiftStrings.cancel && $0.style == .cancel
+    })
+    #expect(alert.actions.contains {
+      $0.title == EditShiftStrings.delete && $0.style == .destructive
+    })
+  }
+
+  @Test("Delete failure shows generic error and allows retry")
+  func deleteFailureAllowsRetry() async throws {
+    let workType = try makeWorkType(
+      id: UUID(
+        uuid: (0x8f, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1)
+      ),
+      name: "Lectures"
+    )
+    let shift = try Shift(id: shiftID, workTypeID: workType.id, start: start, end: end)
+    var outcomes: [Result<Void, EditShiftDeleteFailure>] = [
+      .failure(.generic),
+      .success(())
+    ]
+    var deletedIDs: [UUID] = []
+    let viewController = EditShiftViewController(
+      viewModel: EditShiftViewModel(
+        timeZoneIdentifier: "UTC",
+        workTypes: [workType],
+        shift: shift,
+        saveShift: { _ in .success(()) },
+        deleteShift: { _ in outcomes.removeFirst() }
+      )
+    )
+    viewController.onDeleted = { deletedIDs.append($0) }
+    let animationsWereEnabled = UIView.areAnimationsEnabled
+    UIView.setAnimationsEnabled(false)
+    let window = makeVisibleWindow(root: viewController)
+    defer {
+      UIView.setAnimationsEnabled(animationsWereEnabled)
+      hide(window)
+    }
+
+    let deleteButton: UIButton = try requireView("editShift.delete", in: viewController.view)
+    deleteButton.sendActions(for: .touchUpInside)
+    try await waitUntil { viewController.presentedViewController is UIAlertController }
+    viewController.performConfirmedDelete()
+    try await waitUntil {
+      (viewController.presentedViewController as? UIAlertController)?.title
+        == EditShiftStrings.deleteErrorTitle
+    }
+    let errorAlert = try #require(
+      viewController.presentedViewController as? UIAlertController
+    )
+    #expect(errorAlert.message == EditShiftStrings.deleteErrorMessage)
+    #expect(errorAlert.actions.count == 1)
+    #expect(errorAlert.actions.first?.title == EditShiftStrings.alertOK)
+    #expect(deleteButton.isEnabled)
+    #expect(deletedIDs.isEmpty)
+
+    await dismissPresentedViewController(from: viewController)
+    deleteButton.sendActions(for: .touchUpInside)
+    try await waitUntil { viewController.presentedViewController is UIAlertController }
+    viewController.performConfirmedDelete()
+    try await waitUntil { deletedIDs == [shiftID] }
+    #expect(deletedIDs == [shiftID])
+  }
+
   @Test("Failure показывает точный alert и оставляет форму доступной для retry")
   func failureAlertPreservesForm() async throws {
     let workType = try makeWorkType(
@@ -487,7 +643,8 @@ struct EditShiftViewControllerTests {
       timeZoneIdentifier: "UTC",
       workTypes: [workType],
       shift: shift,
-      saveShift: { _ in outcome }
+      saveShift: { _ in outcome },
+      deleteShift: { _ in .success(()) }
     )
     let viewController = EditShiftViewController(viewModel: viewModel)
 
