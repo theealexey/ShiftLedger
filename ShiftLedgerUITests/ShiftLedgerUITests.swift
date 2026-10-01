@@ -222,15 +222,18 @@ final class ShiftLedgerUITests: XCTestCase {
     private func completeFixedPerShiftOnboarding(
         in app: XCUIApplication
     ) throws {
-        let workTypeName = try requireElement(
-            app.textFields["jobSetup.workTypeName"],
-            message: "Work Type name field must exist"
+        attachScreenshot(named: "00-onboarding-initial", from: app)
+
+        let workTypeName = try scrollToHittable(
+            requerying: {
+                app.textFields["jobSetup.workTypeName"]
+            },
+            in: app,
+            direction: .towardBottom,
+            message: "Work Type name field must be reachable"
         )
 
-        _ = try requireHittable(
-            workTypeName,
-            message: "Work Type name field must be hittable"
-        )
+        attachScreenshot(named: "00-onboarding-work-type-reachable", from: app)
 
         workTypeName.tap()
         workTypeName.typeText("Runtime shift")
@@ -389,14 +392,13 @@ final class ShiftLedgerUITests: XCTestCase {
         end: ShiftTime,
         in app: XCUIApplication
     ) throws {
-        let addShift = try requireElement(
-            app.buttons["overview.addShift"],
-            message: "Overview Add Shift must exist"
-        )
-
-        _ = try requireHittable(
-            addShift,
-            message: "Overview Add Shift must be hittable"
+        let addShift = try scrollToHittable(
+            requerying: {
+                app.buttons["overview.addShift"]
+            },
+            in: app,
+            direction: .towardBottom,
+            message: "Overview Add Shift must be reachable"
         )
 
         addShift.tap()
@@ -406,9 +408,13 @@ final class ShiftLedgerUITests: XCTestCase {
             message: "Add Shift screen must appear"
         )
 
-        let startRow = try requireElement(
-            app.buttons["addShift.start"],
-            message: "Add Shift Start row must exist"
+        let startRow = try scrollToHittable(
+            requerying: {
+                app.buttons["addShift.start"]
+            },
+            in: app,
+            direction: .towardBottom,
+            message: "Add Shift Start row must be reachable"
         )
 
         try select(
@@ -417,9 +423,13 @@ final class ShiftLedgerUITests: XCTestCase {
             in: app
         )
 
-        let endRow = try requireElement(
-            app.buttons["addShift.end"],
-            message: "Add Shift End row must exist"
+        let endRow = try scrollToHittable(
+            requerying: {
+                app.buttons["addShift.end"]
+            },
+            in: app,
+            direction: .towardBottom,
+            message: "Add Shift End row must be reachable"
         )
 
         try select(
@@ -449,14 +459,13 @@ final class ShiftLedgerUITests: XCTestCase {
     private func verifyPaycheckResult(
         in app: XCUIApplication
     ) throws {
-        let checkPaycheck = try requireElement(
-            app.buttons["overview.checkPaycheck"],
-            message: "Check Paycheck must exist"
-        )
-
-        _ = try requireHittable(
-            checkPaycheck,
-            message: "Check Paycheck must be hittable"
+        let checkPaycheck = try scrollToHittable(
+            requerying: {
+                app.buttons["overview.checkPaycheck"]
+            },
+            in: app,
+            direction: .towardBottom,
+            message: "Check Paycheck must be reachable"
         )
 
         checkPaycheck.tap()
@@ -466,26 +475,24 @@ final class ShiftLedgerUITests: XCTestCase {
             message: "Actual Gross screen must appear"
         )
 
-        let amount = try requireElement(
-            app.textFields["actualGrossEntry.amount.input"],
-            message: "Actual Gross input must exist"
-        )
-
-        _ = try requireHittable(
-            amount,
-            message: "Actual Gross input must be hittable"
+        let amount = try scrollToHittable(
+            requerying: {
+                app.textFields["actualGrossEntry.amount.input"]
+            },
+            in: app,
+            direction: .towardBottom,
+            message: "Actual Gross input must be reachable"
         )
 
         amount.tap()
         amount.typeText("2.010")
 
-        let compare = try requireElement(
-            app.buttons["actualGrossEntry.compare"],
-            message: "Compare must exist"
-        )
-
-        _ = try requireHittable(
-            compare,
+        let compare = try scrollToHittable(
+            requerying: {
+                app.buttons["actualGrossEntry.compare"]
+            },
+            in: app,
+            direction: .towardBottom,
             message:
                 "Compare must remain reachable while decimal keyboard is visible"
         )
@@ -602,9 +609,13 @@ final class ShiftLedgerUITests: XCTestCase {
             in: app
         )
 
-        let startRow = try requireElement(
-            app.buttons["editShift.start"],
-            message: "Edit Shift Start row must exist"
+        let startRow = try scrollToHittable(
+            requerying: {
+                app.buttons["editShift.start"]
+            },
+            in: app,
+            direction: .towardBottom,
+            message: "Edit Shift Start row must be reachable"
         )
 
         try select(
@@ -613,9 +624,13 @@ final class ShiftLedgerUITests: XCTestCase {
             in: app
         )
 
-        let endRow = try requireElement(
-            app.buttons["editShift.end"],
-            message: "Edit Shift End row must exist"
+        let endRow = try scrollToHittable(
+            requerying: {
+                app.buttons["editShift.end"]
+            },
+            in: app,
+            direction: .towardBottom,
+            message: "Edit Shift End row must be reachable"
         )
 
         try select(
@@ -653,14 +668,13 @@ final class ShiftLedgerUITests: XCTestCase {
             in: app
         )
 
-        let delete = try requireElement(
-            app.buttons["editShift.delete"],
-            message: "Delete Shift must exist"
-        )
-
-        _ = try requireHittable(
-            delete,
-            message: "Delete Shift must be hittable"
+        let delete = try scrollToHittable(
+            requerying: {
+                app.buttons["editShift.delete"]
+            },
+            in: app,
+            direction: .towardBottom,
+            message: "Delete Shift must be reachable"
         )
 
         delete.tap()
@@ -677,14 +691,13 @@ final class ShiftLedgerUITests: XCTestCase {
             message: "Cancel must keep Edit Shift open"
         )
 
-        let deleteAgain = try requireElement(
-            app.buttons["editShift.delete"],
-            message: "Delete must remain after cancellation"
-        )
-
-        _ = try requireHittable(
-            deleteAgain,
-            message: "Delete must remain hittable after cancellation"
+        let deleteAgain = try scrollToHittable(
+            requerying: {
+                app.buttons["editShift.delete"]
+            },
+            in: app,
+            direction: .towardBottom,
+            message: "Delete must remain reachable after cancellation"
         )
 
         deleteAgain.tap()
@@ -838,9 +851,13 @@ final class ShiftLedgerUITests: XCTestCase {
         forCardIdentifier cardIdentifier: String,
         in app: XCUIApplication
     ) throws {
-        let card = try requireElement(
-            app.buttons[cardIdentifier],
-            message: "Shift card \(cardIdentifier) must exist"
+        let card = try scrollToHittable(
+            requerying: {
+                app.buttons[cardIdentifier]
+            },
+            in: app,
+            direction: .towardTop,
+            message: "Shift card \(cardIdentifier) must be reachable"
         )
 
         if String(describing: card.value).contains("Expanded") == false {
@@ -875,9 +892,13 @@ final class ShiftLedgerUITests: XCTestCase {
             message: "Shift card \(cardIdentifier) must remain Expanded"
         )
 
-        let checkPaycheck = try requireElement(
-            app.buttons["overview.checkPaycheck"],
-            message: "Check Paycheck must exist below the expanded Shift card"
+        let checkPaycheck = try scrollToHittable(
+            requerying: {
+                app.buttons["overview.checkPaycheck"]
+            },
+            in: app,
+            direction: .towardBottom,
+            message: "Check Paycheck must be reachable below the expanded Shift card"
         )
 
         let cardValueBeforeTap = String(describing: expandedCard.value)
@@ -1033,6 +1054,47 @@ final class ShiftLedgerUITests: XCTestCase {
             element,
             message: message
         )
+    }
+
+    @MainActor
+    private func scrollToHittable(
+        requerying query: () -> XCUIElement,
+        in app: XCUIApplication,
+        direction: ScrollDirection,
+        message: String
+    ) throws -> XCUIElement {
+        var element = try requireElement(query(), message: message)
+
+        if element.isHittable {
+            return element
+        }
+
+        let scrollView = app.scrollViews.firstMatch
+
+        for _ in 0 ..< 6 {
+            switch direction {
+            case .towardTop:
+                if scrollView.exists {
+                    scrollView.swipeDown()
+                } else {
+                    app.swipeDown()
+                }
+
+            case .towardBottom:
+                if scrollView.exists {
+                    scrollView.swipeUp()
+                } else {
+                    app.swipeUp()
+                }
+            }
+
+            element = try requireElement(query(), message: message)
+            if element.isHittable {
+                return element
+            }
+        }
+
+        return try requireHittable(element, message: message)
     }
 
     // MARK: - Requirements
