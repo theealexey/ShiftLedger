@@ -20,6 +20,8 @@ enum JobWorkTypeRenameError: Error, Equatable {
 enum JobPayRateChangeError: Error, Equatable {
     case workTypeNotFound(workTypeID: UUID)
     case invalidPayRateChange(WorkTypePayRateChangeError)
+    case historicalCompensationWouldChange(workTypeID: UUID, shiftID: UUID)
+    case payRateResolutionFailed(PayRateResolutionError)
 }
 
 enum JobWorkTypeArchiveError: Error, Equatable {
@@ -175,7 +177,9 @@ struct Job: Equatable {
 
     func addingPayRate(
         _ payRate: PayRate,
-        toWorkTypeID workTypeID: UUID
+        toWorkTypeID workTypeID: UUID,
+        preservingHistoricalPayrollFor shifts: [Shift],
+        asOf: Date
     ) throws(JobPayRateChangeError) -> Job {
         guard let index = workTypes.firstIndex(where: { $0.id == workTypeID }) else {
             throw .workTypeNotFound(workTypeID: workTypeID)
@@ -188,7 +192,7 @@ struct Job: Equatable {
             throw .invalidPayRateChange(error)
         }
 
-        return Job(
+        let candidateJob = Job(
             id: id,
             metadata: ValidatedMetadata(
                 currencyCode: currencyCode,
@@ -198,6 +202,26 @@ struct Job: Equatable {
             workTypes: updatedWorkTypes,
             createdAt: createdAt
         )
+
+        let protectedShifts = shifts.filter {
+            $0.workTypeID == workTypeID && $0.start <= asOf
+        }.sorted(by: Self.isShiftOrderedBefore)
+
+        for shift in protectedShifts {
+            let currentRate: PayRate
+            let candidateRate: PayRate
+            do {
+                currentRate = try applicablePayRate(for: shift)
+                candidateRate = try candidateJob.applicablePayRate(for: shift)
+            } catch {
+                throw .payRateResolutionFailed(error)
+            }
+            guard currentRate.amount == candidateRate.amount else {
+                throw .historicalCompensationWouldChange(workTypeID: workTypeID, shiftID: shift.id)
+            }
+        }
+
+        return candidateJob
     }
 
     func archivingWorkType(

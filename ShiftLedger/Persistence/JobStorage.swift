@@ -37,6 +37,9 @@ enum JobStorageError: Error {
     case workTypeAlreadyArchived(workTypeID: UUID)
     case invalidWorkTypeName(underlying: WorkTypeNameValidationError)
     case invalidPayRateChange(underlying: WorkTypePayRateChangeError)
+    case historicalCompensationWouldChange(workTypeID: UUID, shiftID: UUID)
+    case payRateResolutionFailed(underlying: PayRateResolutionError)
+    case shiftLoadFailed(underlying: ShiftStorageError)
     case fetchFailed(underlying: Error)
     case saveFailed(underlying: Error)
     case corruptedData(Corruption)
@@ -69,9 +72,13 @@ final class JobStorage {
     }
 
     private let context: NSManagedObjectContext
+    private let shiftStorage: ShiftStorage
+    private let now: @MainActor () -> Date
 
-    init(stack: CoreDataStack) {
+    init(stack: CoreDataStack, now: @escaping @MainActor () -> Date = Date.init) {
         context = stack.viewContext
+        shiftStorage = ShiftStorage(stack: stack)
+        self.now = now
     }
 
     func save(_ job: Job) throws {
@@ -263,15 +270,35 @@ final class JobStorage {
         }
 
         let existingJob = try makeJob(from: jobEntity)
+        let shifts: [Shift]
+        do {
+            shifts = try shiftStorage.loadAll()
+        } catch let error as ShiftStorageError {
+            throw JobStorageError.shiftLoadFailed(underlying: error)
+        } catch {
+            throw JobStorageError.fetchFailed(underlying: error)
+        }
+        let asOf = now()
         let candidateJob: Job
         do {
-            candidateJob = try existingJob.addingPayRate(payRate, toWorkTypeID: workTypeID)
+            candidateJob = try existingJob.addingPayRate(
+                payRate,
+                toWorkTypeID: workTypeID,
+                preservingHistoricalPayrollFor: shifts,
+                asOf: asOf
+            )
         } catch {
             switch error {
             case let .workTypeNotFound(id):
                 throw JobStorageError.workTypeNotFound(workTypeID: id)
             case let .invalidPayRateChange(underlying):
                 throw JobStorageError.invalidPayRateChange(underlying: underlying)
+            case let .historicalCompensationWouldChange(workTypeID, shiftID):
+                throw JobStorageError.historicalCompensationWouldChange(
+                    workTypeID: workTypeID, shiftID: shiftID
+                )
+            case let .payRateResolutionFailed(underlying):
+                throw JobStorageError.payRateResolutionFailed(underlying: underlying)
             }
         }
 

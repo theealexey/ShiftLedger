@@ -1849,6 +1849,178 @@ struct JobStorageTests {
         }
     }
 
+    @Test("Direct rate writes use fresh persisted Shifts and capture save-time now once")
+    func rejectsStartedPayrollUsingFreshSnapshotAndClock() async throws {
+        let storeURL = try makeTemporaryStoreURL()
+        var stacks: [CoreDataStack] = []
+        defer { removeTemporaryStoreDirectory(for: storeURL, stacks: stacks) }
+        let stack = try await CoreDataStack.load(storeURL: storeURL)
+        stacks.append(stack)
+        let shift = try rateProtectionShift(day: 10)
+        var currentTime = shift.start.addingTimeInterval(-1)
+        var clockCalls = 0
+        let storage = JobStorage(stack: stack, now: {
+            clockCalls += 1
+            return currentTime
+        })
+        let original = try makeRenameJob()
+        try storage.save(original)
+        // The rate form/storage exists before the Shift is persisted or started.
+        #expect(try ShiftStorage(stack: stack).loadAll().isEmpty)
+        try ShiftStorage(stack: stack).save(shift)
+        currentTime = shift.start
+        let added = try PayRate(id: addedRateID, amount: 150, effectiveFrom: LocalDate(year: 2026, month: 3, day: 1))
+        let context = stack.viewContext
+        let before = storedRateStates(try context.fetch(NSFetchRequest<PayRateEntity>(entityName: "PayRateEntity")))
+        var rejected = false
+        do {
+            _ = try storage.addPayRate(added, toWorkTypeID: renameTargetID)
+            Issue.record("A direct write changed started payroll")
+        } catch JobStorageError.historicalCompensationWouldChange(let workTypeID, let shiftID) {
+            #expect(workTypeID == renameTargetID)
+            #expect(shiftID == shift.id)
+            rejected = true
+        }
+        #expect(rejected)
+        #expect(clockCalls == 1)
+        #expect(try storage.load() == original)
+        #expect(storedRateStates(try context.fetch(NSFetchRequest<PayRateEntity>(entityName: "PayRateEntity"))) == before)
+        #expect(context.hasChanges == false)
+        try close(stack)
+        let reopened = try await CoreDataStack.load(storeURL: storeURL)
+        stacks.append(reopened)
+        let restored = try #require(try JobStorage(stack: reopened).load())
+        #expect(restored == original)
+        #expect(restored.workType(id: renameTargetID)?.payRates.contains { $0.id == addedRateID } == false)
+        #expect(try ShiftStorage(stack: reopened).loadAll() == [shift])
+    }
+
+    @Test("Accepted future rate persists without changing historical payroll across SQLite reopen")
+    func futureRatePreservesPersistedHistory() async throws {
+        let storeURL = try makeTemporaryStoreURL()
+        var stacks: [CoreDataStack] = []
+        defer { removeTemporaryStoreDirectory(for: storeURL, stacks: stacks) }
+        let stack = try await CoreDataStack.load(storeURL: storeURL)
+        stacks.append(stack)
+        let original = try makeRenameJob()
+        let historical = try rateProtectionShift(day: 1)
+        let future = try rateProtectionShift(day: 10)
+        let storage = JobStorage(stack: stack, now: { historical.end })
+        try storage.save(original)
+        let shiftStorage = ShiftStorage(stack: stack)
+        try shiftStorage.save(historical)
+        try shiftStorage.save(future)
+        let added = try PayRate(id: addedRateID, amount: 150, effectiveFrom: LocalDate(year: 2026, month: 3, day: 5))
+        let updated = try storage.addPayRate(added, toWorkTypeID: renameTargetID)
+        #expect(try updated.applicablePayRate(for: historical).amount == 125)
+        #expect(try updated.applicablePayRate(for: future).amount == 150)
+        #expect(try updated.basePay(for: historical) == 250)
+        #expect(try updated.basePay(for: future) == 300)
+        try close(stack)
+        let reopened = try await CoreDataStack.load(storeURL: storeURL)
+        stacks.append(reopened)
+        let restored = try #require(try JobStorage(stack: reopened).load())
+        #expect(restored == updated)
+        #expect(try ShiftStorage(stack: reopened).loadAll() == [historical, future])
+        #expect(try restored.basePay(for: historical) == 250)
+        #expect(try restored.basePay(for: future) == 300)
+    }
+
+    @Test("Same exact rate amount with a new ID is persisted for protected Shifts")
+    func persistsSameAmountNewRateIdentity() async throws {
+        let storeURL = try makeTemporaryStoreURL()
+        var stacks: [CoreDataStack] = []
+        defer { removeTemporaryStoreDirectory(for: storeURL, stacks: stacks) }
+        let stack = try await CoreDataStack.load(storeURL: storeURL)
+        stacks.append(stack)
+        let shift = try rateProtectionShift(day: 10)
+        let storage = JobStorage(stack: stack, now: { shift.end })
+        try storage.save(makeRenameJob())
+        try ShiftStorage(stack: stack).save(shift)
+        let added = try PayRate(id: addedRateID, amount: 125, effectiveFrom: LocalDate(year: 2026, month: 3, day: 1))
+        let updated = try storage.addPayRate(added, toWorkTypeID: renameTargetID)
+        #expect(try updated.applicablePayRate(for: shift) == added)
+        #expect(try updated.basePay(for: shift) == 250)
+        let rates = try stack.viewContext.fetch(NSFetchRequest<PayRateEntity>(entityName: "PayRateEntity"))
+        #expect(rates.filter { $0.id == addedRateID }.count == 1)
+        #expect(stack.viewContext.hasChanges == false)
+    }
+
+    @Test("Corrupted Shift loading fails closed before any PayRate insertion")
+    func shiftLoadFailureDoesNotInsertRate() async throws {
+        let storeURL = try makeTemporaryStoreURL()
+        var stacks: [CoreDataStack] = []
+        defer { removeTemporaryStoreDirectory(for: storeURL, stacks: stacks) }
+        let stack = try await CoreDataStack.load(storeURL: storeURL)
+        stacks.append(stack)
+        var clockCalls = 0
+        let storage = JobStorage(stack: stack, now: {
+            clockCalls += 1
+            return Date(timeIntervalSinceReferenceDate: 0)
+        })
+        let original = try makeRenameJob()
+        try storage.save(original)
+        let shift = try rateProtectionShift(day: 10)
+        try ShiftStorage(stack: stack).save(shift)
+        let context = stack.viewContext
+        let entity = try #require(try context.fetch(NSFetchRequest<ShiftEntity>(entityName: "ShiftEntity")).first)
+        entity.workType = nil
+        try context.save()
+        let before = storedRateStates(try context.fetch(NSFetchRequest<PayRateEntity>(entityName: "PayRateEntity")))
+        let added = try PayRate(id: addedRateID, amount: 150, effectiveFrom: LocalDate(year: 2026, month: 3, day: 1))
+        var rejected = false
+        do {
+            _ = try storage.addPayRate(added, toWorkTypeID: renameTargetID)
+            Issue.record("A rate was saved without a valid persisted Shift snapshot")
+        } catch JobStorageError.shiftLoadFailed(underlying: .corruptedData(.missingShiftWorkType(let shiftID))) {
+            #expect(shiftID == shift.id)
+            rejected = true
+        }
+        #expect(rejected)
+        #expect(clockCalls == 0)
+        #expect(try storage.load() == original)
+        #expect(storedRateStates(try context.fetch(NSFetchRequest<PayRateEntity>(entityName: "PayRateEntity"))) == before)
+        #expect(context.hasChanges == false)
+    }
+
+    @Test("A real read-only SQLite save failure rolls back the accepted candidate")
+    func acceptedRateSaveFailureRollsBack() async throws {
+        let storeURL = try makeTemporaryStoreURL()
+        var stacks: [CoreDataStack] = []
+        defer { removeTemporaryStoreDirectory(for: storeURL, stacks: stacks) }
+        let stack = try await CoreDataStack.load(storeURL: storeURL)
+        stacks.append(stack)
+        let original = try makeRenameJob()
+        try JobStorage(stack: stack).save(original)
+        try close(stack)
+        let context = stack.viewContext
+        let coordinator = try #require(context.persistentStoreCoordinator)
+        _ = try coordinator.addPersistentStore(
+            ofType: NSSQLiteStoreType, configurationName: nil, at: storeURL,
+            options: [NSReadOnlyPersistentStoreOption: true]
+        )
+        let storage = JobStorage(stack: stack, now: { Date(timeIntervalSinceReferenceDate: 0) })
+        let before = storedRateStates(try context.fetch(NSFetchRequest<PayRateEntity>(entityName: "PayRateEntity")))
+        let added = try PayRate(id: addedRateID, amount: 150, effectiveFrom: LocalDate(year: 2026, month: 3, day: 1))
+        var rejected = false
+        do {
+            _ = try storage.addPayRate(added, toWorkTypeID: renameTargetID)
+            Issue.record("A read-only store accepted a write")
+        } catch JobStorageError.saveFailed {
+            rejected = true
+        }
+        #expect(rejected)
+        #expect(context.hasChanges == false)
+        #expect(try storage.load() == original)
+        #expect(storedRateStates(try context.fetch(NSFetchRequest<PayRateEntity>(entityName: "PayRateEntity"))) == before)
+    }
+
+    private func rateProtectionShift(day: Int) throws -> Shift {
+        let zone = try #require(TimeZone(identifier: "Europe/Stockholm"))
+        let start = try LocalDate(year: 2026, month: 3, day: day).startOfDay(in: zone).addingTimeInterval(9 * 3_600)
+        return try Shift(workTypeID: renameTargetID, start: start, end: start.addingTimeInterval(2 * 3_600))
+    }
+
     private func makeRenameJob() throws -> Job {
         let target = WorkType(
             id: renameTargetID,

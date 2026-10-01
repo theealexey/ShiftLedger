@@ -20,5 +20,8 @@ enum ChangePayRateStrings {
     }
     static var errorTitle: String { String(localized: "changePayRate.error.title", table: "Localizable") }
     static var errorMessage: String { String(localized: "changePayRate.error.message", table: "Localizable") }
+    static var historicalPayrollMessage: String {
+        String(localized: "changePayRate.error.historicalPayroll", table: "Localizable")
+    }
     static var ok: String { String(localized: "common.ok", table: "Localizable") }
 }

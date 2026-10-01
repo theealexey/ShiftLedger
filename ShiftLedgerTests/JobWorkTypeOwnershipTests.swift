@@ -81,7 +81,10 @@ struct JobWorkTypeOwnershipTests {
             effectiveFrom: LocalDate(year: 2001, month: 1, day: 2)
         )
 
-        let updated = try original.addingPayRate(added, toWorkTypeID: examID)
+        let updated = try original.addingPayRate(
+            added, toWorkTypeID: examID,
+            preservingHistoricalPayrollFor: [], asOf: Date(timeIntervalSinceReferenceDate: 0)
+        )
 
         #expect(updated.id == original.id)
         #expect(updated.currencyCode == original.currencyCode)
@@ -105,7 +108,10 @@ struct JobWorkTypeOwnershipTests {
         )
 
         #expect(throws: JobPayRateChangeError.workTypeNotFound(workTypeID: unknownWorkTypeID)) {
-            try original.addingPayRate(added, toWorkTypeID: unknownWorkTypeID)
+            try original.addingPayRate(
+                added, toWorkTypeID: unknownWorkTypeID,
+                preservingHistoricalPayrollFor: [], asOf: Date(timeIntervalSinceReferenceDate: 0)
+            )
         }
         #expect(original.workType(id: lectureID) == lecture)
         #expect(original.workType(id: examID) == exam)
@@ -425,6 +431,173 @@ struct JobWorkTypeOwnershipTests {
 
         #expect(try job.applicablePayRate(for: lectureShift) == lectureChanged)
         #expect(try job.applicablePayRate(for: examShift) == examChanged)
+    }
+
+    @Test("A different exact rate cannot rewrite started payroll", arguments: [BasePayBasis.hourly, .fixedPerShift])
+    func protectsStartedPayroll(basis: BasePayBasis) throws {
+        let workType = try makeWorkType(id: lectureID, basis: basis, amount: 20)
+        let job = try makeJob(workTypes: [workType])
+        let shift = try payrollShift(day: 10)
+        let added = try PayRate(amount: 25, effectiveFrom: LocalDate(year: 2026, month: 9, day: 1))
+        #expect(throws: JobPayRateChangeError.historicalCompensationWouldChange(
+            workTypeID: lectureID, shiftID: shift.id
+        )) {
+            try job.addingPayRate(
+                added, toWorkTypeID: lectureID,
+                preservingHistoricalPayrollFor: [shift], asOf: shift.end
+            )
+        }
+        #expect(job.workType(id: lectureID)?.payRates == workType.payRates)
+        #expect(try job.applicablePayRate(for: shift).amount == 20)
+    }
+
+    @Test("Same-day earlier, exact-start and unfinished Shifts are protected", arguments: [0.0, 3_600.0, 25_200.0])
+    func protectsInclusiveStartBoundary(elapsed: TimeInterval) throws {
+        let job = try makeJob(workTypes: [makeWorkType(id: lectureID, basis: .hourly, amount: 20)])
+        let shift = try payrollShift(day: 10, hour: 8)
+        let added = try PayRate(amount: 25, effectiveFrom: LocalDate(year: 2026, month: 9, day: 10))
+        #expect(throws: JobPayRateChangeError.historicalCompensationWouldChange(
+            workTypeID: lectureID, shiftID: shift.id
+        )) {
+            try job.addingPayRate(
+                added, toWorkTypeID: lectureID,
+                preservingHistoricalPayrollFor: [shift], asOf: shift.start.addingTimeInterval(elapsed)
+            )
+        }
+    }
+
+    @Test("Only future same-day Shifts do not block a dated rate")
+    func permitsFutureSameDayRate() throws {
+        let job = try makeJob(workTypes: [makeWorkType(id: lectureID, basis: .hourly, amount: 20)])
+        let shift = try payrollShift(day: 10, hour: 18)
+        let added = try PayRate(amount: 25, effectiveFrom: LocalDate(year: 2026, month: 9, day: 10))
+        let updated = try job.addingPayRate(
+            added, toWorkTypeID: lectureID,
+            preservingHistoricalPayrollFor: [shift], asOf: shift.start.addingTimeInterval(-3 * 3_600)
+        )
+        #expect(try updated.applicablePayRate(for: shift).amount == 25)
+    }
+
+    @Test("A backdated gap insertion stops at the next existing effective date")
+    func permitsUnaffectedHistoricalGap() throws {
+        let initial = try PayRate(amount: 20, effectiveFrom: nil)
+        let first = try PayRate(amount: 30, effectiveFrom: LocalDate(year: 2026, month: 9, day: 5))
+        let next = try PayRate(amount: 40, effectiveFrom: LocalDate(year: 2026, month: 9, day: 15))
+        let workType = WorkType(
+            id: lectureID, basePayBasis: .hourly,
+            payRateHistory: try PayRateHistory(payRates: [next, initial, first])
+        )
+        let job = try makeJob(workTypes: [workType])
+        let before = try payrollShift(day: 9)
+        let atNext = try payrollShift(day: 15)
+        let added = try PayRate(amount: 35, effectiveFrom: LocalDate(year: 2026, month: 9, day: 10))
+        let updated = try job.addingPayRate(
+            added, toWorkTypeID: lectureID,
+            preservingHistoricalPayrollFor: [atNext, before], asOf: atNext.end
+        )
+        #expect(try updated.applicablePayRate(for: before) == first)
+        #expect(try updated.applicablePayRate(for: atNext) == next)
+        let inside = try payrollShift(day: 14)
+        #expect(throws: JobPayRateChangeError.historicalCompensationWouldChange(
+            workTypeID: lectureID, shiftID: inside.id
+        )) {
+            try job.addingPayRate(
+                added, toWorkTypeID: lectureID,
+                preservingHistoricalPayrollFor: [atNext, before, inside], asOf: atNext.end
+            )
+        }
+    }
+
+    @Test("Equal exact amounts allow a new identity without rounding", arguments: [BasePayBasis.hourly, .fixedPerShift])
+    func permitsSameAmountNewIdentity(basis: BasePayBasis) throws {
+        let amount = try #require(Decimal(string: "20.0004"))
+        let job = try makeJob(workTypes: [makeWorkType(id: lectureID, basis: basis, amount: amount)])
+        let shift = try payrollShift(day: 10)
+        let previous = try job.applicablePayRate(for: shift)
+        let added = try PayRate(amount: amount, effectiveFrom: LocalDate(year: 2026, month: 9, day: 1))
+        let updated = try job.addingPayRate(
+            added, toWorkTypeID: lectureID,
+            preservingHistoricalPayrollFor: [shift], asOf: shift.end
+        )
+        #expect(added.id != previous.id)
+        #expect(try updated.applicablePayRate(for: shift).id == added.id)
+        #expect(try updated.applicablePayRate(for: shift).amount == amount)
+        #expect(try updated.basePay(for: shift) == job.basePay(for: shift))
+        let different = try PayRate(amount: 20, effectiveFrom: added.effectiveFrom)
+        #expect(throws: JobPayRateChangeError.historicalCompensationWouldChange(
+            workTypeID: lectureID, shiftID: shift.id
+        )) {
+            try job.addingPayRate(
+                different, toWorkTypeID: lectureID,
+                preservingHistoricalPayrollFor: [shift], asOf: shift.end
+            )
+        }
+    }
+
+    @Test("Protected Shifts assigned to another WorkType do not block a rate")
+    func isolatesProtectedWorkType() throws {
+        let job = try makeMultiWorkTypeJob()
+        let otherShift = try payrollShift(day: 10, workTypeID: examID)
+        let added = try PayRate(amount: 25, effectiveFrom: LocalDate(year: 2026, month: 9, day: 1))
+        let updated = try job.addingPayRate(
+            added, toWorkTypeID: lectureID,
+            preservingHistoricalPayrollFor: [otherShift], asOf: otherShift.end
+        )
+        #expect(try updated.applicablePayRate(for: otherShift).amount == 500)
+        #expect(updated.workType(id: examID) == job.workType(id: examID))
+    }
+
+    @Test("Conflict identity is ordered by start, then end, then UUID", arguments: [0, 1, 2])
+    func reportsDeterministicConflict(orderingDimension: Int) throws {
+        let job = try makeJob(workTypes: [makeWorkType(id: lectureID, basis: .hourly, amount: 20)])
+        let start = try payrollShift(day: 10).start
+        // For start/end ordering, deliberately put the earlier Shift's UUID last.
+        let firstID = orderingDimension == 2 ? lectureID : examID
+        let secondID = orderingDimension == 2 ? examID : lectureID
+        let first = try Shift(id: firstID, workTypeID: lectureID, start: start, end: start.addingTimeInterval(3_600))
+        let secondStart = start.addingTimeInterval(orderingDimension == 0 ? 1 : 0)
+        let secondEnd = start.addingTimeInterval(orderingDimension == 1 ? 7_200 : 3_600)
+        let second = try Shift(id: secondID, workTypeID: lectureID, start: secondStart, end: secondEnd)
+        let added = try PayRate(amount: 25, effectiveFrom: LocalDate(year: 2026, month: 9, day: 1))
+        #expect(throws: JobPayRateChangeError.historicalCompensationWouldChange(
+            workTypeID: lectureID, shiftID: first.id
+        )) {
+            try job.addingPayRate(
+                added, toWorkTypeID: lectureID,
+                preservingHistoricalPayrollFor: [second, first], asOf: second.end
+            )
+        }
+    }
+
+    @Test("DST overnight protection uses absolute start and Job-local rate date")
+    func protectsDSTOvernightShift() throws {
+        let job = try makeJob(workTypes: [makeWorkType(id: lectureID, basis: .hourly, amount: 20)])
+        let zone = try #require(TimeZone(identifier: job.timeZoneIdentifier))
+        let start = try LocalDate(year: 2026, month: 10, day: 24).startOfDay(in: zone).addingTimeInterval(23 * 3_600)
+        let end = try LocalDate(year: 2026, month: 10, day: 25).startOfDay(in: zone).addingTimeInterval(4 * 3_600)
+        let shift = try Shift(workTypeID: lectureID, start: start, end: end)
+        let nextDayRate = try PayRate(amount: 25, effectiveFrom: LocalDate(year: 2026, month: 10, day: 25))
+        let updated = try job.addingPayRate(
+            nextDayRate, toWorkTypeID: lectureID,
+            preservingHistoricalPayrollFor: [shift], asOf: end
+        )
+        #expect(try updated.applicablePayRate(for: shift).amount == 20)
+        let startDayRate = try PayRate(amount: 25, effectiveFrom: LocalDate(year: 2026, month: 10, day: 24))
+        #expect(throws: JobPayRateChangeError.historicalCompensationWouldChange(
+            workTypeID: lectureID, shiftID: shift.id
+        )) {
+            try job.addingPayRate(
+                startDayRate, toWorkTypeID: lectureID,
+                preservingHistoricalPayrollFor: [shift], asOf: start
+            )
+        }
+    }
+
+    private func payrollShift(day: Int, hour: Int = 8, workTypeID: UUID? = nil) throws -> Shift {
+        let zone = try #require(TimeZone(identifier: "Europe/Stockholm"))
+        let start = try LocalDate(year: 2026, month: 9, day: day).startOfDay(in: zone)
+            .addingTimeInterval(TimeInterval(hour) * 3_600)
+        return try Shift(workTypeID: workTypeID ?? lectureID, start: start, end: start.addingTimeInterval(4 * 3_600))
     }
 
     private func makeJob(workTypes: [WorkType]) throws -> Job {

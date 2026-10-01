@@ -2,6 +2,7 @@ import Foundation
 
 enum ChangePayRateSaveFailure: Error, Equatable {
     case persistence
+    case historicalPayrollChange
 }
 
 enum ChangePayRateSaveResult: Equatable {

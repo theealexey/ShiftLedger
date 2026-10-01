@@ -128,6 +128,41 @@ struct ChangePayRateViewControllerTests {
         #expect(calls == 2)
     }
 
+    @Test("Historical rejection explains the conflict without success navigation or losing input")
+    func historicalRejectionPreservesScreenAndInput() throws {
+        let zone = try #require(TimeZone(identifier: "Europe/Stockholm"))
+        let date = try LocalDate(year: 2026, month: 5, day: 3).startOfDay(in: zone)
+        let model = ChangePayRateViewModel(
+            workType: try makeWorkType(basis: .hourly), currencyCode: "EUR",
+            timeZoneIdentifier: zone.identifier, initialEffectiveDate: date,
+            savePayRate: { _, _ in .failure(.historicalPayrollChange) }
+        )
+        let controller = ChangePayRateViewController(viewModel: model)
+        var saved: [Job] = []
+        controller.onSaved = { saved.append($0) }
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+        window.rootViewController = controller
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true }
+        let amount: UITextField = try requireView("changePayRate.amount", in: controller.view)
+        let picker: UIDatePicker = try requireView("changePayRate.effectiveDate", in: controller.view)
+        amount.text = "55"
+        amount.sendActions(for: .editingChanged)
+        let save = try #require(controller.navigationItem.rightBarButtonItem)
+        try tap(save)
+        let alert = try #require(controller.presentedViewController as? UIAlertController)
+        #expect(alert.title == ChangePayRateStrings.errorTitle)
+        #expect(alert.message == ChangePayRateStrings.historicalPayrollMessage)
+        #expect(alert.message != ChangePayRateStrings.errorMessage)
+        #expect(alert.actions.map(\.title) == [ChangePayRateStrings.ok])
+        #expect(saved.isEmpty)
+        #expect(window.rootViewController === controller)
+        #expect(amount.text == "55")
+        #expect(picker.date == date)
+        #expect(model.isSaving == false)
+        #expect(save.isEnabled)
+    }
+
     @Test("Accessibility-sized form remains scrollable with reachable controls")
     func accessibilityLayout() throws {
         let controller = makeController(

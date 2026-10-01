@@ -1381,6 +1381,13 @@
         "ru" : { "stringUnit" : { "state" : "translated", "value" : "Изменения не сохранены. Попробуйте ещё раз." } }
       }
     },
+    "changePayRate.error.historicalPayroll" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "This rate can’t be saved because it would change pay for a shift that has already started." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Эту ставку нельзя сохранить: она изменит оплату смены, которая уже началась." } }
+      }
+    },
     "renameWorkType.title" : {
       "extractionState" : "manual",
       "localizations" : {

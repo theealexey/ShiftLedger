@@ -262,6 +262,46 @@ struct ExpectedGrossBreakdownTests {
         }
     }
 
+    @Test("Accepted future rates preserve historical breakdowns and update future payroll", arguments: [
+        (BasePayBasis.hourly, Decimal(160), Decimal(200)),
+        (.fixedPerShift, Decimal(20), Decimal(25))
+    ])
+    func resolvesFutureRatesWithoutRewritingHistory(
+        basis: BasePayBasis, historicalAmount: Decimal, futureAmount: Decimal
+    ) throws {
+        let initial = try PayRate(amount: 20, effectiveFrom: nil)
+        let original = try makeJob(basePayBasis: basis, payRates: [initial])
+        let historical = try makeShift(day: 1)
+        let future = try makeShift(day: 10)
+        let added = try PayRate(amount: 25, effectiveFrom: LocalDate(year: 2026, month: 9, day: 5))
+        let updated = try original.addingPayRate(
+            added, toWorkTypeID: testWorkTypeID,
+            preservingHistoricalPayrollFor: [future, historical], asOf: historical.end
+        )
+        let breakdown = try updated.expectedGrossBreakdown(for: septemberPeriod(), from: [future, historical])
+        #expect(breakdown.shiftBreakdowns.map(\.appliedPayRate) == [initial, added])
+        #expect(breakdown.shiftBreakdowns.map(\.basePay) == [historicalAmount, futureAmount])
+        #expect(breakdown.expectedGross == historicalAmount + futureAmount)
+        #expect(try original.basePay(for: historical) == historicalAmount)
+        #expect(try updated.basePay(for: historical) == historicalAmount)
+    }
+
+    @Test("Protection resolves Job-local start, not the UTC date")
+    func protectsJobLocalStartDate() throws {
+        let original = try makeJob(payRates: [PayRate(amount: 20, effectiveFrom: nil)])
+        let start = try date(day: 9, hour: 23, timeZoneIdentifier: "UTC")
+        let shift = try Shift(workTypeID: testWorkTypeID, start: start, end: start.addingTimeInterval(hour))
+        let added = try PayRate(amount: 25, effectiveFrom: LocalDate(year: 2026, month: 9, day: 10))
+        #expect(throws: JobPayRateChangeError.historicalCompensationWouldChange(
+            workTypeID: testWorkTypeID, shiftID: shift.id
+        )) {
+            try original.addingPayRate(
+                added, toWorkTypeID: testWorkTypeID,
+                preservingHistoricalPayrollFor: [shift], asOf: shift.start
+            )
+        }
+    }
+
     private func makeJob(
         basePayBasis: BasePayBasis = .hourly,
         timeZoneIdentifier: String = "Europe/Stockholm",

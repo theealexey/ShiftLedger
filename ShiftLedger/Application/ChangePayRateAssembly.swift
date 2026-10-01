@@ -15,6 +15,8 @@ enum ChangePayRateAssembly {
         ) { workTypeID, payRate in
             do {
                 return .success(try storage.addPayRate(payRate, toWorkTypeID: workTypeID))
+            } catch JobStorageError.historicalCompensationWouldChange {
+                return .failure(.historicalPayrollChange)
             } catch {
                 return .failure(.persistence)
             }

@@ -60,19 +60,26 @@ final class ChangePayRateViewController: UIViewController {
         switch viewModel.save() {
         case let .saved(job):
             onSaved?(job)
-        case .failed:
-            presentSaveError()
+        case let .failed(failure):
+            presentSaveError(failure)
         case .invalid, .ignored:
             break
         }
         render()
     }
 
-    private func presentSaveError() {
+    private func presentSaveError(_ failure: ChangePayRateSaveFailure) {
         guard presentedViewController == nil else { return }
+        let message: String
+        switch failure {
+        case .historicalPayrollChange:
+            message = ChangePayRateStrings.historicalPayrollMessage
+        case .persistence:
+            message = ChangePayRateStrings.errorMessage
+        }
         let alert = UIAlertController(
             title: ChangePayRateStrings.errorTitle,
-            message: ChangePayRateStrings.errorMessage,
+            message: message,
             preferredStyle: .alert
         )
         alert.addAction(UIAlertAction(title: ChangePayRateStrings.ok, style: .default))

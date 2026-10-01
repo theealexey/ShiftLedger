@@ -119,6 +119,36 @@ struct ChangePayRateViewModelTests {
         #expect(calls == 2)
     }
 
+    @Test("Historical rejection preserves input, clears saving and allows a corrected retry")
+    func historicalRejectionAndRetry() throws {
+        let zone = try #require(TimeZone(identifier: "Europe/Stockholm"))
+        let date = try LocalDate(year: 2026, month: 7, day: 3).startOfDay(in: zone)
+        let safeDate = try LocalDate(year: 2026, month: 7, day: 4).startOfDay(in: zone)
+        let workType = try makeWorkType()
+        let acceptedRate = try PayRate(id: newRateID, amount: 55, effectiveFrom: LocalDate(date: safeDate, in: zone))
+        let updatedJob = try makeJob(workType: workType.addingPayRate(acceptedRate))
+        var received: [PayRate] = []
+        let model = ChangePayRateViewModel(
+            workType: workType, currencyCode: "EUR", timeZoneIdentifier: zone.identifier,
+            initialEffectiveDate: date, makePayRateID: { newRateID },
+            savePayRate: { _, rate in
+                received.append(rate)
+                return received.count == 1 ? .failure(.historicalPayrollChange) : .success(updatedJob)
+            }
+        )
+        model.updateAmountText("55")
+        #expect(model.canSave)
+        #expect(model.save() == .failed(.historicalPayrollChange))
+        #expect(model.amountText == "55")
+        #expect(model.effectiveDate == date)
+        #expect(model.isSaving == false)
+        #expect(model.canSave)
+        model.updateEffectiveDate(safeDate)
+        #expect(model.save() == .saved(updatedJob))
+        #expect(received.count == 2)
+        #expect(received.last == acceptedRate)
+    }
+
     private func makeWorkType(dated: LocalDate? = nil) throws -> WorkType {
         var rates = [try PayRate(amount: 10, effectiveFrom: nil)]
         if let dated {

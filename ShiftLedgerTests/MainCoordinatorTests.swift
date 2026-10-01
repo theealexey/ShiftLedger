@@ -194,7 +194,10 @@ struct MainCoordinatorTests {
             amount: 175,
             effectiveFrom: LocalDate(year: 2026, month: 9, day: 1)
         )
-        let updated = try harness.job.addingPayRate(added, toWorkTypeID: selected.id)
+        let updated = try harness.job.addingPayRate(
+            added, toWorkTypeID: selected.id,
+            preservingHistoricalPayrollFor: [], asOf: Date(timeIntervalSinceReferenceDate: 0)
+        )
         saving.onSaved?(updated)
         #expect(harness.navigationController.topViewController === workTypes)
         #expect(harness.navigationController.viewControllers.count == 2)
