@@ -87,7 +87,10 @@ final class OverviewShiftStackView: UIView {
         NSLayoutConstraint.deactivate(activeLayoutConstraints)
         activeLayoutConstraints.removeAll()
 
-        guard cards.isEmpty == false else { return }
+        guard cards.isEmpty == false else {
+            accessibilityElements = []
+            return
+        }
         let views = cards.compactMap { cardViews[$0.id] }
         guard views.count == cards.count else { return }
         guard let frontCard = cards.first(where: \.isSelected) ?? cards.first else {

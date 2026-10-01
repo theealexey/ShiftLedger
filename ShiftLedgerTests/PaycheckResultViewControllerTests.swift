@@ -31,32 +31,42 @@ struct PaycheckResultViewControllerTests {
 
     @Test("Reported gross renders from ActualGross")
     func actualGrossRenders() throws {
-        let comparison = try makeComparison(expected: 160, actual: 150)
+        let comparison = try realDomainComparison()
         let viewController = try makeViewController(comparison)
         viewController.loadViewIfNeeded()
+        let model = PaycheckResultFormatting.renderModel(
+            comparison: comparison,
+            currencyCode: "EUR",
+            timeZoneIdentifier: "Europe/Stockholm",
+            workTypes: [try workType()],
+            locale: locale
+        )
 
         let label: UILabel = try requireView(
             identifier: "paycheckResult.actual.value",
             in: viewController.view
         )
-        #expect(label.text == PaycheckResultFormatting.currency(150, currencyCode: "EUR", locale: locale))
+        #expect(label.text == model.actual)
     }
 
     @Test("Difference renders from PaycheckComparison difference")
     func differenceRenders() throws {
-        let comparison = try makeComparison(expected: 160, actual: 150)
+        let comparison = try realDomainComparison()
         let viewController = try makeViewController(comparison)
         viewController.loadViewIfNeeded()
+        let model = PaycheckResultFormatting.renderModel(
+            comparison: comparison,
+            currencyCode: "EUR",
+            timeZoneIdentifier: "Europe/Stockholm",
+            workTypes: [try workType()],
+            locale: locale
+        )
 
         let label: UILabel = try requireView(
             identifier: "paycheckResult.difference.value",
             in: viewController.view
         )
-        #expect(label.text == PaycheckResultFormatting.difference(
-            comparison.difference,
-            currencyCode: "EUR",
-            locale: locale
-        ))
+        #expect(label.text == model.difference)
     }
 
     @Test("Negative difference renders lower explanation")

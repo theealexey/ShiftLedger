@@ -183,6 +183,7 @@ final class OverviewView: UIView, UIScrollViewDelegate {
     }
 
     func renderEmpty() {
+        renderShiftHistory([])
         applyAddShiftEmphasis(isPrimary: true)
         setVisible(
             content: false,

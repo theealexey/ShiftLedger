@@ -3,12 +3,13 @@ import Foundation
 import Testing
 
 struct CoreDataV3SchemaTests {
-    @Test("Model bundle содержит V1, V2 и current V3")
-    func modelBundleContainsAllVersionsAndCurrentIsV3() throws {
+    @Test("Model bundle содержит V1–V3 и current V5")
+    func modelBundlePreservesV1ThroughV3AndCurrentIsV5() throws {
         let packageURL = try modelPackageURL()
         let v1 = try loadModel(named: "ShiftLedger", from: packageURL)
         let v2 = try loadModel(named: "ShiftLedgerV2", from: packageURL)
         let v3 = try loadModel(named: "ShiftLedgerV3", from: packageURL)
+        let v5 = try loadModel(named: "ShiftLedgerV5", from: packageURL)
         let current = try #require(NSManagedObjectModel(contentsOf: packageURL))
 
         #expect(v1.entitiesByName["WorkTypeEntity"] == nil)
@@ -16,7 +17,7 @@ struct CoreDataV3SchemaTests {
         #expect(v2.entitiesByName["WorkTypeEntity"]?.relationshipsByName["shifts"] == nil)
         #expect(v3.entitiesByName["ShiftEntity"]?.relationshipsByName["workType"] != nil)
         #expect(v3.entitiesByName["WorkTypeEntity"]?.relationshipsByName["shifts"] != nil)
-        #expect(current.entityVersionHashesByName == v3.entityVersionHashesByName)
+        #expect(current.entityVersionHashesByName == v5.entityVersionHashesByName)
     }
 
     @Test("V3 Shift.workType — optional to-one Nullify с правильным inverse")
