@@ -11,12 +11,12 @@ final class ChangePayRateView: UIView {
     private let nameLabel = UILabel()
     private let basisLabel = UILabel()
     private let amountTitleLabel = UILabel()
-    private let amountField = UITextField()
-    private let amountUnderline = UIView()
+    private let amountField = FilledTextField()
     private let currencyRow = UIView()
     private let currencyTitleLabel = UILabel()
     private let currencyValueLabel = UILabel()
     private let effectiveDateTitleLabel = UILabel()
+    private let effectiveDateSurface = UIView()
     private let effectiveDatePicker = UIDatePicker()
     private let effectiveDateExplanationLabel = UILabel()
     private let timeZoneRow = UIView()
@@ -92,15 +92,12 @@ final class ChangePayRateView: UIView {
         )
         amountField.font = ShiftLedgerTypography.basePayAmount
         amountField.textColor = ShiftLedgerColors.textPrimary
-        amountField.backgroundColor = .clear
         amountField.borderStyle = .none
         amountField.keyboardType = .decimalPad
         amountField.adjustsFontForContentSizeCategory = true
         amountField.accessibilityIdentifier = "changePayRate.amount"
         amountField.accessibilityLabel = amountTitleLabel.text
         amountField.accessibilityHint = ChangePayRateStrings.amountHint
-        amountUnderline.backgroundColor = ShiftLedgerColors.separator
-        amountUnderline.isAccessibilityElement = false
 
         configureReadOnlyRow(
             currencyRow,
@@ -111,6 +108,10 @@ final class ChangePayRateView: UIView {
             identifier: "changePayRate.currency"
         )
         configureTitle(effectiveDateTitleLabel, text: ChangePayRateStrings.effectiveDate)
+        effectiveDateSurface.backgroundColor = ShiftLedgerColors.backgroundSecondary
+        effectiveDateSurface.layer.cornerRadius = 16
+        effectiveDateSurface.layer.cornerCurve = .continuous
+        effectiveDateSurface.isAccessibilityElement = false
         effectiveDatePicker.datePickerMode = .date
         effectiveDatePicker.preferredDatePickerStyle = .compact
         var calendar = Calendar(identifier: .gregorian)
@@ -182,8 +183,8 @@ final class ChangePayRateView: UIView {
 
     private func configureHierarchy() {
         [scrollView, contentView, contentStack, contextStack, nameLabel, basisLabel,
-         amountTitleLabel, amountField, amountUnderline, currencyRow, currencyTitleLabel,
-         currencyValueLabel, effectiveDateTitleLabel, effectiveDatePicker,
+         amountTitleLabel, amountField, currencyRow, currencyTitleLabel,
+         currencyValueLabel, effectiveDateTitleLabel, effectiveDateSurface, effectiveDatePicker,
          effectiveDateExplanationLabel, timeZoneRow, timeZoneTitleLabel, timeZoneValueLabel,
          duplicateDateLabel].forEach { $0.translatesAutoresizingMaskIntoConstraints = false }
         addSubview(scrollView)
@@ -195,16 +196,16 @@ final class ChangePayRateView: UIView {
         currencyRow.addSubview(currencyValueLabel)
         timeZoneRow.addSubview(timeZoneTitleLabel)
         timeZoneRow.addSubview(timeZoneValueLabel)
-        [contextStack, amountTitleLabel, amountField, amountUnderline, currencyRow,
-         effectiveDateTitleLabel, effectiveDatePicker, effectiveDateExplanationLabel,
+        effectiveDateSurface.addSubview(effectiveDatePicker)
+        [contextStack, amountTitleLabel, amountField, currencyRow,
+         effectiveDateTitleLabel, effectiveDateSurface, effectiveDateExplanationLabel,
          timeZoneRow, duplicateDateLabel].forEach(contentStack.addArrangedSubview)
         contentStack.setCustomSpacing(28, after: contextStack)
         contentStack.setCustomSpacing(6, after: amountTitleLabel)
-        contentStack.setCustomSpacing(12, after: amountField)
-        contentStack.setCustomSpacing(18, after: amountUnderline)
+        contentStack.setCustomSpacing(30, after: amountField)
         contentStack.setCustomSpacing(24, after: currencyRow)
         contentStack.setCustomSpacing(6, after: effectiveDateTitleLabel)
-        contentStack.setCustomSpacing(12, after: effectiveDatePicker)
+        contentStack.setCustomSpacing(12, after: effectiveDateSurface)
         contentStack.setCustomSpacing(12, after: effectiveDateExplanationLabel)
         contentStack.setCustomSpacing(8, after: timeZoneRow)
     }
@@ -224,10 +225,15 @@ final class ChangePayRateView: UIView {
             contentStack.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 24),
             contentStack.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -24),
             contentStack.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -24),
-            amountField.heightAnchor.constraint(greaterThanOrEqualToConstant: 44),
-            amountUnderline.heightAnchor.constraint(equalToConstant: 1 / traitCollection.displayScale),
+            amountField.heightAnchor.constraint(greaterThanOrEqualToConstant: 52),
             currencyRow.heightAnchor.constraint(greaterThanOrEqualToConstant: 52),
+            effectiveDateSurface.heightAnchor.constraint(greaterThanOrEqualToConstant: 52),
             effectiveDatePicker.heightAnchor.constraint(greaterThanOrEqualToConstant: 44),
+            effectiveDatePicker.leadingAnchor.constraint(equalTo: effectiveDateSurface.leadingAnchor, constant: 16),
+            effectiveDatePicker.trailingAnchor.constraint(lessThanOrEqualTo: effectiveDateSurface.trailingAnchor, constant: -16),
+            effectiveDatePicker.topAnchor.constraint(greaterThanOrEqualTo: effectiveDateSurface.topAnchor, constant: 4),
+            effectiveDatePicker.bottomAnchor.constraint(lessThanOrEqualTo: effectiveDateSurface.bottomAnchor, constant: -4),
+            effectiveDatePicker.centerYAnchor.constraint(equalTo: effectiveDateSurface.centerYAnchor),
             timeZoneRow.heightAnchor.constraint(greaterThanOrEqualToConstant: 52)
         ])
         constrainRow(currencyRow, title: currencyTitleLabel, value: currencyValueLabel)
@@ -252,12 +258,6 @@ final class ChangePayRateView: UIView {
             guard let self else { return }
             onAmountChanged?(amountText)
         }, for: .editingChanged)
-        amountField.addAction(UIAction { [weak self] _ in
-            self?.amountUnderline.backgroundColor = ShiftLedgerColors.accentPrimary
-        }, for: .editingDidBegin)
-        amountField.addAction(UIAction { [weak self] _ in
-            self?.amountUnderline.backgroundColor = ShiftLedgerColors.separator
-        }, for: .editingDidEnd)
         effectiveDatePicker.addAction(UIAction { [weak self] _ in
             guard let self else { return }
             onEffectiveDateChanged?(effectiveDatePicker.date)

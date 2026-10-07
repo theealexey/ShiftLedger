@@ -12,8 +12,7 @@ final class RenameWorkTypeView: UIView {
     private let contentView = UIView()
     private let contentStack = UIStackView()
     private let nameTitleLabel = UILabel()
-    private let nameTextField = UITextField()
-    private let nameUnderline = UIView()
+    private let nameTextField = FilledTextField()
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -43,7 +42,6 @@ final class RenameWorkTypeView: UIView {
 
         nameTextField.font = ShiftLedgerTypography.body
         nameTextField.textColor = ShiftLedgerColors.textPrimary
-        nameTextField.backgroundColor = .clear
         nameTextField.borderStyle = .none
         nameTextField.clearButtonMode = .whileEditing
         nameTextField.autocapitalizationType = .sentences
@@ -55,19 +53,16 @@ final class RenameWorkTypeView: UIView {
         nameTextField.accessibilityIdentifier = "renameWorkType.name"
         nameTextField.delegate = self
 
-        nameUnderline.backgroundColor = ShiftLedgerColors.separator
-        nameUnderline.isAccessibilityElement = false
     }
 
     private func configureHierarchy() {
-        [scrollView, contentView, contentStack, nameTitleLabel, nameTextField,
-         nameUnderline].forEach { $0.translatesAutoresizingMaskIntoConstraints = false }
+        [scrollView, contentView, contentStack, nameTitleLabel, nameTextField]
+            .forEach { $0.translatesAutoresizingMaskIntoConstraints = false }
         addSubview(scrollView)
         scrollView.addSubview(contentView)
         contentView.addSubview(contentStack)
-        [nameTitleLabel, nameTextField, nameUnderline].forEach(contentStack.addArrangedSubview)
+        [nameTitleLabel, nameTextField].forEach(contentStack.addArrangedSubview)
         contentStack.setCustomSpacing(6, after: nameTitleLabel)
-        contentStack.setCustomSpacing(8, after: nameTextField)
     }
 
     private func configureLayout() {
@@ -88,8 +83,7 @@ final class RenameWorkTypeView: UIView {
             contentStack.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -24),
             contentStack.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -24),
 
-            nameTextField.heightAnchor.constraint(greaterThanOrEqualToConstant: 44),
-            nameUnderline.heightAnchor.constraint(equalToConstant: 1 / traitCollection.displayScale)
+            nameTextField.heightAnchor.constraint(greaterThanOrEqualToConstant: 52)
         ])
     }
 
@@ -98,12 +92,6 @@ final class RenameWorkTypeView: UIView {
             guard let self else { return }
             onNameChanged?(nameText)
         }, for: .editingChanged)
-        nameTextField.addAction(UIAction { [weak self] _ in
-            self?.nameUnderline.backgroundColor = ShiftLedgerColors.accentPrimary
-        }, for: .editingDidBegin)
-        nameTextField.addAction(UIAction { [weak self] _ in
-            self?.nameUnderline.backgroundColor = ShiftLedgerColors.separator
-        }, for: .editingDidEnd)
     }
 }
 

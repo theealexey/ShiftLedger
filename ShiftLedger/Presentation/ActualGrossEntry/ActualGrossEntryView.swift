@@ -13,9 +13,8 @@ final class ActualGrossEntryView: UIView {
     private let inputStack = UIStackView()
     private let amountLabel = UILabel()
     private let amountRow = UIStackView()
-    private let amountTextField = UITextField()
+    private let amountTextField = FilledTextField()
     private let currencyLabel = UILabel()
-    private let inputUnderline = UIView()
     private let validationLabel = UILabel()
     private let compareButton = UIButton(type: .system)
 
@@ -95,7 +94,6 @@ final class ActualGrossEntryView: UIView {
 
         amountTextField.font = ShiftLedgerTypography.basePayAmount
         amountTextField.textColor = ShiftLedgerColors.textPrimary
-        amountTextField.backgroundColor = .clear
         amountTextField.borderStyle = .none
         amountTextField.keyboardType = .decimalPad
         amountTextField.textAlignment = .natural
@@ -114,8 +112,6 @@ final class ActualGrossEntryView: UIView {
         currencyLabel.accessibilityIdentifier = "actualGrossEntry.currency"
         currencyLabel.setContentHuggingPriority(.required, for: .horizontal)
         currencyLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
-
-        inputUnderline.backgroundColor = ShiftLedgerColors.separator
 
         configureLabel(
             validationLabel,
@@ -149,7 +145,7 @@ final class ActualGrossEntryView: UIView {
         [questionLabel, supportingLabel, amountContainer, validationLabel, compareButton]
             .forEach(contentStack.addArrangedSubview)
         amountContainer.addSubview(inputStack)
-        [amountLabel, amountRow, inputUnderline].forEach(inputStack.addArrangedSubview)
+        [amountLabel, amountRow].forEach(inputStack.addArrangedSubview)
         [amountTextField, currencyLabel].forEach(amountRow.addArrangedSubview)
 
         contentStack.setCustomSpacing(8, after: questionLabel)
@@ -179,16 +175,13 @@ final class ActualGrossEntryView: UIView {
             inputStack.trailingAnchor.constraint(equalTo: amountContainer.trailingAnchor, constant: -16),
             inputStack.bottomAnchor.constraint(equalTo: amountContainer.bottomAnchor, constant: -16),
 
-            amountTextField.heightAnchor.constraint(greaterThanOrEqualToConstant: 44),
-            inputUnderline.heightAnchor.constraint(equalToConstant: 1 / traitCollection.displayScale),
+            amountTextField.heightAnchor.constraint(greaterThanOrEqualToConstant: 52),
             compareButton.heightAnchor.constraint(greaterThanOrEqualToConstant: 50)
         ])
     }
 
     private func configureInteractions() {
         amountTextField.addTarget(self, action: #selector(amountChanged), for: .editingChanged)
-        amountTextField.addTarget(self, action: #selector(editingDidBegin), for: .editingDidBegin)
-        amountTextField.addTarget(self, action: #selector(editingDidEnd), for: .editingDidEnd)
         compareButton.addAction(UIAction { [weak self] _ in
             self?.onCompareTapped?()
         }, for: .touchUpInside)
@@ -211,11 +204,4 @@ final class ActualGrossEntryView: UIView {
         onAmountChanged?(amountTextField.text ?? "")
     }
 
-    @objc private func editingDidBegin() {
-        inputUnderline.backgroundColor = ShiftLedgerColors.accentPrimary
-    }
-
-    @objc private func editingDidEnd() {
-        inputUnderline.backgroundColor = ShiftLedgerColors.separator
-    }
 }

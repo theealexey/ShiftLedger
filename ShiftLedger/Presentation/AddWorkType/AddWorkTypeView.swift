@@ -19,8 +19,7 @@ final class AddWorkTypeView: UIView {
     private let contentView = UIView()
     private let contentStack = UIStackView()
     private let nameTitleLabel = UILabel()
-    private let nameTextField = UITextField()
-    private let nameUnderline = UIView()
+    private let nameTextField = FilledTextField()
     private let payBasisTitleLabel = UILabel()
     private let basisStack = UIStackView()
     private let hourlyControl = AddWorkTypeBasisControl(
@@ -33,8 +32,7 @@ final class AddWorkTypeView: UIView {
     )
     private let amountSection = UIStackView()
     private let amountTitleLabel = UILabel()
-    private let amountTextField = UITextField()
-    private let amountUnderline = UIView()
+    private let amountTextField = FilledTextField()
     private let currencyRow = UIView()
     private let currencyTitleLabel = UILabel()
     private let currencyValueLabel = UILabel()
@@ -90,7 +88,6 @@ final class AddWorkTypeView: UIView {
         configureTitle(nameTitleLabel, text: AddWorkTypeStrings.nameTitle)
         nameTextField.font = ShiftLedgerTypography.body
         nameTextField.textColor = ShiftLedgerColors.textPrimary
-        nameTextField.backgroundColor = .clear
         nameTextField.borderStyle = .none
         nameTextField.clearButtonMode = .whileEditing
         nameTextField.autocapitalizationType = .sentences
@@ -103,8 +100,6 @@ final class AddWorkTypeView: UIView {
         nameTextField.accessibilityIdentifier = "addWorkType.name"
         nameTextField.delegate = self
 
-        nameUnderline.backgroundColor = ShiftLedgerColors.separator
-        nameUnderline.isAccessibilityElement = false
 
         configureTitle(payBasisTitleLabel, text: AddWorkTypeStrings.payBasisTitle)
         basisStack.axis = .vertical
@@ -117,7 +112,6 @@ final class AddWorkTypeView: UIView {
 
         amountTextField.font = ShiftLedgerTypography.basePayAmount
         amountTextField.textColor = ShiftLedgerColors.textPrimary
-        amountTextField.backgroundColor = .clear
         amountTextField.borderStyle = .none
         amountTextField.keyboardType = .decimalPad
         amountTextField.adjustsFontForContentSizeCategory = true
@@ -125,8 +119,6 @@ final class AddWorkTypeView: UIView {
         amountTextField.accessibilityIdentifier = "addWorkType.amount"
         amountTextField.delegate = self
 
-        amountUnderline.backgroundColor = ShiftLedgerColors.separator
-        amountUnderline.isAccessibilityElement = false
 
         currencyTitleLabel.text = AddWorkTypeStrings.currencyTitle
         currencyTitleLabel.font = ShiftLedgerTypography.body
@@ -158,9 +150,9 @@ final class AddWorkTypeView: UIView {
 
     private func configureHierarchy() {
         [scrollView, contentView, contentStack, nameTitleLabel, nameTextField,
-         nameUnderline, payBasisTitleLabel, basisStack, hourlyControl,
+         payBasisTitleLabel, basisStack, hourlyControl,
          fixedPerShiftControl, amountSection, amountTitleLabel, amountTextField,
-         amountUnderline, currencyRow, currencyTitleLabel, currencyValueLabel,
+         currencyRow, currencyTitleLabel, currencyValueLabel,
          currencySeparator].forEach { $0.translatesAutoresizingMaskIntoConstraints = false }
 
         addSubview(scrollView)
@@ -171,20 +163,17 @@ final class AddWorkTypeView: UIView {
         basisStack.addArrangedSubview(fixedPerShiftControl)
         amountSection.addArrangedSubview(amountTitleLabel)
         amountSection.addArrangedSubview(amountTextField)
-        amountSection.addArrangedSubview(amountUnderline)
         amountSection.setCustomSpacing(6, after: amountTitleLabel)
-        amountSection.setCustomSpacing(12, after: amountTextField)
 
         [currencyTitleLabel, currencyValueLabel, currencySeparator].forEach(currencyRow.addSubview)
 
-        [nameTitleLabel, nameTextField, nameUnderline, payBasisTitleLabel,
+        [nameTitleLabel, nameTextField, payBasisTitleLabel,
          basisStack, amountSection, currencyRow].forEach(contentStack.addArrangedSubview)
         contentStack.setCustomSpacing(6, after: nameTitleLabel)
-        contentStack.setCustomSpacing(8, after: nameTextField)
-        contentStack.setCustomSpacing(28, after: nameUnderline)
+        contentStack.setCustomSpacing(36, after: nameTextField)
         contentStack.setCustomSpacing(12, after: payBasisTitleLabel)
         contentStack.setCustomSpacing(24, after: basisStack)
-        contentStack.setCustomSpacing(18, after: amountSection)
+        contentStack.setCustomSpacing(30, after: amountSection)
     }
 
     private func configureLayout() {
@@ -205,10 +194,8 @@ final class AddWorkTypeView: UIView {
             contentStack.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -24),
             contentStack.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -24),
 
-            nameTextField.heightAnchor.constraint(greaterThanOrEqualToConstant: 44),
-            nameUnderline.heightAnchor.constraint(equalToConstant: 1 / traitCollection.displayScale),
-            amountTextField.heightAnchor.constraint(greaterThanOrEqualToConstant: 44),
-            amountUnderline.heightAnchor.constraint(equalToConstant: 1 / traitCollection.displayScale),
+            nameTextField.heightAnchor.constraint(greaterThanOrEqualToConstant: 52),
+            amountTextField.heightAnchor.constraint(greaterThanOrEqualToConstant: 52),
             currencyRow.heightAnchor.constraint(greaterThanOrEqualToConstant: 52),
 
             currencyTitleLabel.leadingAnchor.constraint(equalTo: currencyRow.leadingAnchor),
@@ -231,22 +218,10 @@ final class AddWorkTypeView: UIView {
             guard let self else { return }
             onNameChanged?(nameText)
         }, for: .editingChanged)
-        nameTextField.addAction(UIAction { [weak self] _ in
-            self?.nameUnderline.backgroundColor = ShiftLedgerColors.accentPrimary
-        }, for: .editingDidBegin)
-        nameTextField.addAction(UIAction { [weak self] _ in
-            self?.nameUnderline.backgroundColor = ShiftLedgerColors.separator
-        }, for: .editingDidEnd)
         amountTextField.addAction(UIAction { [weak self] _ in
             guard let self else { return }
             onAmountChanged?(amountText)
         }, for: .editingChanged)
-        amountTextField.addAction(UIAction { [weak self] _ in
-            self?.amountUnderline.backgroundColor = ShiftLedgerColors.accentPrimary
-        }, for: .editingDidBegin)
-        amountTextField.addAction(UIAction { [weak self] _ in
-            self?.amountUnderline.backgroundColor = ShiftLedgerColors.separator
-        }, for: .editingDidEnd)
         hourlyControl.onTapped = { [weak self] in self?.onBasePayBasisSelected?(.hourly) }
         fixedPerShiftControl.onTapped = { [weak self] in self?.onBasePayBasisSelected?(.fixedPerShift) }
     }
