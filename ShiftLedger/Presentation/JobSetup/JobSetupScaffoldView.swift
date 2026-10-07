@@ -25,6 +25,7 @@ final class JobSetupScaffoldView: UIView {
     private let progressStack = UIStackView()
     private let progressSegments = (0..<3).map { _ in UIView() }
     private let showsBrand: Bool
+    private var continueButtonMinimumHeightConstraint: NSLayoutConstraint?
 
     init(
         brandText: String?,
@@ -121,6 +122,7 @@ final class JobSetupScaffoldView: UIView {
         continueConfiguration.imagePlacement = .trailing
         continueConfiguration.imagePadding = 8
         continueConfiguration.titleAlignment = .trailing
+        continueConfiguration.titleLineBreakMode = .byWordWrapping
         continueConfiguration.baseForegroundColor = ShiftLedgerColors.textTertiary
         continueConfiguration.contentInsets = NSDirectionalEdgeInsets(
             top: 10,
@@ -136,6 +138,7 @@ final class JobSetupScaffoldView: UIView {
         continueButton.configuration = continueConfiguration
         continueButton.contentHorizontalAlignment = .trailing
         continueButton.titleLabel?.numberOfLines = 0
+        continueButton.titleLabel?.lineBreakMode = .byWordWrapping
         continueButton.titleLabel?.adjustsFontForContentSizeCategory = true
     }
 
@@ -178,6 +181,12 @@ final class JobSetupScaffoldView: UIView {
     }
 
     private func configureLayout() {
+        let continueButtonBottomToSafeAreaConstraint = continueButton.bottomAnchor.constraint(
+            equalTo: safeAreaLayoutGuide.bottomAnchor,
+            constant: -Layout.actionBottomInset
+        )
+        continueButtonBottomToSafeAreaConstraint.priority = .defaultHigh
+
         NSLayoutConstraint.activate([
             scrollView.topAnchor.constraint(equalTo: safeAreaLayoutGuide.topAnchor),
             scrollView.leadingAnchor.constraint(equalTo: leadingAnchor),
@@ -200,11 +209,14 @@ final class JobSetupScaffoldView: UIView {
             progressStack.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -Layout.contentInset),
             progressStack.heightAnchor.constraint(equalToConstant: 1),
 
-            continueButton.leadingAnchor.constraint(greaterThanOrEqualTo: safeAreaLayoutGuide.leadingAnchor, constant: Layout.contentInset),
+            continueButton.leadingAnchor.constraint(equalTo: safeAreaLayoutGuide.leadingAnchor, constant: Layout.contentInset),
             continueButton.trailingAnchor.constraint(equalTo: safeAreaLayoutGuide.trailingAnchor, constant: -Layout.contentInset),
-            continueButton.bottomAnchor.constraint(equalTo: safeAreaLayoutGuide.bottomAnchor, constant: -Layout.actionBottomInset),
-            continueButton.heightAnchor.constraint(greaterThanOrEqualToConstant: 44)
+            continueButtonBottomToSafeAreaConstraint,
+            continueButton.bottomAnchor.constraint(lessThanOrEqualTo: keyboardLayoutGuide.topAnchor, constant: -Layout.scrollToActionGap)
         ])
+
+        continueButtonMinimumHeightConstraint = continueButton.heightAnchor.constraint(greaterThanOrEqualToConstant: 44)
+        continueButtonMinimumHeightConstraint?.isActive = true
     }
 
     private func configureInteractions() {
@@ -237,9 +249,14 @@ final class JobSetupScaffoldView: UIView {
             return
         }
 
+        configuration.image = usesAccessibilityLayout ? nil : UIImage(systemName: "arrow.right")
         configuration.imagePlacement = .trailing
-        configuration.imagePadding = 8
+        configuration.imagePadding = usesAccessibilityLayout ? 0 : 8
         continueButton.configuration = configuration
+
+        continueButtonMinimumHeightConstraint?.constant = usesAccessibilityLayout
+            ? max(44, (ShiftLedgerTypography.button.lineHeight * 2) + 20)
+            : 44
     }
 
 }
