@@ -89,7 +89,7 @@ final class OverviewViewController: UIViewController {
             self?.render()
         }
         overviewView.onShiftCardTapped = { [weak self] id in
-            self?.viewModel.toggleShiftExpansion(with: id)
+            self?.viewModel.handleShiftCardTap(with: id)
             self?.render()
         }
         overviewView.onEditShiftTapped = { [weak self] id in

@@ -43,6 +43,25 @@ final class OverviewShiftCardView: UIControl {
     private let payBasisDetailGroup = UIStackView()
     private let editButton = UIButton(type: .system)
     private var onEditTapped: (() -> Void)?
+    private var accessibilityVisibleRegion: CGRect?
+
+    override var accessibilityFrame: CGRect {
+        get {
+            guard let accessibilityVisibleRegion else { return super.accessibilityFrame }
+            return UIAccessibility.convertToScreenCoordinates(accessibilityVisibleRegion, in: self)
+        }
+        set { super.accessibilityFrame = newValue }
+    }
+
+    override var accessibilityActivationPoint: CGPoint {
+        get {
+            guard accessibilityVisibleRegion != nil else { return super.accessibilityActivationPoint }
+            let frame = accessibilityFrame
+            return CGPoint(x: frame.midX, y: frame.midY)
+        }
+        set { super.accessibilityActivationPoint = newValue }
+    }
+
     init(
         card: OverviewView.ShiftCard,
         surfaceRole: ShiftSurfaceRole,
@@ -110,7 +129,9 @@ final class OverviewShiftCardView: UIControl {
             ].compactMap { $0 }
             : []
         accessibilityLabel = ([card.accessibilityLabel] + expandedDetails).joined(separator: ", ")
-        accessibilityHint = card.isExpanded ? OverviewStrings.collapseShift : OverviewStrings.expandShift
+        accessibilityHint = !card.isSelected
+            ? OverviewStrings.selectShift
+            : card.isExpanded ? OverviewStrings.collapseShift : OverviewStrings.expandShift
         accessibilityTraits = card.isSelected ? [.button, .selected] : .button
         accessibilityValue = card.isExpanded ? OverviewStrings.expanded : OverviewStrings.collapsed
         accessibilityCustomActions = card.isExpanded
@@ -371,11 +392,8 @@ final class OverviewShiftCardView: UIControl {
     }
 
     func updateAccessibilityFrame(for region: CGRect, in container: UIView) {
-        accessibilityFrame = container.convert(region, to: nil)
-        accessibilityActivationPoint = container.convert(
-            CGPoint(x: region.midX, y: region.midY),
-            to: nil
-        )
+        // Keep the reveal in local space; ancestor scrolling changes only the conversion at query time.
+        accessibilityVisibleRegion = container.convert(region, to: self)
     }
 
     @objc private func editAccessibilityAction() -> Bool {

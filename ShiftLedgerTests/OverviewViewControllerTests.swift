@@ -724,7 +724,7 @@ struct OverviewViewControllerTests {
         let content = try requireContent(subject.viewModel.state)
         #expect(content.selectedPeriod == .perShift(shiftID: older.id))
         #expect(content.selectedShiftID == older.id)
-        #expect(content.expandedShiftID == older.id)
+        #expect(content.expandedShiftID == nil)
         #expect(content.expectedBreakdown?.shiftBreakdowns.map(\.shift) == [older])
         #expect(content.shiftHistoryBreakdowns.map(\.shift) == [older, newer])
         #expect(shiftCardIdentifiers(in: try requireRootView(subject.viewController)) == [newer.id, older.id])
@@ -739,7 +739,7 @@ struct OverviewViewControllerTests {
         let check: UIButton = try requireView(identifier: "overview.checkPaycheck", in: try requireRootView(subject.viewController))
         check.sendActions(for: .touchUpInside)
         #expect(receivedPeriod == .perShift(shiftID: older.id))
-        for expectedExpandedID in [nil, older.id] as [UUID?] {
+        for expectedExpandedID in [older.id, nil] as [UUID?] {
             olderCard.sendActions(for: .touchUpInside)
             let updated = try requireContent(subject.viewModel.state)
             #expect(updated.expandedShiftID == expectedExpandedID)
@@ -836,6 +836,9 @@ struct OverviewViewControllerTests {
         )
         #expect(isEffectivelyHidden(middleFront) == false)
         #expect(isEffectivelyHidden(newerCovered) == false)
+        #expect(isEffectivelyHidden(middleDetail))
+        #expect(middleCard.accessibilityHint == OverviewStrings.expandShift)
+        middleCard.sendActions(for: .touchUpInside)
         #expect(isEffectivelyHidden(middleDetail) == false)
         #expect(visibleFrontCardIdentifiers(in: try requireRootView(subject.viewController)) == [middle.id])
 
@@ -864,6 +867,9 @@ struct OverviewViewControllerTests {
             in: try requireRootView(subject.viewController)
         )
 
+        #expect(isEffectivelyHidden(olderDetail))
+        #expect(isEffectivelyHidden(middleDetail))
+        olderCard.sendActions(for: .touchUpInside)
         #expect(isEffectivelyHidden(olderDetail) == false)
 
         olderCard.sendActions(for: .touchUpInside)
@@ -895,9 +901,20 @@ struct OverviewViewControllerTests {
         )
         #expect(editButton.isHidden)
         #expect(card.accessibilityCustomActions?.isEmpty != false)
+        #expect(card.accessibilityTraits.contains(.button))
+        #expect(card.accessibilityTraits.contains(.selected) == false)
+        #expect(card.accessibilityHint == OverviewStrings.selectShift)
 
         card.sendActions(for: .touchUpInside)
+        #expect(editButton.isHidden)
+        #expect(card.accessibilityCustomActions?.isEmpty != false)
+        #expect(card.accessibilityTraits.contains(.selected))
+        #expect(card.accessibilityHint == OverviewStrings.expandShift)
+        #expect(card.accessibilityValue == OverviewStrings.collapsed)
+        card.sendActions(for: .touchUpInside)
         window.layoutIfNeeded()
+        #expect(card.accessibilityHint == OverviewStrings.collapseShift)
+        #expect(card.accessibilityValue == OverviewStrings.expanded)
         #expect(editButton.isHidden == false)
         #expect(editButton.configuration?.title == OverviewStrings.editShift)
         #expect(editButton.bounds.height >= 44)
@@ -937,6 +954,10 @@ struct OverviewViewControllerTests {
 
         card.sendActions(for: .touchUpInside)
         #expect(editButton.isHidden)
+        #expect(card.accessibilityTraits.contains(.selected))
+        #expect(card.accessibilityHint == OverviewStrings.expandShift)
+        #expect(card.accessibilityValue == OverviewStrings.collapsed)
+        #expect(card.accessibilityCustomActions?.isEmpty != false)
     }
 
     @Test("Covered Shift strips resolve hit testing to their own card before making it front")
@@ -1009,6 +1030,71 @@ struct OverviewViewControllerTests {
         window.layoutIfNeeded()
         try requireRootView(subject.viewController).layoutIfNeeded()
         expectAccessibleDocumentOrder(cards, in: window)
+    }
+
+    @Test("Card accessibility reveals follow reorder, expansion and ancestor scrolling", arguments: [false, true])
+    func shiftAccessibilityRegionsFollowVisibleHierarchy(accessibleList: Bool) throws {
+        let shifts = try [
+            makeShift(id: 1, month: 9, day: 10),
+            makeShift(id: 2, month: 9, day: 15),
+            makeShift(id: 3, month: 9, day: 20)
+        ]
+        let subject = try makeSubject(job: makeJob(cycle: .scheduled(.calendarMonthly)), shifts: shifts)
+        subject.viewController.traitOverrides.preferredContentSizeCategory = accessibleList
+            ? .accessibilityExtraExtraLarge : .large
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+        window.rootViewController = subject.viewController
+        window.isHidden = false
+        defer { window.isHidden = true }
+        window.layoutIfNeeded()
+
+        let root = try requireRootView(subject.viewController)
+        let deck: UIView = try requireView(identifier: "overview.shiftStack", in: root)
+        let scroll: UIScrollView = try requireView(identifier: "overview.pageScroll", in: root)
+        let cards: [UIControl] = try shifts.map {
+            try requireView(identifier: "overview.shift.\($0.id.uuidString)", in: root)
+        }
+
+        func expectVisibleRegions() {
+            let ordered = cards.sorted { $0.frame.minY < $1.frame.minY }
+            for (index, card) in ordered.enumerated() {
+                var region = card.frame
+                if !accessibleList, index + 1 < ordered.count {
+                    region.size.height = min(region.maxY, ordered[index + 1].frame.minY) - region.minY
+                }
+                let expected = UIAccessibility.convertToScreenCoordinates(region, in: deck)
+                let actual = card.accessibilityFrame
+                #expect(abs(actual.minX - expected.minX) < 0.5)
+                #expect(abs(actual.minY - expected.minY) < 0.5)
+                #expect(abs(actual.width - expected.width) < 0.5)
+                #expect(abs(actual.height - expected.height) < 0.5)
+                #expect(actual.contains(card.accessibilityActivationPoint))
+            }
+        }
+
+        expectVisibleRegions()
+        // Select another card, then expand and collapse it, preserving the visible-region policy.
+        for _ in 0..<3 {
+            cards[1].sendActions(for: .touchUpInside)
+            window.layoutIfNeeded()
+            expectVisibleRegions()
+        }
+
+        let before = cards.map(\.accessibilityFrame)
+        let pointsBefore = cards.map(\.accessibilityActivationPoint)
+        let offsetBefore = scroll.contentOffset
+        scroll.setContentOffset(CGPoint(x: offsetBefore.x, y: offsetBefore.y + 40), animated: false)
+        // Query immediately, without a deck layout pass or explicit accessibility refresh.
+        let delta = scroll.contentOffset.y - offsetBefore.y
+        #expect(delta != 0)
+        for (index, card) in cards.enumerated() {
+            #expect(abs(card.accessibilityFrame.minY - (before[index].minY - delta)) < 0.5)
+            #expect(abs(card.accessibilityActivationPoint.y - (pointsBefore[index].y - delta)) < 0.5)
+        }
+        expectVisibleRegions()
+
+        root.transform = CGAffineTransform(translationX: 13, y: 17)
+        expectVisibleRegions()
     }
 
     @Test("Accessibility Shift dates fill card headers without character wrapping")
@@ -1085,6 +1171,8 @@ struct OverviewViewControllerTests {
             #expect(button.bounds.contains(titleLabel.convert(titleLabel.bounds, to: button)))
         }
 
+        card.sendActions(for: .touchUpInside)
+        #expect(isEffectivelyHidden(edit))
         card.sendActions(for: .touchUpInside)
         window.layoutIfNeeded()
         #expect(isEffectivelyHidden(edit) == false)
@@ -1343,7 +1431,7 @@ struct OverviewViewControllerTests {
         let content = try requireContent(subject.viewModel.state)
         #expect(content.selectedPeriod == .perShift(shiftID: saved.id))
         #expect(content.selectedShiftID == saved.id)
-        #expect(content.expandedShiftID == saved.id)
+        #expect(content.expandedShiftID == nil)
         let root = try requireRootView(subject.viewController)
         #expect(visibleFrontCardIdentifiers(in: root) == [saved.id])
         var receivedPeriod: PayCalculationPeriod?

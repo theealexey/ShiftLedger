@@ -19,6 +19,7 @@ enum OverviewStrings {
     }
     static var payBasis: String { String(localized: "overview.shift.payBasis", table: "Localizable") }
     static var expandShift: String { String(localized: "overview.shift.expand", table: "Localizable") }
+    static var selectShift: String { String(localized: "overview.shift.select", table: "Localizable") }
     static var collapseShift: String { String(localized: "overview.shift.collapse", table: "Localizable") }
     static var expanded: String { String(localized: "overview.shift.expanded", table: "Localizable") }
     static var collapsed: String { String(localized: "overview.shift.collapsed", table: "Localizable") }

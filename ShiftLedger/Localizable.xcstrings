@@ -1010,6 +1010,13 @@
         "ru" : { "stringUnit" : { "state" : "translated", "value" : "Основание оплаты" } }
       }
     },
+    "overview.shift.select" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Select shift" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Выбрать смену" } }
+      }
+    },
     "overview.shift.expand" : {
       "extractionState" : "manual",
       "localizations" : {

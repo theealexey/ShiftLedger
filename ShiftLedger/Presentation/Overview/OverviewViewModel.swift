@@ -151,7 +151,7 @@ final class OverviewViewModel {
         }
     }
 
-    func toggleShiftExpansion(with id: UUID) {
+    func handleShiftCardTap(with id: UUID) {
         guard
             case let .content(content) = state,
             content.shiftHistoryBreakdowns.contains(where: { $0.shift.id == id })
@@ -159,10 +159,12 @@ final class OverviewViewModel {
             return
         }
 
-        if selectedShiftID == id, expandedShiftID == id {
+        if selectedShiftID != id {
+            selectedShiftID = id
+            expandedShiftID = nil
+        } else if expandedShiftID == id {
             expandedShiftID = nil
         } else {
-            selectedShiftID = id
             expandedShiftID = id
         }
 
@@ -258,7 +260,7 @@ final class OverviewViewModel {
 
     private func publishContent(selectingSavedShift shift: Shift) throws {
         selectedShiftID = shift.id
-        expandedShiftID = shift.id
+        expandedShiftID = nil
         switch job.payCalculationCycle {
         case .scheduled:
             guard let currentPayPeriod = try currentScheduledPayPeriod(),
