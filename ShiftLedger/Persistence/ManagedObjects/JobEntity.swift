@@ -4,6 +4,8 @@ import CoreData
 @objc(JobEntity)
 class JobEntity: NSManagedObject {
     @NSManaged var id: UUID
+    @NSManaged var name: String?
+    @NSManaged var isArchived: Bool
     @NSManaged var currencyCode: String
     @NSManaged var timeZoneIdentifier: String
     @NSManaged var basePayKind: String?
