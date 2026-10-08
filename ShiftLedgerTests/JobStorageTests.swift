@@ -2243,6 +2243,211 @@ struct JobStorageTests {
         #expect(!stack.viewContext.hasChanges)
     }
 
+    @Test("Empty catalog and legacy startup remain read-only")
+    func emptyCatalog() async throws {
+        let url = try makeTemporaryStoreURL()
+        var stacks: [CoreDataStack] = []
+        defer { removeTemporaryStoreDirectory(for: url, stacks: stacks) }
+        let stack = try await CoreDataStack.load(storeURL: url)
+        stacks.append(stack)
+        let storage = JobStorage(stack: stack)
+        #expect(try storage.loadCatalog().isEmpty)
+        #expect(try storage.loadCatalog().isEmpty)
+        #expect(try storage.load() == nil)
+        #expect(!stack.viewContext.hasChanges)
+    }
+
+    @Test("Production single Job catalog preserves defaults, full Job and startup across reopen")
+    func singleJobCatalogSurvivesReopen() async throws {
+        let url = try makeTemporaryStoreURL()
+        var stacks: [CoreDataStack] = []
+        defer { removeTemporaryStoreDirectory(for: url, stacks: stacks) }
+        let stack = try await CoreDataStack.load(storeURL: url)
+        stacks.append(stack)
+        let original = try makeRenameJob()
+        let storage = JobStorage(stack: stack)
+        try storage.save(original)
+        let expected = [JobCatalogEntry(job: original, name: nil, isArchived: false)]
+        #expect(try storage.loadCatalog() == expected)
+        #expect(try storage.loadCatalog() == expected)
+        #expect(try storage.load() == original)
+        do {
+            try storage.save(original)
+            Issue.record("Second production Job was accepted")
+        } catch JobStorageError.jobAlreadyExists {
+            #expect(try storage.loadCatalog() == expected)
+        }
+        #expect(!stack.viewContext.hasChanges)
+        try close(stack)
+        let reopened = try await CoreDataStack.load(storeURL: url)
+        stacks.append(reopened)
+        #expect(try JobStorage(stack: reopened).loadCatalog() == expected)
+        #expect(try JobStorage(stack: reopened).load() == original)
+        #expect(!reopened.viewContext.hasChanges)
+    }
+
+    @Test("Complete catalog order, exact metadata and colliding WorkTypes survive insertion reversal and reopen",
+          arguments: [false, true])
+    func multipleJobCatalogSurvivesReopen(reverseInsertion: Bool) async throws {
+        let url = try makeTemporaryStoreURL()
+        var stacks: [CoreDataStack] = []
+        defer { removeTemporaryStoreDirectory(for: url, stacks: stacks) }
+        let stack = try await CoreDataStack.load(storeURL: url)
+        stacks.append(stack)
+        let expected = try seedCatalogJobs(reverseInsertion: reverseInsertion, in: stack.viewContext)
+        let storage = JobStorage(stack: stack)
+        let catalog = try storage.loadCatalog()
+        #expect(catalog == expected)
+        #expect(catalog.map(\.job.id) == [catalogID(4), catalogID(1), catalogID(2), catalogID(3)])
+        #expect(catalog.map(\.name) == ["Archived", nil, "  AcME \n", ""])
+        #expect(catalog.map(\.isArchived) == [true, false, true, false])
+        #expect(Set(catalog.map(\.job.id)).count == 4)
+        #expect(try storage.loadCatalog() == catalog)
+        for entry in expected {
+            #expect(try storage.load(forJobID: entry.job.id) == entry.job)
+        }
+        do {
+            _ = try storage.load()
+            Issue.record("Legacy startup accepted multiple Jobs")
+        } catch JobStorageError.multipleJobsFound {
+            #expect(try storage.loadCatalog() == expected)
+        }
+        do {
+            try storage.save(try makeRenameJob())
+            Issue.record("Production creation accepted multiple existing Jobs")
+        } catch JobStorageError.multipleJobsFound {
+            #expect(try storage.loadCatalog() == expected)
+        }
+        #expect(!stack.viewContext.hasChanges)
+        try close(stack)
+        let reopened = try await CoreDataStack.load(storeURL: url)
+        stacks.append(reopened)
+        #expect(try JobStorage(stack: reopened).loadCatalog() == expected)
+        #expect(!reopened.viewContext.hasChanges)
+    }
+
+    @Test("Catalog rejects duplicate identity across the full set before decoding corrupted metadata",
+          arguments: [false, true])
+    func catalogRejectsDuplicateBeforeDecoding(reverseInsertion: Bool) async throws {
+        let url = try makeTemporaryStoreURL()
+        var stacks: [CoreDataStack] = []
+        defer { removeTemporaryStoreDirectory(for: url, stacks: stacks) }
+        let stack = try await CoreDataStack.load(storeURL: url)
+        stacks.append(stack)
+        _ = try seedCatalogJobs(reverseInsertion: reverseInsertion, in: stack.viewContext)
+        let request = NSFetchRequest<JobEntity>(entityName: "JobEntity")
+        let entities = try stack.viewContext.fetch(request)
+        let first = try #require(entities.first { $0.id == catalogID(1) })
+        let duplicate = try #require(entities.first { $0.id == catalogID(2) })
+        let newest = try #require(entities.first { $0.id == catalogID(4) })
+        duplicate.id = first.id
+        newest.timeZoneIdentifier = "Invalid/Zone"
+        try stack.viewContext.save()
+        let beforeRates = storedRateStates(try stack.viewContext.fetch(
+            NSFetchRequest<PayRateEntity>(entityName: "PayRateEntity")))
+        for _ in 0..<2 {
+            do {
+                _ = try JobStorage(stack: stack).loadCatalog()
+                Issue.record("Catalog returned entries with duplicate identity")
+            } catch JobStorageError.corruptedData(.duplicateJobIdentity(let id)) {
+                #expect(id == catalogID(1))
+            }
+        }
+        #expect(!stack.viewContext.hasChanges)
+        #expect(storedRateStates(try stack.viewContext.fetch(
+            NSFetchRequest<PayRateEntity>(entityName: "PayRateEntity"))) == beforeRates)
+        stack.viewContext.reset()
+        let persisted = try stack.viewContext.fetch(request)
+        #expect(persisted.count == 4)
+        #expect(persisted.filter { $0.id == catalogID(1) }.count == 2)
+        #expect(persisted.first { $0.id == catalogID(4) }?.timeZoneIdentifier == "Invalid/Zone")
+    }
+
+    @Test("One corrupted Job fails the complete catalog without repair regardless of insertion order",
+          arguments: [false, true])
+    func catalogRejectsCorruptedJob(reverseInsertion: Bool) async throws {
+        let url = try makeTemporaryStoreURL()
+        var stacks: [CoreDataStack] = []
+        defer { removeTemporaryStoreDirectory(for: url, stacks: stacks) }
+        let stack = try await CoreDataStack.load(storeURL: url)
+        stacks.append(stack)
+        let expected = try seedCatalogJobs(reverseInsertion: reverseInsertion, in: stack.viewContext)
+        let request = NSFetchRequest<JobEntity>(entityName: "JobEntity")
+        let corrupted = try #require(try stack.viewContext.fetch(request).first { $0.id == catalogID(2) })
+        corrupted.timeZoneIdentifier = "Invalid/Zone"
+        try stack.viewContext.save()
+        for _ in 0..<2 {
+            do {
+                _ = try JobStorage(stack: stack).loadCatalog()
+                Issue.record("Catalog silently skipped corrupted Job")
+            } catch JobStorageError.corruptedData(.invalidTimeZoneIdentifier(let identifier)) {
+                #expect(identifier == "Invalid/Zone")
+            }
+        }
+        #expect(!stack.viewContext.hasChanges)
+        stack.viewContext.reset()
+        #expect(try stack.viewContext.fetch(request).count == 4)
+        #expect(try stack.viewContext.fetch(request).first { $0.id == catalogID(2) }?.timeZoneIdentifier == "Invalid/Zone")
+        for entry in expected where entry.job.id != catalogID(2) {
+            #expect(try JobStorage(stack: stack).load(forJobID: entry.job.id) == entry.job)
+        }
+        #expect(!stack.viewContext.hasChanges)
+    }
+
+    private func catalogID(_ suffix: UInt8) -> UUID {
+        UUID(uuid: (0x49, 0x2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, suffix))
+    }
+
+    private func seedCatalogJobs(
+        reverseInsertion: Bool, in context: NSManagedObjectContext
+    ) throws -> [JobCatalogEntry] {
+        let names: [String?] = [nil, "  AcME \n", "", "Archived"]
+        let currencies = ["EUR", "SEK", "USD", "CAD"]
+        let zones = ["Europe/Stockholm", "America/New_York", "Asia/Tokyo", "Europe/London"]
+        let kinds = ["perShift", "weekly", "biweekly", "calendarMonthly"]
+        let dates: [TimeInterval] = [900_000, 900_000, 800_000, 950_000]
+        let anchor = try LocalDate(year: 2026, month: 1, day: 5)
+        let cycles: [PayCalculationCycle] = [
+            .perShift, .scheduled(.weekly(anchorDate: anchor)),
+            .scheduled(.biweekly(anchorDate: anchor)), .scheduled(.calendarMonthly)
+        ]
+        let indexes = reverseInsertion ? [3, 2, 1, 0] : [0, 1, 2, 3]
+        var expected: [JobCatalogEntry] = []
+        for index in indexes {
+            let id = catalogID(UInt8(index + 1))
+            let rateID = catalogID(UInt8(index + 10))
+            let amount = Decimal(index + 100)
+            let date = Date(timeIntervalSinceReferenceDate: dates[index])
+            let zone = try #require(TimeZone(identifier: zones[index]))
+            let persisted = try insertPersistedJob(
+                id: id, payRateID: rateID, payRateEffectiveFrom: nil, payRateAmount: amount,
+                workTypeID: renameTargetID, timeZoneIdentifier: zone.identifier,
+                payPeriodKind: kinds[index],
+                payPeriodAnchorDate: (1...2).contains(index) ? anchor.startOfDay(in: zone) : nil,
+                in: context
+            )
+            persisted.job.currencyCode = currencies[index]
+            persisted.job.createdAt = date
+            persisted.job.name = names[index]
+            persisted.job.isArchived = index == 1 || index == 3
+            let type = try #require(persisted.workType)
+            type.name = "Type \(index)"
+            type.isArchived = index == 2
+            let workType = WorkType(id: renameTargetID, name: type.name, basePayBasis: .hourly,
+                payRateHistory: try PayRateHistory(payRates: [
+                    PayRate(id: rateID, amount: amount, effectiveFrom: nil)
+                ]), isArchived: type.isArchived)
+            let job = try Job(id: id, currencyCode: currencies[index], timeZoneIdentifier: zone.identifier,
+                payCalculationCycle: cycles[index], workTypes: [workType], createdAt: date)
+            expected.append(JobCatalogEntry(job: job, name: names[index], isArchived: persisted.job.isArchived))
+        }
+        try context.save()
+        return expected.sorted {
+            if $0.job.createdAt != $1.job.createdAt { return $0.job.createdAt > $1.job.createdAt }
+            return $0.job.id.uuidString < $1.job.id.uuidString
+        }
+    }
+
     private func seedScopedJobs(in context: NSManagedObjectContext) throws {
         try insertPersistedJob(id: renameJobID, payRateID: renameInitialRateID,
                                payRateEffectiveFrom: nil, payRateAmount: 120,

@@ -1,6 +1,12 @@
 import Foundation
 import CoreData
 
+struct JobCatalogEntry: Equatable {
+    let job: Job
+    let name: String?
+    let isArchived: Bool
+}
+
 enum JobStorageError: Error {
     enum Corruption: Error {
         case duplicateJobIdentity(jobID: UUID)
@@ -361,6 +367,31 @@ final class JobStorage {
 
     func load(forJobID jobID: UUID) throws -> Job {
         try makeJob(from: job(id: jobID))
+    }
+
+    func loadCatalog() throws -> [JobCatalogEntry] {
+        let request = NSFetchRequest<JobEntity>(entityName: "JobEntity")
+        let entities: [JobEntity]
+        do {
+            entities = try context.fetch(request)
+        } catch {
+            throw JobStorageError.fetchFailed(underlying: error)
+        }
+        let ordered = entities.sorted {
+            if $0.createdAt != $1.createdAt {
+                return $0.createdAt > $1.createdAt
+            }
+            return $0.id.uuidString < $1.id.uuidString
+        }
+        var identities = Set<UUID>()
+        for entity in ordered {
+            guard identities.insert(entity.id).inserted else {
+                throw JobStorageError.corruptedData(.duplicateJobIdentity(jobID: entity.id))
+            }
+        }
+        return try ordered.map {
+            JobCatalogEntry(job: try makeJob(from: $0), name: $0.name, isArchived: $0.isArchived)
+        }
     }
 
     private func job(id jobID: UUID) throws -> JobEntity {

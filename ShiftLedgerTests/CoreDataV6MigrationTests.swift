@@ -142,6 +142,9 @@ struct CoreDataV6MigrationTests {
         #expect(entity.name == nil)
         #expect(entity.isArchived == false)
         #expect(try JobStorage(stack: stack).load() == expectedJob)
+        #expect(try JobStorage(stack: stack).loadCatalog() == [
+            JobCatalogEntry(job: expectedJob, name: nil, isArchived: false)
+        ])
         let current = try #require(stack.viewContext.persistentStoreCoordinator?.managedObjectModel)
         let v6 = try model(named: "ShiftLedgerV6")
         #expect(current.entityVersionHashesByName == v6.entityVersionHashesByName)
