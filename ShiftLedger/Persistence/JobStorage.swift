@@ -3,6 +3,7 @@ import CoreData
 
 enum JobStorageError: Error {
     enum Corruption: Error {
+        case duplicateJobIdentity(jobID: UUID)
         case invalidTimeZoneIdentifier(String)
         case unknownPayPeriodKind(String)
         case unknownBasePayKind(String)
@@ -30,7 +31,8 @@ enum JobStorageError: Error {
     }
 
     case jobAlreadyExists
-    case jobNotFound
+    case jobNotFound(jobID: UUID)
+    case jobArchived(jobID: UUID)
     case multipleJobsFound
     case invalidWorkTypeAddition(underlying: JobValidationError)
     case workTypeNotFound(workTypeID: UUID)
@@ -149,17 +151,8 @@ final class JobStorage {
         }
     }
 
-    func addWorkType(_ workType: WorkType) throws -> Job {
-        let jobEntities = try fetchJobs()
-        let jobEntity: JobEntity
-        switch jobEntities.count {
-        case 0:
-            throw JobStorageError.jobNotFound
-        case 1:
-            jobEntity = jobEntities[0]
-        default:
-            throw JobStorageError.multipleJobsFound
-        }
+    func addWorkType(_ workType: WorkType, toJobID jobID: UUID) throws -> Job {
+        let jobEntity = try writableJob(id: jobID)
 
         let existingJob = try makeJob(from: jobEntity)
         let candidateJob: Job
@@ -214,17 +207,8 @@ final class JobStorage {
         return candidateJob
     }
 
-    func renameWorkType(id workTypeID: UUID, to rawName: String) throws -> Job {
-        let jobEntities = try fetchJobs()
-        let jobEntity: JobEntity
-        switch jobEntities.count {
-        case 0:
-            throw JobStorageError.jobNotFound
-        case 1:
-            jobEntity = jobEntities[0]
-        default:
-            throw JobStorageError.multipleJobsFound
-        }
+    func renameWorkType(id workTypeID: UUID, to rawName: String, inJobID jobID: UUID) throws -> Job {
+        let jobEntity = try writableJob(id: jobID)
 
         let existingJob = try makeJob(from: jobEntity)
         let candidateJob: Job
@@ -258,17 +242,8 @@ final class JobStorage {
         return candidateJob
     }
 
-    func addPayRate(_ payRate: PayRate, toWorkTypeID workTypeID: UUID) throws -> Job {
-        let jobEntities = try fetchJobs()
-        let jobEntity: JobEntity
-        switch jobEntities.count {
-        case 0:
-            throw JobStorageError.jobNotFound
-        case 1:
-            jobEntity = jobEntities[0]
-        default:
-            throw JobStorageError.multipleJobsFound
-        }
+    func addPayRate(_ payRate: PayRate, toWorkTypeID workTypeID: UUID, inJobID jobID: UUID) throws -> Job {
+        let jobEntity = try writableJob(id: jobID)
 
         let existingJob = try makeJob(from: jobEntity)
         let shifts: [Shift]
@@ -339,17 +314,8 @@ final class JobStorage {
         return candidateJob
     }
 
-    func archiveWorkType(id workTypeID: UUID) throws -> Job {
-        let jobEntities = try fetchJobs()
-        let jobEntity: JobEntity
-        switch jobEntities.count {
-        case 0:
-            throw JobStorageError.jobNotFound
-        case 1:
-            jobEntity = jobEntities[0]
-        default:
-            throw JobStorageError.multipleJobsFound
-        }
+    func archiveWorkType(id workTypeID: UUID, inJobID jobID: UUID) throws -> Job {
+        let jobEntity = try writableJob(id: jobID)
 
         let existingJob = try makeJob(from: jobEntity)
         let candidateJob: Job
@@ -391,6 +357,37 @@ final class JobStorage {
         default:
             throw JobStorageError.multipleJobsFound
         }
+    }
+
+    func load(forJobID jobID: UUID) throws -> Job {
+        try makeJob(from: job(id: jobID))
+    }
+
+    private func job(id jobID: UUID) throws -> JobEntity {
+        let request = NSFetchRequest<JobEntity>(entityName: "JobEntity")
+        request.predicate = NSPredicate(format: "id == %@", jobID as NSUUID)
+        request.fetchLimit = 2
+        let matches: [JobEntity]
+        do {
+            matches = try context.fetch(request)
+        } catch {
+            throw JobStorageError.fetchFailed(underlying: error)
+        }
+        guard let result = matches.first else {
+            throw JobStorageError.jobNotFound(jobID: jobID)
+        }
+        guard matches.count == 1 else {
+            throw JobStorageError.corruptedData(.duplicateJobIdentity(jobID: jobID))
+        }
+        return result
+    }
+
+    private func writableJob(id jobID: UUID) throws -> JobEntity {
+        let result = try job(id: jobID)
+        guard !result.isArchived else {
+            throw JobStorageError.jobArchived(jobID: jobID)
+        }
+        return result
     }
 
     private func fetchJobs() throws -> [JobEntity] {
@@ -519,12 +516,15 @@ final class JobStorage {
         jobEntity: JobEntity,
         timeZone: TimeZone
     ) throws -> WorkType {
-        guard workTypeEntity.job.objectID == jobEntity.objectID else {
+        guard let owner = workTypeEntity.value(forKey: "job") as? JobEntity else {
+            throw JobStorageError.corruptedData(.invalidWorkTypesRelationship)
+        }
+        guard owner.objectID == jobEntity.objectID else {
             throw JobStorageError.corruptedData(
                 .workTypeBelongsToDifferentJob(
                     workTypeID: workTypeEntity.id,
                     expectedJobID: jobEntity.id,
-                    actualJobID: workTypeEntity.job.id
+                    actualJobID: owner.id
                 )
             )
         }
@@ -534,14 +534,21 @@ final class JobStorage {
         var payRates: [PayRate] = []
 
         for payRateEntity in payRateEntities {
-            guard payRateEntity.job.objectID == jobEntity.objectID else {
+            guard let rateOwner = payRateEntity.value(forKey: "job") as? JobEntity else {
+                throw JobStorageError.corruptedData(.invalidWorkTypePayRatesRelationship)
+            }
+            guard rateOwner.objectID == jobEntity.objectID else {
                 throw JobStorageError.corruptedData(
                     .payRateBelongsToDifferentJob(
                         payRateID: payRateEntity.id,
                         expectedJobID: jobEntity.id,
-                        actualJobID: payRateEntity.job.id
+                        actualJobID: rateOwner.id
                     )
                 )
+            }
+
+            guard payRateEntity.workType?.objectID == workTypeEntity.objectID else {
+                throw JobStorageError.corruptedData(.invalidWorkTypePayRatesRelationship)
             }
 
             payRates.append(try makePayRate(from: payRateEntity, timeZone: timeZone))

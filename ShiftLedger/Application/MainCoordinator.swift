@@ -6,9 +6,9 @@ final class MainCoordinator {
     struct Dependencies {
         let makeOverview: @MainActor (Job) -> OverviewViewController
         let makeAddShift: @MainActor (Job) -> AddShiftViewController
-        let makeWorkTypes: @MainActor ([WorkType]) -> WorkTypesViewController
+        let makeWorkTypes: @MainActor (Job) -> WorkTypesViewController
         let makeAddWorkType: @MainActor (Job) -> AddWorkTypeViewController
-        let makeRenameWorkType: @MainActor (WorkType) -> RenameWorkTypeViewController
+        let makeRenameWorkType: @MainActor (Job, WorkType) -> RenameWorkTypeViewController
         let makeChangePayRate: @MainActor (Job, WorkType) -> ChangePayRateViewController
         let makePayRateHistory: @MainActor (Job, WorkType) -> PayRateHistoryViewController
         let makeEditShift: @MainActor (Job, Shift) -> EditShiftViewController
@@ -107,7 +107,7 @@ final class MainCoordinator {
     }
 
     private func showWorkTypes() {
-        let viewController = dependencies.makeWorkTypes(job.workTypes)
+        let viewController = dependencies.makeWorkTypes(job)
         viewController.onArchived = { [weak self] updatedJob in
             self?.applyWorkTypeArchive(updatedJob)
         }
@@ -147,7 +147,7 @@ final class MainCoordinator {
         _ workType: WorkType,
         returningTo workTypesViewController: WorkTypesViewController
     ) {
-        let viewController = dependencies.makeRenameWorkType(workType)
+        let viewController = dependencies.makeRenameWorkType(job, workType)
         viewController.onSaved = { [weak self, weak workTypesViewController] updatedJob in
             guard let workTypesViewController else { return }
             self?.completeWorkTypeMutation(with: updatedJob, returningTo: workTypesViewController)

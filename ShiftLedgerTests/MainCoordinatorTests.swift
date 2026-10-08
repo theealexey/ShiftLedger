@@ -122,6 +122,7 @@ struct MainCoordinatorTests {
         workTypes.onRenameWorkType?(selected)
         let rename = try #require(harness.navigationController.topViewController as? RenameWorkTypeViewController)
         #expect(harness.metrics.renameInputs == [selected])
+        #expect(harness.metrics.renameJobs == [harness.job])
         let updatedJob = try harness.job.renamingWorkType(id: selected.id, to: "Senior Lectures")
         rename.onSaved?(updatedJob)
 
@@ -140,6 +141,7 @@ struct MainCoordinatorTests {
         _ = harness.navigationController.popViewController(animated: false)
         harness.overview.onManageWorkTypes?()
         #expect(harness.metrics.workTypesInputs.last == updatedJob.workTypes)
+        #expect(harness.metrics.workTypesJobs.last == updatedJob)
     }
 
     @Test("Archiving WorkType keeps Work Types open and updates the Job for subsequent Add Shift")
@@ -440,9 +442,10 @@ struct MainCoordinatorTests {
                     )
                 )
             },
-            makeWorkTypes: { workTypes in
-                metrics.workTypesInputs.append(workTypes)
-                return WorkTypesViewController(viewModel: WorkTypesViewModel(workTypes: workTypes) { id in
+            makeWorkTypes: { job in
+                metrics.workTypesJobs.append(job)
+                metrics.workTypesInputs.append(job.workTypes)
+                return WorkTypesViewController(viewModel: WorkTypesViewModel(workTypes: job.workTypes) { id in
                     do {
                         return .success(try job.archivingWorkType(id: id))
                     } catch {
@@ -458,7 +461,8 @@ struct MainCoordinatorTests {
                     )
                 )
             },
-            makeRenameWorkType: { workType in
+            makeRenameWorkType: { job, workType in
+                metrics.renameJobs.append(job)
                 metrics.renameInputs.append(workType)
                 return RenameWorkTypeViewController(
                     viewModel: RenameWorkTypeViewModel(workType: workType) { _, _ in
@@ -637,7 +641,9 @@ private final class Metrics {
     var overviewShifts: [Shift] = []
     var addShiftJobs: [Job] = []
     var workTypesInputs: [[WorkType]] = []
+    var workTypesJobs: [Job] = []
     var renameInputs: [WorkType] = []
+    var renameJobs: [Job] = []
     var changePayRateJobs: [Job] = []
     var changePayRateInputs: [WorkType] = []
     var payRateHistoryJobs: [Job] = []

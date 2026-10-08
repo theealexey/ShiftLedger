@@ -239,7 +239,7 @@ struct ShiftStorageTests {
         let storage = ShiftStorage(stack: stack)
         try storage.save(initial, forJobID: multiJobID)
         let jobStorage = JobStorage(stack: stack)
-        _ = try jobStorage.archiveWorkType(id: firstWorkTypeID)
+        _ = try jobStorage.archiveWorkType(id: firstWorkTypeID, inJobID: multiJobID)
 
         let movedInTime = try Shift(
             id: initial.id,
@@ -251,7 +251,7 @@ struct ShiftStorageTests {
         try storage.update(movedInTime, forJobID: multiJobID)
         #expect(try storage.loadAll(forJobID: multiJobID) == [movedInTime])
 
-        _ = try jobStorage.archiveWorkType(id: secondWorkTypeID)
+        _ = try jobStorage.archiveWorkType(id: secondWorkTypeID, inJobID: multiJobID)
         let reassigned = try Shift(
             id: initial.id,
             jobID: multiJobID,
@@ -730,7 +730,7 @@ struct ShiftStorageTests {
         )
         let storage = ShiftStorage(stack: stack)
         try storage.save(target, forJobID: multiJobID)
-        let archivedJob = try jobStorage.archiveWorkType(id: firstWorkTypeID)
+        let archivedJob = try jobStorage.archiveWorkType(id: firstWorkTypeID, inJobID: multiJobID)
         let workTypeObjectIDs = Set(try fetchWorkTypes(in: stack.viewContext).map(\.objectID))
         let payRateObjectIDs = Set(try fetchPayRates(in: stack.viewContext).map(\.objectID))
 
@@ -1244,14 +1244,15 @@ struct ShiftStorageTests {
         #expect(comparison.expected.expectedGross == 800)
         #expect(comparison.difference == 0)
 
-        // JobStorage remains intentionally single-Job even though ShiftStorage is scoped.
+        // JobStorage now resolves the explicit owner even with another Job persisted.
         do {
             _ = try JobStorage(stack: stack).addPayRate(
                 PayRate(id: firstWorkTypeID, amount: 101, effectiveFrom: nil),
-                toWorkTypeID: canonicalWorkTypeID
+                toWorkTypeID: canonicalWorkTypeID,
+                inJobID: canonicalWorkTypeID
             )
-            Issue.record("JobStorage unexpectedly accepted Multi-Job rate mutation")
-        } catch JobStorageError.multipleJobsFound {
+            Issue.record("JobStorage unexpectedly accepted a second undated rate")
+        } catch JobStorageError.invalidPayRateChange {
             #expect(!stack.viewContext.hasChanges)
         }
 

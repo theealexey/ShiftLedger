@@ -8,7 +8,7 @@ enum AddWorkTypeAssembly {
             currencyCode: job.currencyCode,
             saveWorkType: { workType in
                 do {
-                    return .success(try storage.addWorkType(workType))
+                    return .success(try storage.addWorkType(workType, toJobID: job.id))
                 } catch JobStorageError.invalidWorkTypeAddition(_) {
                     return .failure(.invalidWorkType)
                 } catch {

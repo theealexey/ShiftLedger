@@ -14,7 +14,7 @@ enum ChangePayRateAssembly {
             timeZoneIdentifier: job.timeZoneIdentifier
         ) { workTypeID, payRate in
             do {
-                return .success(try storage.addPayRate(payRate, toWorkTypeID: workTypeID))
+                return .success(try storage.addPayRate(payRate, toWorkTypeID: workTypeID, inJobID: job.id))
             } catch JobStorageError.historicalCompensationWouldChange {
                 return .failure(.historicalPayrollChange)
             } catch {

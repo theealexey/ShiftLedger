@@ -33,14 +33,14 @@ struct AppFlowComposition {
             makeAddShift: { job in
                 AddShiftAssembly.make(job: job, stack: stack)
             },
-            makeWorkTypes: { workTypes in
-                WorkTypesAssembly.make(workTypes: workTypes, stack: stack)
+            makeWorkTypes: { job in
+                WorkTypesAssembly.make(job: job, stack: stack)
             },
             makeAddWorkType: { job in
                 AddWorkTypeAssembly.make(job: job, stack: stack)
             },
-            makeRenameWorkType: { workType in
-                RenameWorkTypeAssembly.make(workType: workType, stack: stack)
+            makeRenameWorkType: { job, workType in
+                RenameWorkTypeAssembly.make(job: job, workType: workType, stack: stack)
             },
             makeChangePayRate: { job, workType in
                 ChangePayRateAssembly.make(job: job, workType: workType, stack: stack)
