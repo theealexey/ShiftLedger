@@ -1,21 +1,31 @@
 import Foundation
 
 @MainActor
+enum AppLaunchDestination: Equatable {
+    case onboarding
+    case main(Job)
+    case jobSelection([JobCatalogEntry])
+}
+
+@MainActor
 struct AppLaunchResolution {
     let composition: AppFlowComposition
-    let job: Job?
+    let destination: AppLaunchDestination
 }
 
 @MainActor
 final class AppLaunchResolver {
     private let loadCoreDataStack: @MainActor () async throws -> CoreDataStack
+    private let arguments: [String]
 
     init(
         loadCoreDataStack: @escaping @MainActor () async throws -> CoreDataStack = {
             try await CoreDataStack.load()
-        }
+        },
+        arguments: [String] = ProcessInfo.processInfo.arguments
     ) {
         self.loadCoreDataStack = loadCoreDataStack
+        self.arguments = arguments
     }
 
     func resolve() async throws -> AppLaunchResolution {
@@ -24,28 +34,38 @@ final class AppLaunchResolver {
         let stack = try await loadCoreDataStack()
         try Task.checkCancellation()
 
-        let job = try loadInitialJob(from: stack)
+        let catalog = try loadInitialCatalog(from: stack)
+        try Task.checkCancellation()
+        let activeJobs = catalog.filter { !$0.isArchived }
+        let destination: AppLaunchDestination
+        if catalog.isEmpty {
+            destination = .onboarding
+        } else if activeJobs.count == 1, let entry = activeJobs.first {
+            destination = .main(entry.job)
+        } else {
+            destination = .jobSelection(catalog)
+        }
 
         return AppLaunchResolution(
             composition: AppFlowComposition(stack: stack),
-            job: job
+            destination: destination
         )
     }
 
     private func prepareLaunchStateForUITesting() throws {
 #if DEBUG
-        if ProcessInfo.processInfo.arguments.contains("-ui-testing-reset-store") {
+        if arguments.contains("-ui-testing-reset-store") {
             try CoreDataStack.resetPersistentStoreForUITesting()
         }
 #endif
     }
 
-    private func loadInitialJob(from stack: CoreDataStack) throws -> Job? {
+    private func loadInitialCatalog(from stack: CoreDataStack) throws -> [JobCatalogEntry] {
         let jobStorage = JobStorage(stack: stack)
+        let catalog = try jobStorage.loadCatalog()
 
 #if DEBUG
-        if ProcessInfo.processInfo.arguments.contains("-ui-testing-seed-job"),
-           try jobStorage.load() == nil {
+        if arguments.contains("-ui-testing-seed-job"), catalog.isEmpty {
             let job = try Job(
                 currencyCode: "SEK",
                 timeZoneIdentifier: "Europe/Stockholm",
@@ -60,9 +80,10 @@ final class AppLaunchResolver {
                 createdAt: Date(timeIntervalSinceReferenceDate: 0)
             )
             try jobStorage.save(job)
+            return try jobStorage.loadCatalog()
         }
 #endif
 
-        return try jobStorage.load()
+        return catalog
     }
 }

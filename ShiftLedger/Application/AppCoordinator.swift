@@ -6,6 +6,7 @@ final class AppCoordinator {
     private enum ActiveFlow {
         case onboarding(OnboardingCoordinator)
         case main(MainCoordinator)
+        case jobSelection(UINavigationController)
     }
 
     private let window: UIWindow
@@ -62,15 +63,18 @@ final class AppCoordinator {
 
                 try Task.checkCancellation()
 
-                if let job = resolution.job {
+                switch resolution.destination {
+                case let .main(job):
                     installMainFlow(
                         job: job,
                         composition: resolution.composition
                     )
-                } else {
+                case .onboarding:
                     installOnboardingFlow(
                         composition: resolution.composition
                     )
+                case let .jobSelection(catalog):
+                    installJobSelection(catalog: catalog, composition: resolution.composition)
                 }
 
             } catch is CancellationError {
@@ -108,8 +112,37 @@ final class AppCoordinator {
         installRoot(navigationController)
     }
 
-    private func installMainFlow(job: Job, composition: AppFlowComposition) {
+    private func installJobSelection(catalog: [JobCatalogEntry], composition: AppFlowComposition) {
         let navigationController = makeNavigationController()
+        let controller = JobSelectionAssembly.make(catalog: catalog)
+        controller.onSelectJob = { [weak self, weak controller, weak navigationController] id in
+            guard let self, let controller, let navigationController,
+                  case .jobSelection = self.activeFlow else { return }
+            do {
+                let job = try composition.resolveSelectedJob(id: id)
+                self.installMainFlow(job: job, composition: composition, navigationController: navigationController)
+            } catch {
+                controller.presentSelectionError()
+            }
+        }
+        controller.onReload = { [weak controller] in
+            do {
+                controller?.reload(items: try composition.loadJobSelectionItems())
+            } catch {
+                controller?.presentSelectionError()
+            }
+        }
+        navigationController.setViewControllers([controller], animated: false)
+        activeFlow = .jobSelection(navigationController)
+        installRoot(navigationController)
+    }
+
+    private func installMainFlow(
+        job: Job,
+        composition: AppFlowComposition,
+        navigationController: UINavigationController? = nil
+    ) {
+        let navigationController = navigationController ?? makeNavigationController()
         let coordinator = MainCoordinator(
             navigationController: navigationController,
             job: job,
@@ -131,7 +164,9 @@ final class AppCoordinator {
     }
 
     private func installRoot(_ rootViewController: UIViewController) {
-        window.rootViewController = rootViewController
+        if window.rootViewController !== rootViewController {
+            window.rootViewController = rootViewController
+        }
 
         if window.isHidden {
             window.makeKeyAndVisible()

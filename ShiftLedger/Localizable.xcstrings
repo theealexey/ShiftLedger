@@ -1,6 +1,62 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "jobSelection.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Choose Job" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Выберите работу" } }
+      }
+    },
+    "jobSelection.active" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Active Jobs" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Активные работы" } }
+      }
+    },
+    "jobSelection.archived" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Archived Jobs" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Архивные работы" } }
+      }
+    },
+    "jobSelection.unnamed" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Unnamed Job" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Работа без названия" } }
+      }
+    },
+    "jobSelection.archivedStatus" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Archived" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "В архиве" } }
+      }
+    },
+    "jobSelection.noActive" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "No active Jobs are available. Archived Jobs are shown for information; their history cannot be opened here yet." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Нет активных работ. Архивные работы показаны для справки; открыть их историю здесь пока нельзя." } }
+      }
+    },
+    "jobSelection.error.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Could Not Open Job" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Не удалось открыть работу" } }
+      }
+    },
+    "jobSelection.error.message" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "The selected Job is unavailable or its data could not be loaded. Retry to reload the list." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Выбранная работа недоступна или её данные не удалось загрузить. Повторите попытку, чтобы обновить список." } }
+      }
+    },
     "app.brandName" : {
       "extractionState" : "manual",
       "localizations" : {

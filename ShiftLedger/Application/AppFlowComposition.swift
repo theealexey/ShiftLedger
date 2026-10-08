@@ -1,11 +1,31 @@
 import Foundation
 
+enum JobSelectionError: Error {
+    case jobNotFound(jobID: UUID)
+    case jobArchived(jobID: UUID)
+}
+
 @MainActor
 struct AppFlowComposition {
     private let stack: CoreDataStack
 
     init(stack: CoreDataStack) {
         self.stack = stack
+    }
+
+    func loadJobSelectionItems() throws -> [JobSelectionItem] {
+        JobSelectionAssembly.items(from: try JobStorage(stack: stack).loadCatalog())
+    }
+
+    func resolveSelectedJob(id: UUID) throws -> Job {
+        let catalog = try JobStorage(stack: stack).loadCatalog()
+        guard let entry = catalog.first(where: { $0.job.id == id }) else {
+            throw JobSelectionError.jobNotFound(jobID: id)
+        }
+        guard !entry.isArchived else {
+            throw JobSelectionError.jobArchived(jobID: id)
+        }
+        return entry.job
     }
 
     func makeOnboardingDependencies() -> OnboardingCoordinator.Dependencies {

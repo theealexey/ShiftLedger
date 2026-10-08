@@ -5,6 +5,185 @@ import Testing
 
 @MainActor
 struct AppCoordinatorTests {
+    @Test("Selecting Job B validates fresh persistence and keeps one navigation owner")
+    func selectingJobInstallsScopedMainFlow() async throws {
+        let fixture = try await JobSelectionTestStore.make()
+        defer { try? fixture.close() }
+        try fixture.insertJob(index: 1, name: "Same Name")
+        let b = try fixture.insertJob(index: 2, name: "Same Name")
+        let composition = AppFlowComposition(stack: fixture.stack)
+        let catalog = try JobStorage(stack: fixture.stack).loadCatalog()
+        let jobA = try #require(catalog.first { $0.job.id != b.id }).job
+        let jobB = try #require(catalog.first { $0.job.id == b.id }).job
+        let shiftA = try makeShift(day: 20, workTypeID: try #require(jobA.soleWorkType).id, jobID: jobA.id)
+        let shiftB = try makeShift(day: 20, workTypeID: try #require(jobB.soleWorkType).id, jobID: jobB.id)
+        // Shift identities remain globally unique even when dates and WorkType IDs coincide.
+        let distinctShiftB = try Shift(
+            id: try #require(UUID(uuidString: "BB000000-0000-0000-0000-000000000001")),
+            jobID: jobB.id, workTypeID: shiftB.workTypeID, start: shiftB.start, end: shiftB.end
+        )
+        let storage = ShiftStorage(stack: fixture.stack)
+        try storage.save(shiftA, forJobID: jobA.id)
+        try storage.save(distinctShiftB, forJobID: jobB.id)
+        var resolutionCount = 0
+        let window = makeWindow()
+        let coordinator = AppCoordinator(
+            window: window,
+            resolveLaunch: {
+                resolutionCount += 1
+                return AppLaunchResolution(composition: composition, destination: .jobSelection(catalog))
+            },
+            makeNavigationController: { NonAnimatingNavigationController() }
+        )
+        defer { tearDown(window, coordinator: coordinator) }
+        coordinator.start()
+        try await waitUntil { (window.rootViewController as? UINavigationController)?.topViewController is JobSelectionViewController }
+        let navigation = try #require(window.rootViewController as? UINavigationController)
+        let selection = try #require(navigation.topViewController as? JobSelectionViewController)
+        selection.loadViewIfNeeded()
+        coordinator.start()
+        await Task.yield()
+        #expect(resolutionCount == 1)
+        #expect(navigation.viewControllers.count == 1)
+        selection.onSelectJob?(jobB.id)
+        #expect(window.rootViewController === navigation)
+        let overview = try #require(navigation.topViewController as? OverviewViewController)
+        overview.loadViewIfNeeded()
+        #expect(navigation.viewControllers.count == 1)
+        let hero: UILabel = try requireView("overview.expectedGross.amount", in: overview.view)
+        #expect(hero.text == OverviewFormatting.heroAmount(
+            200, currencyCode: jobB.currencyCode, locale: CurrencySelectionItem.applicationDisplayLocale
+        ))
+        let selectedCard: UIControl = try requireView("overview.shift.\(distinctShiftB.id.uuidString)", in: overview.view)
+        #expect(selectedCard.accessibilityTraits.contains(.selected))
+        overview.onAddShift?()
+        let add = try #require(navigation.topViewController as? AddShiftViewController)
+        _ = navigation.popViewController(animated: false)
+        #expect(navigation.topViewController === overview)
+        overview.onAddShift?()
+        let newAdd = try #require(navigation.topViewController as? AddShiftViewController)
+        #expect(newAdd !== add)
+        let addedDates = try makeShift(day: 22, workTypeID: distinctShiftB.workTypeID, jobID: jobB.id)
+        newAdd.loadViewIfNeeded()
+        try await selectDate(addedDates.start, in: newAdd, rowWithAccessibilityLabel: AddShiftStrings.start)
+        try await selectDate(addedDates.end, in: newAdd, rowWithAccessibilityLabel: AddShiftStrings.end)
+        try tapBarButtonItem(newAdd.navigationItem.rightBarButtonItem)
+        let saved = try #require(try storage.loadAll(forJobID: jobB.id).first { $0.start == addedDates.start })
+        #expect(saved.jobID == jobB.id)
+        #expect(try storage.loadAll(forJobID: jobA.id) == [shiftA])
+        #expect(navigation.topViewController === overview)
+        let savedCard: UIControl = try requireView("overview.shift.\(saved.id.uuidString)", in: overview.view)
+        #expect(savedCard.accessibilityTraits.contains(.selected))
+        savedCard.sendActions(for: .touchUpInside)
+        let editButton: UIButton = try requireView("overview.shift.\(saved.id.uuidString).edit", in: overview.view)
+        editButton.sendActions(for: .touchUpInside)
+        let edit = try #require(navigation.topViewController as? EditShiftViewController)
+        let editedDates = try makeShift(day: 23, workTypeID: saved.workTypeID, jobID: jobB.id)
+        edit.loadViewIfNeeded()
+        try await selectDate(editedDates.start, in: edit, rowWithAccessibilityLabel: AddShiftStrings.start)
+        try await selectDate(editedDates.end, in: edit, rowWithAccessibilityLabel: AddShiftStrings.end)
+        try tapBarButtonItem(edit.navigationItem.rightBarButtonItem)
+        let edited = try #require(try storage.loadAll(forJobID: jobB.id).first { $0.id == saved.id })
+        #expect(edited.jobID == jobB.id)
+        #expect(edited.start == editedDates.start)
+        #expect(edited.end == editedDates.end)
+        #expect(try storage.loadAll(forJobID: jobA.id) == [shiftA])
+        #expect(navigation.topViewController === overview)
+        let period = try jobB.payCalculationPeriod(for: distinctShiftB)
+        overview.onCheckPaycheck?(period)
+        let entry = try #require(navigation.topViewController as? ActualGrossEntryViewController)
+        let actual = try ActualGross(amount: 201)
+        entry.onContinue?(actual)
+        let result = try #require(navigation.topViewController as? PaycheckResultViewController)
+        let expected = try jobB.paycheckComparison(for: period, actualGross: actual, from: [distinctShiftB])
+        try expectSummary(result, comparison: expected, job: jobB)
+        #expect(expected.expected.expectedGross == 200)
+        coordinator.start()
+        await Task.yield()
+        #expect(resolutionCount == 1)
+        #expect(navigation.topViewController === result)
+        #expect(!fixture.stack.viewContext.hasChanges)
+    }
+
+    @Test("Selection failure retains recoverable root without fallback", arguments: ["missing", "removed", "archived", "newlyArchived", "corrupted"])
+    func invalidSelectionKeepsRoot(reason: String) async throws {
+        let fixture = try await JobSelectionTestStore.make()
+        defer { try? fixture.close() }
+        try fixture.insertJob(index: 1)
+        let second = try fixture.insertJob(index: 2)
+        let secondID = second.id
+        let archived = try fixture.insertJob(index: 3, archived: true)
+        let catalog = try JobStorage(stack: fixture.stack).loadCatalog()
+        let composition = AppFlowComposition(stack: fixture.stack)
+        let window = makeWindow()
+        let coordinator = AppCoordinator(window: window, resolveLaunch: {
+            AppLaunchResolution(composition: composition, destination: .jobSelection(catalog))
+        })
+        defer { tearDown(window, coordinator: coordinator) }
+        coordinator.start()
+        try await waitUntil { (window.rootViewController as? UINavigationController)?.topViewController is JobSelectionViewController }
+        let navigation = try #require(window.rootViewController as? UINavigationController)
+        let selection = try #require(navigation.topViewController as? JobSelectionViewController)
+        selection.loadViewIfNeeded()
+        let id: UUID
+        switch reason {
+        case "missing":
+            id = try #require(UUID(uuidString: "FF000000-0000-0000-0000-000000000001"))
+        case "archived": id = archived.id
+        case "removed":
+            id = second.id
+            fixture.stack.viewContext.delete(second)
+            try fixture.stack.viewContext.save()
+        case "newlyArchived":
+            second.isArchived = true
+            try fixture.stack.viewContext.save()
+            id = second.id
+        default:
+            archived.timeZoneIdentifier = "Invalid/Zone"
+            try fixture.stack.viewContext.save()
+            id = second.id
+        }
+        selection.onSelectJob?(id)
+        #expect(navigation.topViewController === selection)
+        #expect(window.rootViewController === navigation)
+        #expect(navigation.viewControllers.count == 1)
+        let alert = try #require(selection.presentedViewController as? UIAlertController)
+        #expect(alert.title == JobSelectionStrings.errorTitle)
+        #expect(alert.message == JobSelectionStrings.errorMessage)
+        #expect(alert.actions.map(\.title).contains(JobSelectionStrings.retry))
+        #expect(!fixture.stack.viewContext.hasChanges)
+        selection.dismiss(animated: false)
+        try await waitUntil { selection.presentedViewController == nil }
+        if reason == "corrupted" {
+            archived.timeZoneIdentifier = "Europe/Stockholm"
+            try fixture.stack.viewContext.save()
+        }
+        #expect(navigation.topViewController === selection)
+        selection.onSelectJob?(try #require(catalog.first { $0.job.id != secondID && !$0.isArchived }).job.id)
+        try await waitUntil { navigation.topViewController is OverviewViewController }
+    }
+
+    @Test("A fresh launch asks again and can choose a different Job")
+    func coldLaunchDoesNotRestorePreviousSelection() async throws {
+        let fixture = try await JobSelectionTestStore.make()
+        defer { try? fixture.close() }
+        let a = try fixture.insertJob(index: 1)
+        let b = try fixture.insertJob(index: 2)
+        for id in [b.id, a.id] {
+            let window = makeWindow()
+            let coordinator = AppCoordinator(window: window, resolveLaunch: {
+                try await AppLaunchResolver(loadCoreDataStack: { fixture.stack }, arguments: []).resolve()
+            })
+            coordinator.start()
+            try await waitUntil { (window.rootViewController as? UINavigationController)?.topViewController is JobSelectionViewController }
+            let navigation = try #require(window.rootViewController as? UINavigationController)
+            let selection = try #require(navigation.topViewController as? JobSelectionViewController)
+            selection.onSelectJob?(id)
+            #expect(navigation.topViewController is OverviewViewController)
+            tearDown(window, coordinator: coordinator)
+        }
+        #expect(!fixture.stack.viewContext.hasChanges)
+    }
     @Test("Startup failure presents a localized retry alert")
     func startupFailurePresentsLocalizedError() async throws {
         var loaderCallCount = 0
@@ -61,7 +240,7 @@ struct AppCoordinatorTests {
 
             return AppLaunchResolution(
                 composition: AppFlowComposition(stack: stack),
-                job: nil
+                destination: .onboarding
             )
         }
         let window = makeWindow()
@@ -154,7 +333,7 @@ struct AppCoordinatorTests {
 
             return AppLaunchResolution(
                 composition: AppFlowComposition(stack: stack),
-                job: nil
+                destination: .onboarding
             )
         }
         let window = makeWindow()
@@ -194,7 +373,7 @@ struct AppCoordinatorTests {
 
                 return AppLaunchResolution(
                     composition: AppFlowComposition(stack: stack),
-                    job: nil
+                    destination: .onboarding
                 )
             }
         )
@@ -224,7 +403,7 @@ struct AppCoordinatorTests {
 
             return AppLaunchResolution(
                 composition: AppFlowComposition(stack: stack),
-                job: job
+                destination: .main(job)
             )
         }
         let window = makeWindow()
@@ -259,7 +438,7 @@ struct AppCoordinatorTests {
             resolveLaunch: {
                 AppLaunchResolution(
                     composition: AppFlowComposition(stack: stack),
-                    job: nil
+                    destination: .onboarding
                 )
             },
             makeNavigationController: {
@@ -804,7 +983,7 @@ struct AppCoordinatorTests {
             resolveLaunch: {
                 AppLaunchResolution(
                     composition: AppFlowComposition(stack: stack),
-                    job: job
+                    destination: .main(job)
                 )
             },
             makeNavigationController: { NonAnimatingNavigationController() }
