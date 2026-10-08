@@ -55,7 +55,7 @@ struct AppFlowComposition {
                 ActualGrossEntryAssembly.make(currencyCode: currencyCode)
             },
             preparePaycheckComparison: { job, period, actualGross in
-                let shifts = try ShiftStorage(stack: stack).loadAll()
+                let shifts = try ShiftStorage(stack: stack).loadAll(forJobID: job.id)
                 return try job.paycheckComparison(
                     for: period,
                     actualGross: actualGross,

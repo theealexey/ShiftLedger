@@ -163,7 +163,7 @@ struct CoreDataV5MigrationTests {
         let domainJob = try #require(try JobStorage(stack: stack).load())
         #expect(domainJob == expectedJob)
         #expect(domainJob.workType(id: workTypeID)?.isArchived == false)
-        #expect(try ShiftStorage(stack: stack).loadAll() == [expectedShift])
+        #expect(try ShiftStorage(stack: stack).loadAll(forJobID: expectedShift.jobID) == [expectedShift])
         #expect(try domainJob.expectedGross(
             for: .perShift(shiftID: expectedShift.id),
             from: [expectedShift]

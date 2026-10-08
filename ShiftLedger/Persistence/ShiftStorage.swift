@@ -7,6 +7,7 @@ enum ShiftStorageError: Error {
         case missingWorkType
         case duplicateWorkTypeIdentity(workTypeID: UUID)
         case duplicateShiftIdentity(shiftID: UUID)
+        case duplicateJobIdentity(jobID: UUID)
         case workTypeBelongsToDifferentJob(
             workTypeID: UUID,
             expectedJobID: UUID,
@@ -29,9 +30,9 @@ enum ShiftStorageError: Error {
         case invalidShift(underlying: ShiftValidationError)
     }
 
-    case jobNotFound
+    case jobNotFound(jobID: UUID)
+    case jobArchived(jobID: UUID)
     case foreignShiftOwner(shiftID: UUID, expectedJobID: UUID, actualJobID: UUID)
-    case multipleJobsFound
     case workTypeNotFound(workTypeID: UUID)
     case workTypeArchived(workTypeID: UUID)
     case shiftNotFound(shiftID: UUID)
@@ -54,20 +55,22 @@ final class ShiftStorage {
         context = stack.viewContext
     }
 
-    func save(_ shift: Shift) throws {
-        let job = try singleJob()
+    func save(_ shift: Shift, forJobID jobID: UUID) throws {
+        let job = try job(id: jobID)
         try validateOwner(of: shift, job: job)
+        try validateWritable(job)
+        let matches = try fetchShifts(matching: NSPredicate(format: "id == %@", shift.id as NSUUID))
+        guard matches.count <= 1 else {
+            throw ShiftStorageError.corruptedData(.duplicateShiftIdentity(shiftID: shift.id))
+        }
+        guard matches.isEmpty else { throw ShiftStorageError.duplicateShift }
         let workTypes = try workTypes(for: job)
         let workType = try workType(id: shift.workTypeID, in: workTypes)
         try validateNewAssignment(to: workType)
-        let existingShifts = try fetchShifts()
+        let existingShifts = try history(for: job)
 
         for entity in existingShifts {
             let existingShift = try makeShift(from: entity, job: job)
-
-            if entity.id == shift.id {
-                throw ShiftStorageError.duplicateShift
-            }
 
             if existingShift.overlaps(with: shift) {
                 throw ShiftStorageError.overlappingShift
@@ -100,12 +103,13 @@ final class ShiftStorage {
         }
     }
 
-    func update(_ shift: Shift) throws {
-        let job = try singleJob()
+    func update(_ shift: Shift, forJobID jobID: UUID) throws {
+        let job = try job(id: jobID)
         try validateOwner(of: shift, job: job)
+        try validateWritable(job)
         let workTypes = try workTypes(for: job)
-        let existingShifts = try fetchShifts()
-        let target = try uniqueShift(id: shift.id, in: existingShifts)
+        let target = try uniqueShift(id: shift.id, for: job)
+        let existingShifts = try history(for: job)
         let requestedWorkType = try workType(id: shift.workTypeID, in: workTypes)
         let existingWorkType = try validatedWorkType(of: target, job: job)
         if requestedWorkType.objectID != existingWorkType.objectID {
@@ -129,7 +133,6 @@ final class ShiftStorage {
         target.unpaidBreakStart = shift.unpaidBreak?.start
         target.unpaidBreakEnd = shift.unpaidBreak?.end
         target.workType = requestedWorkType
-        target.job = job
 
         do {
             try context.save()
@@ -139,10 +142,11 @@ final class ShiftStorage {
         }
     }
 
-    func delete(id shiftID: UUID) throws {
-        let job = try singleJob()
+    func delete(id shiftID: UUID, inJobID jobID: UUID) throws {
+        let job = try job(id: jobID)
+        try validateWritable(job)
         _ = try workTypes(for: job)
-        let target = try uniqueShift(id: shiftID, in: try fetchShifts())
+        let target = try uniqueShift(id: shiftID, for: job)
         _ = try validatedWorkType(of: target, job: job)
 
         context.delete(target)
@@ -155,11 +159,11 @@ final class ShiftStorage {
         }
     }
 
-    func loadAll() throws -> [Shift] {
-        let job = try singleJob()
+    func loadAll(forJobID jobID: UUID) throws -> [Shift] {
+        let job = try job(id: jobID)
         _ = try workTypes(for: job)
 
-        return try fetchShifts().map { entity in
+        return try history(for: job).map { entity in
             try makeShift(from: entity, job: job)
         }
         .sorted {
@@ -173,8 +177,9 @@ final class ShiftStorage {
         }
     }
 
-    private func singleJob() throws -> JobEntity {
+    private func job(id: UUID) throws -> JobEntity {
         let request = NSFetchRequest<JobEntity>(entityName: "JobEntity")
+        request.predicate = NSPredicate(format: "id == %@", id as NSUUID)
         request.fetchLimit = 2
 
         let jobs: [JobEntity]
@@ -186,12 +191,16 @@ final class ShiftStorage {
 
         switch jobs.count {
         case 0:
-            throw ShiftStorageError.jobNotFound
+            throw ShiftStorageError.jobNotFound(jobID: id)
         case 1:
             return jobs[0]
         default:
-            throw ShiftStorageError.multipleJobsFound
+            throw ShiftStorageError.corruptedData(.duplicateJobIdentity(jobID: id))
         }
+    }
+
+    private func validateWritable(_ job: JobEntity) throws {
+        guard !job.isArchived else { throw ShiftStorageError.jobArchived(jobID: job.id) }
     }
 
     private func validateOwner(of shift: Shift, job: JobEntity) throws {
@@ -202,8 +211,9 @@ final class ShiftStorage {
         }
     }
 
-    private func fetchShifts() throws -> [ShiftEntity] {
+    private func fetchShifts(matching predicate: NSPredicate) throws -> [ShiftEntity] {
         let request = NSFetchRequest<ShiftEntity>(entityName: "ShiftEntity")
+        request.predicate = predicate
         do {
             return try context.fetch(request)
         } catch {
@@ -211,16 +221,45 @@ final class ShiftStorage {
         }
     }
 
+    private func history(for job: JobEntity) throws -> [ShiftEntity] {
+        // Either relationship associates a record with this Job for validation.
+        // A record with neither relationship cannot be attributed safely; report
+        // corruption rather than silently returning an incomplete history.
+        let shifts = try fetchShifts(matching: NSPredicate(
+            format: "job == %@ OR workType.job == %@ OR (job == nil AND workType == nil)",
+            job, job
+        ))
+        guard !shifts.isEmpty else { return [] }
+
+        // Identity is global, while overlap/history is Job-scoped. Only query
+        // identities represented in this history, not another Job's history.
+        let identities = try fetchShifts(matching: NSPredicate(
+            format: "id IN %@", shifts.map { $0.id as NSUUID }
+        ))
+        var seen = Set<UUID>()
+        for entity in identities {
+            guard seen.insert(entity.id).inserted else {
+                throw ShiftStorageError.corruptedData(.duplicateShiftIdentity(shiftID: entity.id))
+            }
+        }
+        return shifts
+    }
+
     private func uniqueShift(
         id: UUID,
-        in shifts: [ShiftEntity]
+        for job: JobEntity
     ) throws -> ShiftEntity {
-        let matches = shifts.filter { $0.id == id }
+        let matches = try fetchShifts(matching: NSPredicate(format: "id == %@", id as NSUUID))
 
         switch matches.count {
         case 0:
             throw ShiftStorageError.shiftNotFound(shiftID: id)
         case 1:
+            if let owner = matches[0].job, owner.objectID != job.objectID {
+                throw ShiftStorageError.foreignShiftOwner(
+                    shiftID: id, expectedJobID: job.id, actualJobID: owner.id
+                )
+            }
             return matches[0]
         default:
             throw ShiftStorageError.corruptedData(

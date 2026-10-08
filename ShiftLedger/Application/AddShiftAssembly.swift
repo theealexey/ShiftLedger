@@ -9,7 +9,7 @@ enum AddShiftAssembly {
             timeZoneIdentifier: job.timeZoneIdentifier,
             workTypes: job.workTypes,
             saveShift: { shift in
-                saveShift(shift, using: shiftStorage)
+                saveShift(shift, jobID: job.id, using: shiftStorage)
             }
         )
 
@@ -18,10 +18,11 @@ enum AddShiftAssembly {
 
     private static func saveShift(
         _ shift: Shift,
+        jobID: UUID,
         using shiftStorage: ShiftStorage
     ) -> Result<Void, AddShiftSaveFailure> {
         do {
-            try shiftStorage.save(shift)
+            try shiftStorage.save(shift, forJobID: jobID)
             return .success(())
         } catch ShiftStorageError.overlappingShift {
             return .failure(.overlap)

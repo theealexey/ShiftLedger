@@ -354,7 +354,7 @@ struct JobStorageTests {
         stacks.append(stackA)
         let storage = JobStorage(stack: stackA)
         try storage.save(originalJob)
-        try ShiftStorage(stack: stackA).save(shift)
+        try ShiftStorage(stack: stackA).save(shift, forJobID: shift.jobID)
 
         let context = stackA.viewContext
         let storedJobBefore = try #require(try context.fetch(
@@ -426,7 +426,7 @@ struct JobStorageTests {
         let stackB = try await CoreDataStack.load(storeURL: storeURL)
         stacks.append(stackB)
         let restoredJob = try #require(try JobStorage(stack: stackB).load())
-        let restoredShifts = try ShiftStorage(stack: stackB).loadAll()
+        let restoredShifts = try ShiftStorage(stack: stackB).loadAll(forJobID: originalJob.id)
         #expect(restoredJob == archivedJob)
         #expect(restoredJob.workType(id: renameTargetID)?.isArchived == true)
         #expect(restoredShifts == [shift])
@@ -1871,8 +1871,8 @@ struct JobStorageTests {
         let original = try makeRenameJob()
         try storage.save(original)
         // The rate form/storage exists before the Shift is persisted or started.
-        #expect(try ShiftStorage(stack: stack).loadAll().isEmpty)
-        try ShiftStorage(stack: stack).save(shift)
+        #expect(try ShiftStorage(stack: stack).loadAll(forJobID: original.id).isEmpty)
+        try ShiftStorage(stack: stack).save(shift, forJobID: shift.jobID)
         currentTime = shift.start
         let added = try PayRate(id: addedRateID, amount: 150, effectiveFrom: LocalDate(year: 2026, month: 3, day: 1))
         let context = stack.viewContext
@@ -1897,7 +1897,7 @@ struct JobStorageTests {
         let restored = try #require(try JobStorage(stack: reopened).load())
         #expect(restored == original)
         #expect(restored.workType(id: renameTargetID)?.payRates.contains { $0.id == addedRateID } == false)
-        #expect(try ShiftStorage(stack: reopened).loadAll() == [shift])
+        #expect(try ShiftStorage(stack: reopened).loadAll(forJobID: original.id) == [shift])
     }
 
     @Test("Accepted future rate persists without changing historical payroll across SQLite reopen")
@@ -1913,8 +1913,8 @@ struct JobStorageTests {
         let storage = JobStorage(stack: stack, now: { historical.end })
         try storage.save(original)
         let shiftStorage = ShiftStorage(stack: stack)
-        try shiftStorage.save(historical)
-        try shiftStorage.save(future)
+        try shiftStorage.save(historical, forJobID: historical.jobID)
+        try shiftStorage.save(future, forJobID: future.jobID)
         let added = try PayRate(id: addedRateID, amount: 150, effectiveFrom: LocalDate(year: 2026, month: 3, day: 5))
         let updated = try storage.addPayRate(added, toWorkTypeID: renameTargetID)
         #expect(try updated.applicablePayRate(for: historical).amount == 125)
@@ -1926,7 +1926,7 @@ struct JobStorageTests {
         stacks.append(reopened)
         let restored = try #require(try JobStorage(stack: reopened).load())
         #expect(restored == updated)
-        #expect(try ShiftStorage(stack: reopened).loadAll() == [historical, future])
+        #expect(try ShiftStorage(stack: reopened).loadAll(forJobID: original.id) == [historical, future])
         #expect(try restored.basePay(for: historical) == 250)
         #expect(try restored.basePay(for: future) == 300)
     }
@@ -1941,7 +1941,7 @@ struct JobStorageTests {
         let shift = try rateProtectionShift(day: 10)
         let storage = JobStorage(stack: stack, now: { shift.end })
         try storage.save(makeRenameJob())
-        try ShiftStorage(stack: stack).save(shift)
+        try ShiftStorage(stack: stack).save(shift, forJobID: shift.jobID)
         let added = try PayRate(id: addedRateID, amount: 125, effectiveFrom: LocalDate(year: 2026, month: 3, day: 1))
         let updated = try storage.addPayRate(added, toWorkTypeID: renameTargetID)
         #expect(try updated.applicablePayRate(for: shift) == added)
@@ -1966,7 +1966,7 @@ struct JobStorageTests {
         let original = try makeRenameJob()
         try storage.save(original)
         let shift = try rateProtectionShift(day: 10)
-        try ShiftStorage(stack: stack).save(shift)
+        try ShiftStorage(stack: stack).save(shift, forJobID: shift.jobID)
         let context = stack.viewContext
         let entity = try #require(try context.fetch(NSFetchRequest<ShiftEntity>(entityName: "ShiftEntity")).first)
         entity.workType = nil

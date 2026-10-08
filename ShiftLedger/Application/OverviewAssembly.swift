@@ -10,7 +10,7 @@ enum OverviewAssembly {
         let shiftStorage = ShiftStorage(stack: stack)
         let viewModel = OverviewViewModel(
             job: job,
-            loadShifts: { try shiftStorage.loadAll() },
+            loadShifts: { try shiftStorage.loadAll(forJobID: job.id) },
             currentDate: currentDate
         )
 

@@ -115,7 +115,7 @@ struct CoreDataV6MigrationTests {
         coordinators.append(try #require(reopened.viewContext.persistentStoreCoordinator))
         try verifyJobMetadata(reopened, expectedJob: fixture.job)
         #expect(try snapshot(in: reopened.viewContext) == before)
-        #expect(try ShiftStorage(stack: reopened).loadAll().isEmpty)
+        #expect(try ShiftStorage(stack: reopened).loadAll(forJobID: fixture.job.id).isEmpty)
         #expect(reopened.viewContext.hasChanges == false)
     }
 
@@ -126,7 +126,7 @@ struct CoreDataV6MigrationTests {
         try verifyJobMetadata(stack, expectedJob: fixture.job)
         #expect(try snapshot(in: stack.viewContext) == before)
         let job = try #require(try JobStorage(stack: stack).load())
-        let shifts = try ShiftStorage(stack: stack).loadAll()
+        let shifts = try ShiftStorage(stack: stack).loadAll(forJobID: fixture.job.id)
         #expect(shifts == fixture.shifts)
         #expect(try shifts.map { try job.basePay(for: $0) } == expectedAmounts)
         #expect(try shifts.map {

@@ -323,7 +323,7 @@ struct AppCoordinatorTests {
             let addShift = try #require(navigation.topViewController as? AddShiftViewController)
             #expect(addShift.navigationController === navigation)
             let persisted = try makeShift(day: 20)
-            try ShiftStorage(stack: stack).save(persisted)
+            try ShiftStorage(stack: stack).save(persisted, forJobID: persisted.jobID)
 
             // The callback value differs deliberately: only storage may supply the Overview data.
             addShift.onSaved?(try makeShift(day: 21))
@@ -365,7 +365,7 @@ struct AppCoordinatorTests {
             )
             try tapBarButtonItem(addShift.navigationItem.rightBarButtonItem)
 
-            let persistedShifts = try ShiftStorage(stack: stack).loadAll()
+            let persistedShifts = try ShiftStorage(stack: stack).loadAll(forJobID: job.id)
             #expect(persistedShifts.count == 1)
             let persistedShift = try #require(persistedShifts.first)
             #expect(persistedShift.start == expectedShift.start)
@@ -414,7 +414,7 @@ struct AppCoordinatorTests {
             )
             try tapBarButtonItem(addShift.navigationItem.rightBarButtonItem)
 
-            let persistedShifts = try ShiftStorage(stack: stack).loadAll()
+            let persistedShifts = try ShiftStorage(stack: stack).loadAll(forJobID: job.id)
             let persistedShift = try #require(persistedShifts.first)
             #expect(persistedShifts.count == 1)
             #expect(persistedShift.workTypeID == selectedWorkType.id)
@@ -600,7 +600,7 @@ struct AppCoordinatorTests {
         let edited = try makeShift(day: 23, workTypeID: secondWorkType.id, jobID: job.id)
 
         try await withOverview(job: job) { stack, navigation, overview in
-            try ShiftStorage(stack: stack).save(original)
+            try ShiftStorage(stack: stack).save(original, forJobID: original.jobID)
             overview.reload(selectingShiftID: original.id)
             let originalOverview = overview
             let initiallySelectedCard: UIControl = try requireView(
@@ -642,7 +642,7 @@ struct AppCoordinatorTests {
             )
             try tapBarButtonItem(editShift.navigationItem.rightBarButtonItem)
 
-            let persistedShifts = try ShiftStorage(stack: stack).loadAll()
+            let persistedShifts = try ShiftStorage(stack: stack).loadAll(forJobID: job.id)
             let persisted = try #require(persistedShifts.first)
             #expect(persistedShifts.count == 1)
             #expect(persisted.id == original.id)
@@ -690,7 +690,7 @@ struct AppCoordinatorTests {
         let job = try makeValidJob()
         try await withOverview(job: job) { stack, navigation, overview in
             let shift = try makeShift(day: 20)
-            try ShiftStorage(stack: stack).save(shift)
+            try ShiftStorage(stack: stack).save(shift, forJobID: shift.jobID)
             let period = try job.payCalculationPeriod(for: shift)
             overview.onCheckPaycheck?(period)
             let entry = try #require(navigation.topViewController as? ActualGrossEntryViewController)
@@ -712,10 +712,10 @@ struct AppCoordinatorTests {
             let first = try makeShift(day: 20)
             let second = try makeShift(day: 21)
             let storage = ShiftStorage(stack: stack)
-            try storage.save(first)
+            try storage.save(first, forJobID: first.jobID)
             overview.reload()
             let period = try job.payCalculationPeriod(for: first)
-            try storage.save(second)
+            try storage.save(second, forJobID: second.jobID)
             overview.onCheckPaycheck?(period)
             let entry = try #require(navigation.topViewController as? ActualGrossEntryViewController)
             let actual = try ActualGross(amount: 1_500)

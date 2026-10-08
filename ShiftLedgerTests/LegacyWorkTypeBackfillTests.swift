@@ -409,7 +409,7 @@ struct LegacyWorkTypeBackfillTests {
     ) throws {
         let job = try #require(try JobStorage(stack: stack).load())
         let workType = try #require(job.soleWorkType)
-        let shifts = try ShiftStorage(stack: stack).loadAll()
+        let shifts = try ShiftStorage(stack: stack).loadAll(forJobID: job.id)
 
         #expect(job.id == fixture.identifiers.job)
         #expect(workType.id == job.id)

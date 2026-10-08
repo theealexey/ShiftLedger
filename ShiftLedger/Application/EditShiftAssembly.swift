@@ -13,10 +13,10 @@ enum EditShiftAssembly {
             workTypes: job.workTypes,
             shift: shift,
             saveShift: { updatedShift in
-                update(updatedShift, using: shiftStorage)
+                update(updatedShift, jobID: job.id, using: shiftStorage)
             },
             deleteShift: { shiftID in
-                delete(shiftID, using: shiftStorage)
+                delete(shiftID, jobID: job.id, using: shiftStorage)
             }
         )
         return EditShiftViewController(viewModel: viewModel)
@@ -24,10 +24,11 @@ enum EditShiftAssembly {
 
     private static func update(
         _ shift: Shift,
+        jobID: UUID,
         using storage: ShiftStorage
     ) -> Result<Void, EditShiftSaveFailure> {
         do {
-            try storage.update(shift)
+            try storage.update(shift, forJobID: jobID)
             return .success(())
         } catch ShiftStorageError.overlappingShift {
             return .failure(.overlap)
@@ -38,10 +39,11 @@ enum EditShiftAssembly {
 
     private static func delete(
         _ shiftID: UUID,
+        jobID: UUID,
         using storage: ShiftStorage
     ) -> Result<Void, EditShiftDeleteFailure> {
         do {
-            try storage.delete(id: shiftID)
+            try storage.delete(id: shiftID, inJobID: jobID)
             return .success(())
         } catch {
             return .failure(.generic)

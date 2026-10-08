@@ -21,7 +21,7 @@ struct ShiftStorageTests {
         try JobStorage(stack: stack).save(job)
         let original = try makeShift(jobID: job.id)
         let storage = ShiftStorage(stack: stack)
-        try storage.save(original)
+        try storage.save(original, forJobID: canonicalWorkTypeID)
         let foreignOwner = testJobID
         let proposed = try Shift(
             id: updating ? original.id : testWorkTypeID,
@@ -32,8 +32,8 @@ struct ShiftStorageTests {
         )
         var rejected = false
         do {
-            if updating { try storage.update(proposed) }
-            else { try storage.save(proposed) }
+            if updating { try storage.update(proposed, forJobID: canonicalWorkTypeID) }
+            else { try storage.save(proposed, forJobID: canonicalWorkTypeID) }
         } catch ShiftStorageError.foreignShiftOwner(let shiftID, let expected, let actual) {
             rejected = true
             #expect(shiftID == proposed.id)
@@ -42,12 +42,12 @@ struct ShiftStorageTests {
         }
         #expect(rejected)
         #expect(stack.viewContext.hasChanges == false)
-        #expect(try storage.loadAll() == [original])
+        #expect(try storage.loadAll(forJobID: canonicalWorkTypeID) == [original])
         #expect(try JobStorage(stack: stack).load() == job)
         try close(stack)
         let reopened = try await makeStack(storeURL: storeURL, stacks: &stacks)
-        #expect(try ShiftStorage(stack: reopened).loadAll() == [original])
-        #expect(try ShiftStorage(stack: reopened).loadAll().first?.jobID == job.id)
+        #expect(try ShiftStorage(stack: reopened).loadAll(forJobID: canonicalWorkTypeID) == [original])
+        #expect(try ShiftStorage(stack: reopened).loadAll(forJobID: canonicalWorkTypeID).first?.jobID == job.id)
         #expect(try JobStorage(stack: reopened).load() == job)
         #expect(try fetchShifts(in: reopened.viewContext).count == 1)
     }
@@ -62,9 +62,9 @@ struct ShiftStorageTests {
         let stackA = try await makeStack(storeURL: storeURL, stacks: &stacks)
         let job = try makeJob()
         try JobStorage(stack: stackA).save(job)
-        try ShiftStorage(stack: stackA).save(shift)
+        try ShiftStorage(stack: stackA).save(shift, forJobID: job.id)
 
-        #expect(try ShiftStorage(stack: stackA).loadAll() == [shift])
+        #expect(try ShiftStorage(stack: stackA).loadAll(forJobID: canonicalWorkTypeID) == [shift])
 
         let persistedJobs = try fetchJobs(in: stackA.viewContext)
         let persistedWorkTypes = try fetchWorkTypes(in: stackA.viewContext)
@@ -91,7 +91,7 @@ struct ShiftStorageTests {
         try close(stackA)
 
         let stackB = try await makeStack(storeURL: storeURL, stacks: &stacks)
-        let loaded = try #require(try ShiftStorage(stack: stackB).loadAll().first)
+        let loaded = try #require(try ShiftStorage(stack: stackB).loadAll(forJobID: canonicalWorkTypeID).first)
         #expect(loaded == shift)
         #expect(loaded.workTypeID == canonicalWorkTypeID)
         #expect(loaded.unpaidBreak == nil)
@@ -124,10 +124,10 @@ struct ShiftStorageTests {
         )
         let stackA = try await makeStack(storeURL: storeURL, stacks: &stacks)
         try JobStorage(stack: stackA).save(try makeJob())
-        try ShiftStorage(stack: stackA).save(shift)
+        try ShiftStorage(stack: stackA).save(shift, forJobID: canonicalWorkTypeID)
 
         let stackB = try await makeStack(storeURL: storeURL, stacks: &stacks)
-        let loaded = try #require(try ShiftStorage(stack: stackB).loadAll().first)
+        let loaded = try #require(try ShiftStorage(stack: stackB).loadAll(forJobID: canonicalWorkTypeID).first)
         #expect(loaded.id == shift.id)
         #expect(loaded.workTypeID == canonicalWorkTypeID)
         #expect(loaded.start == shift.start)
@@ -154,8 +154,8 @@ struct ShiftStorageTests {
         )
         let stackA = try await makeStack(storeURL: storeURL, stacks: &stacks)
         try JobStorage(stack: stackA).save(job)
-        try ShiftStorage(stack: stackA).save(firstShift)
-        try ShiftStorage(stack: stackA).save(secondShift)
+        try ShiftStorage(stack: stackA).save(firstShift, forJobID: multiJobID)
+        try ShiftStorage(stack: stackA).save(secondShift, forJobID: multiJobID)
 
         let persistedJobs = try fetchJobs(in: stackA.viewContext)
         let persistedWorkTypes = try fetchWorkTypes(in: stackA.viewContext)
@@ -192,7 +192,7 @@ struct ShiftStorageTests {
         try close(stackA)
 
         let stackB = try await makeStack(storeURL: storeURL, stacks: &stacks)
-        let loaded = try ShiftStorage(stack: stackB).loadAll()
+        let loaded = try ShiftStorage(stack: stackB).loadAll(forJobID: multiJobID)
 
         #expect(loaded == [firstShift, secondShift])
         #expect(loaded.map(\.workTypeID) == [firstWorkTypeID, secondWorkTypeID])
@@ -212,7 +212,7 @@ struct ShiftStorageTests {
         try JobStorage(stack: stack).save(archivedJob)
 
         do {
-            try ShiftStorage(stack: stack).save(try makeShift())
+            try ShiftStorage(stack: stack).save(try makeShift(), forJobID: canonicalWorkTypeID)
             Issue.record("A new Shift was assigned to an archived WorkType")
         } catch ShiftStorageError.workTypeArchived(let workTypeID) {
             #expect(workTypeID == canonicalWorkTypeID)
@@ -237,7 +237,7 @@ struct ShiftStorageTests {
             workTypeID: firstWorkTypeID, jobID: multiJobID
         )
         let storage = ShiftStorage(stack: stack)
-        try storage.save(initial)
+        try storage.save(initial, forJobID: multiJobID)
         let jobStorage = JobStorage(stack: stack)
         _ = try jobStorage.archiveWorkType(id: firstWorkTypeID)
 
@@ -248,8 +248,8 @@ struct ShiftStorageTests {
             start: initial.start.addingTimeInterval(60 * 60),
             end: initial.end.addingTimeInterval(60 * 60)
         )
-        try storage.update(movedInTime)
-        #expect(try storage.loadAll() == [movedInTime])
+        try storage.update(movedInTime, forJobID: multiJobID)
+        #expect(try storage.loadAll(forJobID: multiJobID) == [movedInTime])
 
         _ = try jobStorage.archiveWorkType(id: secondWorkTypeID)
         let reassigned = try Shift(
@@ -260,13 +260,13 @@ struct ShiftStorageTests {
             end: movedInTime.end
         )
         do {
-            try storage.update(reassigned)
+            try storage.update(reassigned, forJobID: multiJobID)
             Issue.record("An existing Shift was reassigned to another archived WorkType")
         } catch ShiftStorageError.workTypeArchived(let workTypeID) {
             #expect(workTypeID == secondWorkTypeID)
         }
 
-        #expect(try storage.loadAll() == [movedInTime])
+        #expect(try storage.loadAll(forJobID: multiJobID) == [movedInTime])
         #expect(stack.viewContext.hasChanges == false)
     }
 
@@ -289,8 +289,8 @@ struct ShiftStorageTests {
             workTypeID: firstWorkTypeID, jobID: multiJobID
         )
         let storage = ShiftStorage(stack: stackA)
-        try storage.save(original)
-        try storage.save(unrelated)
+        try storage.save(original, forJobID: multiJobID)
+        try storage.save(unrelated, forJobID: multiJobID)
 
         let beforeShifts = try fetchShifts(in: stackA.viewContext)
         let targetBefore = try #require(beforeShifts.first { $0.id == original.id })
@@ -318,7 +318,7 @@ struct ShiftStorageTests {
             )
         )
 
-        try storage.update(updated)
+        try storage.update(updated, forJobID: multiJobID)
 
         let afterShifts = try fetchShifts(in: stackA.viewContext)
         let workTypesAfter = try fetchWorkTypes(in: stackA.viewContext)
@@ -338,13 +338,13 @@ struct ShiftStorageTests {
         #expect(workTypesAfter.count == 2)
         #expect(workTypesAfter.map(\.objectID).contains(firstWorkTypeObjectID))
         #expect(workTypesAfter.map(\.objectID).contains(secondWorkTypeObjectID))
-        #expect(try storage.loadAll() == [updated, unrelated])
+        #expect(try storage.loadAll(forJobID: multiJobID) == [updated, unrelated])
         #expect(stackA.viewContext.hasChanges == false)
 
         try close(stackA)
 
         let stackB = try await makeStack(storeURL: storeURL, stacks: &stacks)
-        #expect(try ShiftStorage(stack: stackB).loadAll() == [updated, unrelated])
+        #expect(try ShiftStorage(stack: stackB).loadAll(forJobID: multiJobID) == [updated, unrelated])
         #expect(try fetchShifts(in: stackB.viewContext).count == 2)
     }
 
@@ -358,15 +358,15 @@ struct ShiftStorageTests {
         try JobStorage(stack: stack).save(try makeJob())
         let shift = try makeShift(id: "75000000-0000-0000-0000-000000000001")
         let storage = ShiftStorage(stack: stack)
-        try storage.save(shift)
+        try storage.save(shift, forJobID: canonicalWorkTypeID)
         let objectID = try #require(try fetchShifts(in: stack.viewContext).first).objectID
 
-        try storage.update(shift)
+        try storage.update(shift, forJobID: canonicalWorkTypeID)
 
         let persisted = try fetchShifts(in: stack.viewContext)
         #expect(persisted.count == 1)
         #expect(persisted.first?.objectID == objectID)
-        #expect(try storage.loadAll() == [shift])
+        #expect(try storage.loadAll(forJobID: canonicalWorkTypeID) == [shift])
         #expect(stack.viewContext.hasChanges == false)
     }
 
@@ -389,8 +389,8 @@ struct ShiftStorageTests {
             workTypeID: secondWorkTypeID, jobID: multiJobID
         )
         let storage = ShiftStorage(stack: stack)
-        try storage.save(target)
-        try storage.save(other)
+        try storage.save(target, forJobID: multiJobID)
+        try storage.save(other, forJobID: multiJobID)
         let targetObjectID = try #require(
             try fetchShifts(in: stack.viewContext).first { $0.id == target.id }
         ).objectID
@@ -404,7 +404,7 @@ struct ShiftStorageTests {
         )
 
         do {
-            try storage.update(proposed)
+            try storage.update(proposed, forJobID: multiJobID)
             Issue.record("Пересекающийся update был сохранён")
         } catch ShiftStorageError.overlappingShift {
         }
@@ -413,7 +413,7 @@ struct ShiftStorageTests {
             try fetchShifts(in: stack.viewContext).first { $0.id == target.id }
         )
         #expect(persistedTarget.objectID == targetObjectID)
-        #expect(try storage.loadAll() == [target, other])
+        #expect(try storage.loadAll(forJobID: multiJobID) == [target, other])
         #expect(stack.viewContext.hasChanges == false)
     }
 
@@ -436,8 +436,8 @@ struct ShiftStorageTests {
             workTypeID: secondWorkTypeID, jobID: multiJobID
         )
         let storage = ShiftStorage(stack: stack)
-        try storage.save(target)
-        try storage.save(other)
+        try storage.save(target, forJobID: multiJobID)
+        try storage.save(other, forJobID: multiJobID)
         let adjacentStart = Date(timeIntervalSinceReferenceDate: 12 * 60 * 60)
         let adjacent = try Shift(
             id: target.id,
@@ -447,9 +447,9 @@ struct ShiftStorageTests {
             end: other.start
         )
 
-        try storage.update(adjacent)
+        try storage.update(adjacent, forJobID: multiJobID)
 
-        #expect(try storage.loadAll() == [adjacent, other])
+        #expect(try storage.loadAll(forJobID: multiJobID) == [adjacent, other])
     }
 
     @Test("Update с неизвестным WorkType отклоняется без изменения target")
@@ -465,7 +465,7 @@ struct ShiftStorageTests {
             workTypeID: firstWorkTypeID, jobID: multiJobID
         )
         let storage = ShiftStorage(stack: stack)
-        try storage.save(target)
+        try storage.save(target, forJobID: multiJobID)
         let unknownID = UUID(uuid: (0x78, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 9))
         let proposed = try Shift(
             id: target.id,
@@ -476,13 +476,13 @@ struct ShiftStorageTests {
         )
 
         do {
-            try storage.update(proposed)
+            try storage.update(proposed, forJobID: multiJobID)
             Issue.record("Update с неизвестным WorkType был сохранён")
         } catch ShiftStorageError.workTypeNotFound(let workTypeID) {
             #expect(workTypeID == unknownID)
         }
 
-        #expect(try storage.loadAll() == [target])
+        #expect(try storage.loadAll(forJobID: multiJobID) == [target])
         #expect(stack.viewContext.hasChanges == false)
     }
 
@@ -496,17 +496,17 @@ struct ShiftStorageTests {
         try JobStorage(stack: stack).save(try makeJob())
         let existing = try makeShift(id: "79000000-0000-0000-0000-000000000001")
         let storage = ShiftStorage(stack: stack)
-        try storage.save(existing)
+        try storage.save(existing, forJobID: canonicalWorkTypeID)
         let missing = try makeShift(id: "79000000-0000-0000-0000-000000000002")
 
         do {
-            try storage.update(missing)
+            try storage.update(missing, forJobID: canonicalWorkTypeID)
             Issue.record("Отсутствующий Shift был обновлён")
         } catch ShiftStorageError.shiftNotFound(let shiftID) {
             #expect(shiftID == missing.id)
         }
 
-        #expect(try storage.loadAll() == [existing])
+        #expect(try storage.loadAll(forJobID: canonicalWorkTypeID) == [existing])
         #expect(stack.viewContext.hasChanges == false)
     }
 
@@ -549,7 +549,7 @@ struct ShiftStorageTests {
         )
 
         do {
-            try ShiftStorage(stack: stack).update(proposed)
+            try ShiftStorage(stack: stack).update(proposed, forJobID: canonicalWorkTypeID)
             Issue.record("Один из duplicate Shift был произвольно обновлён")
         } catch ShiftStorageError.corruptedData(
             .duplicateShiftIdentity(let shiftID)
@@ -592,7 +592,7 @@ struct ShiftStorageTests {
         )
 
         do {
-            try ShiftStorage(stack: stack).update(proposed)
+            try ShiftStorage(stack: stack).update(proposed, forJobID: canonicalWorkTypeID)
             Issue.record("Повреждённый target был молча исправлен")
         } catch ShiftStorageError.corruptedData(
             .missingShiftWorkType(let shiftID)
@@ -625,8 +625,8 @@ struct ShiftStorageTests {
             workTypeID: secondWorkTypeID, jobID: multiJobID
         )
         let storage = ShiftStorage(stack: stack)
-        try storage.save(target)
-        try storage.save(unrelated)
+        try storage.save(target, forJobID: multiJobID)
+        try storage.save(unrelated, forJobID: multiJobID)
 
         let jobBefore = try #require(try jobStorage.load())
         let jobEntityBefore = try #require(try fetchOnlyJob(in: stack.viewContext))
@@ -639,7 +639,7 @@ struct ShiftStorageTests {
         let targetObjectID = try #require(shiftsBefore.first { $0.id == target.id }).objectID
         let unrelatedObjectID = try #require(shiftsBefore.first { $0.id == unrelated.id }).objectID
 
-        try storage.delete(id: target.id)
+        try storage.delete(id: target.id, inJobID: multiJobID)
 
         let shiftsAfter = try fetchShifts(in: stack.viewContext)
         let persistedJob = try #require(try fetchOnlyJob(in: stack.viewContext))
@@ -678,7 +678,7 @@ struct ShiftStorageTests {
         )
         #expect(Set(try fetchPayRates(in: stack.viewContext).map(\.objectID)) == payRateObjectIDs)
         #expect(try jobStorage.load() == jobBefore)
-        #expect(try storage.loadAll() == [unrelated])
+        #expect(try storage.loadAll(forJobID: multiJobID) == [unrelated])
         #expect(stack.viewContext.hasChanges == false)
     }
 
@@ -701,13 +701,13 @@ struct ShiftStorageTests {
             workTypeID: secondWorkTypeID, jobID: multiJobID
         )
         let storage = ShiftStorage(stack: stackA)
-        try storage.save(target)
-        try storage.save(remaining)
-        try storage.delete(id: target.id)
+        try storage.save(target, forJobID: multiJobID)
+        try storage.save(remaining, forJobID: multiJobID)
+        try storage.delete(id: target.id, inJobID: multiJobID)
         try close(stackA)
 
         let stackB = try await makeStack(storeURL: storeURL, stacks: &stacks)
-        #expect(try ShiftStorage(stack: stackB).loadAll() == [remaining])
+        #expect(try ShiftStorage(stack: stackB).loadAll(forJobID: multiJobID) == [remaining])
         #expect(try JobStorage(stack: stackB).load() == job)
         #expect(try fetchShifts(in: stackB.viewContext).count == 1)
         #expect(try fetchWorkTypes(in: stackB.viewContext).count == 2)
@@ -729,14 +729,14 @@ struct ShiftStorageTests {
             workTypeID: firstWorkTypeID, jobID: multiJobID
         )
         let storage = ShiftStorage(stack: stack)
-        try storage.save(target)
+        try storage.save(target, forJobID: multiJobID)
         let archivedJob = try jobStorage.archiveWorkType(id: firstWorkTypeID)
         let workTypeObjectIDs = Set(try fetchWorkTypes(in: stack.viewContext).map(\.objectID))
         let payRateObjectIDs = Set(try fetchPayRates(in: stack.viewContext).map(\.objectID))
 
-        try storage.delete(id: target.id)
+        try storage.delete(id: target.id, inJobID: multiJobID)
 
-        #expect(try storage.loadAll().isEmpty)
+        #expect(try storage.loadAll(forJobID: multiJobID).isEmpty)
         #expect(try jobStorage.load() == archivedJob)
         #expect(Set(try fetchWorkTypes(in: stack.viewContext).map(\.objectID)) == workTypeObjectIDs)
         #expect(Set(try fetchPayRates(in: stack.viewContext).map(\.objectID)) == payRateObjectIDs)
@@ -754,18 +754,18 @@ struct ShiftStorageTests {
         let existing = try makeShift(id: "7F000000-0000-0000-0000-000000000001")
         let missingID = UUID(uuid: (0x7F, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2))
         let storage = ShiftStorage(stack: stack)
-        try storage.save(existing)
+        try storage.save(existing, forJobID: canonicalWorkTypeID)
         let objectID = try #require(try fetchShifts(in: stack.viewContext).first).objectID
 
         do {
-            try storage.delete(id: missingID)
+            try storage.delete(id: missingID, inJobID: canonicalWorkTypeID)
             Issue.record("An unknown Shift was deleted")
         } catch ShiftStorageError.shiftNotFound(let shiftID) {
             #expect(shiftID == missingID)
         }
 
         #expect(try fetchShifts(in: stack.viewContext).first?.objectID == objectID)
-        #expect(try storage.loadAll() == [existing])
+        #expect(try storage.loadAll(forJobID: canonicalWorkTypeID) == [existing])
         #expect(stack.viewContext.hasChanges == false)
     }
 
@@ -800,7 +800,7 @@ struct ShiftStorageTests {
         let objectIDs = Set([first.objectID, second.objectID])
 
         do {
-            try ShiftStorage(stack: stack).delete(id: duplicateID)
+            try ShiftStorage(stack: stack).delete(id: duplicateID, inJobID: canonicalWorkTypeID)
             Issue.record("One duplicate Shift was arbitrarily deleted")
         } catch ShiftStorageError.corruptedData(.duplicateShiftIdentity(let shiftID)) {
             #expect(shiftID == duplicateID)
@@ -819,7 +819,7 @@ struct ShiftStorageTests {
         let stack = try await makeStack(storeURL: storeURL, stacks: &stacks)
 
         do {
-            try ShiftStorage(stack: stack).delete(id: UUID())
+            try ShiftStorage(stack: stack).delete(id: UUID(), inJobID: canonicalWorkTypeID)
             Issue.record("Delete succeeded without a Job")
         } catch ShiftStorageError.jobNotFound {
         }
@@ -828,7 +828,7 @@ struct ShiftStorageTests {
         #expect(stack.viewContext.hasChanges == false)
     }
 
-    @Test("Delete with multiple Jobs returns exact multipleJobsFound")
+    @Test("Delete resolves the requested Job even when another Job exists")
     func deleteRejectsMultipleJobs() async throws {
         let storeURL = try makeTemporaryStoreURL()
         var stacks: [CoreDataStack] = []
@@ -846,9 +846,12 @@ struct ShiftStorageTests {
         try stack.viewContext.save()
 
         do {
-            try ShiftStorage(stack: stack).delete(id: UUID())
-            Issue.record("Delete succeeded with multiple Jobs")
-        } catch ShiftStorageError.multipleJobsFound {
+            try ShiftStorage(stack: stack).delete(
+                id: UUID(),
+                inJobID: UUID(uuid: (0x81, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1))
+            )
+            Issue.record("Delete succeeded for an unknown Shift")
+        } catch ShiftStorageError.shiftNotFound {
         }
 
         #expect(try fetchJobs(in: stack.viewContext).count == 2)
@@ -877,7 +880,7 @@ struct ShiftStorageTests {
         let objectID = target.objectID
 
         do {
-            try ShiftStorage(stack: stack).delete(id: targetID)
+            try ShiftStorage(stack: stack).delete(id: targetID, inJobID: canonicalWorkTypeID)
             Issue.record("A corrupted Shift was deleted")
         } catch ShiftStorageError.corruptedData(.missingShiftWorkType(let shiftID)) {
             #expect(shiftID == targetID)
@@ -917,7 +920,7 @@ struct ShiftStorageTests {
         )
         let stackA = try await makeStack(storeURL: storeURL, stacks: &stacks)
         try JobStorage(stack: stackA).save(job)
-        try ShiftStorage(stack: stackA).save(shift)
+        try ShiftStorage(stack: stackA).save(shift, forJobID: job.id)
 
         let persistedShift = try #require(try fetchShifts(in: stackA.viewContext).first)
         #expect(persistedShift.workType?.id == workTypeID)
@@ -926,7 +929,7 @@ struct ShiftStorageTests {
         try close(stackA)
 
         let stackB = try await makeStack(storeURL: storeURL, stacks: &stacks)
-        #expect(try ShiftStorage(stack: stackB).loadAll() == [shift])
+        #expect(try ShiftStorage(stack: stackB).loadAll(forJobID: job.id) == [shift])
         #expect(try fetchWorkTypes(in: stackB.viewContext).count == 1)
     }
 
@@ -940,10 +943,10 @@ struct ShiftStorageTests {
         try JobStorage(stack: stack).save(try makeJob())
         let first = try makeShift(id: "00000000-0000-0000-0000-000000000002", start: 20 * 60 * 60)
         let second = try makeShift(id: "00000000-0000-0000-0000-000000000001", start: 10 * 60 * 60)
-        try ShiftStorage(stack: stack).save(first)
-        try ShiftStorage(stack: stack).save(second)
+        try ShiftStorage(stack: stack).save(first, forJobID: canonicalWorkTypeID)
+        try ShiftStorage(stack: stack).save(second, forJobID: canonicalWorkTypeID)
 
-        #expect(try ShiftStorage(stack: stack).loadAll() == [second, first])
+        #expect(try ShiftStorage(stack: stack).loadAll(forJobID: canonicalWorkTypeID) == [second, first])
     }
 
     @Test("Overlap остаётся Job-wide между разными WorkTypes")
@@ -959,10 +962,10 @@ struct ShiftStorageTests {
             start: 10 * 60 * 60,
             workTypeID: firstWorkTypeID, jobID: multiJobID
         )
-        try ShiftStorage(stack: stack).save(first)
+        try ShiftStorage(stack: stack).save(first, forJobID: multiJobID)
 
         do {
-            try ShiftStorage(stack: stack).save(first)
+            try ShiftStorage(stack: stack).save(first, forJobID: multiJobID)
             Issue.record("Дубликат Shift UUID был сохранён")
         } catch ShiftStorageError.duplicateShift {
         }
@@ -972,7 +975,7 @@ struct ShiftStorageTests {
             start: 18 * 60 * 60,
             workTypeID: secondWorkTypeID, jobID: multiJobID
         )
-        try ShiftStorage(stack: stack).save(adjacent)
+        try ShiftStorage(stack: stack).save(adjacent, forJobID: multiJobID)
 
         let overlapping = try makeShift(
             id: "A0000000-0000-0000-0000-000000000003",
@@ -980,12 +983,12 @@ struct ShiftStorageTests {
             workTypeID: secondWorkTypeID, jobID: multiJobID
         )
         do {
-            try ShiftStorage(stack: stack).save(overlapping)
+            try ShiftStorage(stack: stack).save(overlapping, forJobID: multiJobID)
             Issue.record("Пересекающаяся Shift была сохранена")
         } catch ShiftStorageError.overlappingShift {
         }
 
-        #expect(try ShiftStorage(stack: stack).loadAll() == [first, adjacent])
+        #expect(try ShiftStorage(stack: stack).loadAll(forJobID: multiJobID) == [first, adjacent])
     }
 
     @Test("Без Job сохранение отклоняется typed jobNotFound")
@@ -996,7 +999,7 @@ struct ShiftStorageTests {
         let stack = try await makeStack(storeURL: storeURL, stacks: &stacks)
 
         do {
-            try ShiftStorage(stack: stack).save(try makeShift())
+            try ShiftStorage(stack: stack).save(try makeShift(), forJobID: canonicalWorkTypeID)
             Issue.record("Shift сохранён без Job")
         } catch ShiftStorageError.jobNotFound {
         }
@@ -1019,7 +1022,7 @@ struct ShiftStorageTests {
         )
 
         do {
-            try ShiftStorage(stack: stack).save(shift)
+            try ShiftStorage(stack: stack).save(shift, forJobID: multiJobID)
             Issue.record("Shift с неизвестным WorkType был сохранён")
         } catch ShiftStorageError.workTypeNotFound(let workTypeID) {
             #expect(workTypeID == unsupportedID)
@@ -1051,7 +1054,7 @@ struct ShiftStorageTests {
         try stack.viewContext.save()
 
         do {
-            _ = try ShiftStorage(stack: stack).loadAll()
+            _ = try ShiftStorage(stack: stack).loadAll(forJobID: canonicalWorkTypeID)
             Issue.record("Legacy Shift.job был принят без canonical Shift.workType")
         } catch ShiftStorageError.corruptedData(
             .missingShiftWorkType(let shiftID)
@@ -1080,7 +1083,7 @@ struct ShiftStorageTests {
         )
 
         do {
-            _ = try ShiftStorage(stack: stack).loadAll()
+            _ = try ShiftStorage(stack: stack).loadAll(forJobID: canonicalWorkTypeID)
             Issue.record("Shift без Job compatibility mirror был принят")
         } catch ShiftStorageError.corruptedData(
             .missingShiftJobRelationship(let shiftID)
@@ -1103,7 +1106,7 @@ struct ShiftStorageTests {
         try stack.viewContext.save()
 
         do {
-            _ = try ShiftStorage(stack: stack).loadAll()
+            _ = try ShiftStorage(stack: stack).loadAll(forJobID: try #require(UUID(uuidString: "17000000-0000-0000-0000-000000000001")))
             Issue.record("Job без canonical WorkType была принята")
         } catch ShiftStorageError.corruptedData(.missingWorkType) {
         }
@@ -1127,7 +1130,7 @@ struct ShiftStorageTests {
         try stack.viewContext.save()
 
         do {
-            _ = try ShiftStorage(stack: stack).loadAll()
+            _ = try ShiftStorage(stack: stack).loadAll(forJobID: try #require(UUID(uuidString: "18000000-0000-0000-0000-000000000001")))
             Issue.record("Повторяющийся WorkType ID был принят")
         } catch ShiftStorageError.corruptedData(
             .duplicateWorkTypeIdentity(let workTypeID)
@@ -1136,8 +1139,8 @@ struct ShiftStorageTests {
         }
     }
 
-    @Test("Две Job отклоняются как multipleJobsFound")
-    func rejectsMultipleJobs() async throws {
+    @Test("История указанной Job доступна при двух persisted Jobs")
+    func loadsRequestedJobWithMultipleJobs() async throws {
         let storeURL = try makeTemporaryStoreURL()
         var stacks: [CoreDataStack] = []
         defer { removeTemporaryStoreDirectory(for: storeURL, stacks: stacks) }
@@ -1146,11 +1149,8 @@ struct ShiftStorageTests {
         try insertPersistedJob(id: try #require(UUID(uuidString: "10000000-0000-0000-0000-000000000002")), in: stack.viewContext)
         try stack.viewContext.save()
 
-        do {
-            _ = try ShiftStorage(stack: stack).loadAll()
-            Issue.record("Несколько Job были приняты")
-        } catch ShiftStorageError.multipleJobsFound {
-        }
+        let jobID = try #require(UUID(uuidString: "10000000-0000-0000-0000-000000000001"))
+        #expect(try ShiftStorage(stack: stack).loadAll(forJobID: jobID).isEmpty)
     }
 
     @Test("Частичная пара break-дат — corruption")
@@ -1174,7 +1174,7 @@ struct ShiftStorageTests {
         try stack.viewContext.save()
 
         do {
-            _ = try ShiftStorage(stack: stack).loadAll()
+            _ = try ShiftStorage(stack: stack).loadAll(forJobID: canonicalWorkTypeID)
             Issue.record("Частичная пара break-дат была принята")
         } catch ShiftStorageError.corruptedData(.invalidBreakPair) {
         }
@@ -1199,10 +1199,273 @@ struct ShiftStorageTests {
         try stack.viewContext.save()
 
         do {
-            _ = try ShiftStorage(stack: stack).loadAll()
+            _ = try ShiftStorage(stack: stack).loadAll(forJobID: canonicalWorkTypeID)
             Issue.record("Некорректный persisted Shift был принят")
         } catch ShiftStorageError.corruptedData(.invalidShift(underlying: ShiftValidationError.startNotBeforeEnd)) {
         }
+    }
+
+    @Test("Two Job SQLite histories, exact payroll and mutation isolation survive reopen")
+    func scopedHistoriesSurviveReopen() async throws {
+        let storeURL = try makeTemporaryStoreURL()
+        var stacks: [CoreDataStack] = []
+        defer { removeTemporaryStoreDirectory(for: storeURL, stacks: stacks) }
+        let stack = try await makeStack(storeURL: storeURL, stacks: &stacks)
+        let a = try insertPersistedJob(id: canonicalWorkTypeID, in: stack.viewContext)
+        let b = try insertPersistedJob(id: multiJobID, workTypeID: canonicalWorkTypeID, in: stack.viewContext)
+        let bWorkType = try #require(b.workType)
+        bWorkType.basePayKind = StoredBasePayKind.fixedPerShift.rawValue
+        b.job.basePayKind = StoredBasePayKind.fixedPerShift.rawValue
+        try stack.viewContext.save()
+        let storage = ShiftStorage(stack: stack)
+        let first = try makeShift(id: "91000000-0000-0000-0000-000000000001")
+        let second = try makeShift(id: "91000000-0000-0000-0000-000000000002", jobID: multiJobID)
+        try storage.save(first, forJobID: a.job.id)
+        try storage.save(second, forJobID: b.job.id)
+        #expect(try storage.loadAll(forJobID: a.job.id) == [first])
+        #expect(try storage.loadAll(forJobID: b.job.id) == [second])
+        let domainA = try makeJob()
+        let domainB = try Job(
+            id: multiJobID, currencyCode: "EUR", timeZoneIdentifier: "Europe/Stockholm",
+            payCalculationCycle: .perShift,
+            workTypes: [WorkType(
+                id: canonicalWorkTypeID, basePayBasis: .fixedPerShift,
+                payRateHistory: PayRateHistory(payRates: [PayRate(id: multiJobID, amount: 100, effectiveFrom: nil)])
+            )]
+        )
+        #expect(try domainA.expectedGross(for: domainA.payCalculationPeriod(for: first),
+                                        from: storage.loadAll(forJobID: domainA.id)) == 800)
+        #expect(try domainB.expectedGross(for: domainB.payCalculationPeriod(for: second),
+                                        from: storage.loadAll(forJobID: domainB.id)) == 100)
+        let composition = AppFlowComposition(stack: stack).makeMainDependencies()
+        let comparison = try composition.preparePaycheckComparison(
+            domainA, domainA.payCalculationPeriod(for: first), ActualGross(amount: 800)
+        )
+        #expect(comparison.expected.expectedGross == 800)
+        #expect(comparison.difference == 0)
+
+        // JobStorage remains intentionally single-Job even though ShiftStorage is scoped.
+        do {
+            _ = try JobStorage(stack: stack).addPayRate(
+                PayRate(id: firstWorkTypeID, amount: 101, effectiveFrom: nil),
+                toWorkTypeID: canonicalWorkTypeID
+            )
+            Issue.record("JobStorage unexpectedly accepted Multi-Job rate mutation")
+        } catch JobStorageError.multipleJobsFound {
+            #expect(!stack.viewContext.hasChanges)
+        }
+
+        let moved = try makeShift(id: first.id.uuidString, start: 40 * 60 * 60)
+        try storage.update(moved, forJobID: canonicalWorkTypeID)
+        #expect(try storage.loadAll(forJobID: multiJobID) == [second])
+        try close(stack)
+        let reopened = try await makeStack(storeURL: storeURL, stacks: &stacks)
+        let reopenedStorage = ShiftStorage(stack: reopened)
+        #expect(try reopenedStorage.loadAll(forJobID: canonicalWorkTypeID) == [moved])
+        #expect(try reopenedStorage.loadAll(forJobID: multiJobID) == [second])
+        let persisted = try fetchShifts(in: reopened.viewContext)
+        #expect(persisted.allSatisfy { $0.job?.objectID == $0.workType?.job.objectID })
+        try reopenedStorage.delete(id: moved.id, inJobID: canonicalWorkTypeID)
+        try close(reopened)
+        let final = try await makeStack(storeURL: storeURL, stacks: &stacks)
+        #expect(try ShiftStorage(stack: final).loadAll(forJobID: canonicalWorkTypeID).isEmpty)
+        #expect(try ShiftStorage(stack: final).loadAll(forJobID: multiJobID) == [second])
+        #expect(try domainB.basePay(for: second) == 100)
+    }
+
+    @Test("Foreign target IDs cannot update, delete or reparent another Job's Shift", arguments: [false, true])
+    func foreignTargetRejectsWithoutMutation(_ deleting: Bool) async throws {
+        let storeURL = try makeTemporaryStoreURL()
+        var stacks: [CoreDataStack] = []
+        defer { removeTemporaryStoreDirectory(for: storeURL, stacks: stacks) }
+        let stack = try await makeStack(storeURL: storeURL, stacks: &stacks)
+        _ = try insertPersistedJob(id: canonicalWorkTypeID, in: stack.viewContext)
+        _ = try insertPersistedJob(id: multiJobID, workTypeID: canonicalWorkTypeID, in: stack.viewContext)
+        try stack.viewContext.save()
+        let original = try makeShift(jobID: multiJobID)
+        let storage = ShiftStorage(stack: stack)
+        try storage.save(original, forJobID: multiJobID)
+        let proposed = try makeShift(id: original.id.uuidString, start: 40 * 60 * 60)
+        do {
+            if deleting { try storage.delete(id: original.id, inJobID: canonicalWorkTypeID) }
+            else { try storage.update(proposed, forJobID: canonicalWorkTypeID) }
+            Issue.record("Foreign persisted Shift was mutated")
+        } catch ShiftStorageError.foreignShiftOwner(let id, let expected, let actual) {
+            #expect(id == original.id)
+            #expect(expected == canonicalWorkTypeID)
+            #expect(actual == multiJobID)
+        }
+        #expect(!stack.viewContext.hasChanges)
+        try close(stack)
+        let reopened = try await makeStack(storeURL: storeURL, stacks: &stacks)
+        #expect(try ShiftStorage(stack: reopened).loadAll(forJobID: multiJobID) == [original])
+        #expect(try ShiftStorage(stack: reopened).loadAll(forJobID: canonicalWorkTypeID).isEmpty)
+    }
+
+    @Test("Archived Job history loads, but save/update/delete are rejected", arguments: [0, 1, 2])
+    func archivedJobRejectsWrites(_ operation: Int) async throws {
+        let storeURL = try makeTemporaryStoreURL()
+        var stacks: [CoreDataStack] = []
+        defer { removeTemporaryStoreDirectory(for: storeURL, stacks: stacks) }
+        let stack = try await makeStack(storeURL: storeURL, stacks: &stacks)
+        let a = try insertPersistedJob(id: canonicalWorkTypeID, in: stack.viewContext)
+        _ = try insertPersistedJob(id: multiJobID, in: stack.viewContext)
+        try stack.viewContext.save()
+        let original = try makeShift()
+        let storage = ShiftStorage(stack: stack)
+        try storage.save(original, forJobID: canonicalWorkTypeID)
+        a.job.isArchived = true
+        try stack.viewContext.save()
+        do {
+            switch operation {
+            case 0: try storage.save(makeShift(id: firstWorkTypeID.uuidString), forJobID: canonicalWorkTypeID)
+            case 1: try storage.update(original, forJobID: canonicalWorkTypeID)
+            default: try storage.delete(id: original.id, inJobID: canonicalWorkTypeID)
+            }
+            Issue.record("Archived Job accepted a write")
+        } catch ShiftStorageError.jobArchived(let id) {
+            #expect(id == canonicalWorkTypeID)
+        }
+        #expect(!stack.viewContext.hasChanges)
+        let activeShift = try makeShift(id: secondWorkTypeID.uuidString, workTypeID: multiJobID, jobID: multiJobID)
+        try storage.save(activeShift, forJobID: multiJobID)
+        try close(stack)
+        let reopened = try await makeStack(storeURL: storeURL, stacks: &stacks)
+        #expect(try ShiftStorage(stack: reopened).loadAll(forJobID: canonicalWorkTypeID) == [original])
+        #expect(try ShiftStorage(stack: reopened).loadAll(forJobID: multiJobID) == [activeShift])
+    }
+
+    @Test("Shift identity is globally unique even across different Jobs")
+    func duplicateShiftAcrossJobsRejected() async throws {
+        let storeURL = try makeTemporaryStoreURL()
+        var stacks: [CoreDataStack] = []
+        defer { removeTemporaryStoreDirectory(for: storeURL, stacks: stacks) }
+        let stack = try await makeStack(storeURL: storeURL, stacks: &stacks)
+        let a = try insertPersistedJob(id: canonicalWorkTypeID, in: stack.viewContext)
+        let b = try insertPersistedJob(id: multiJobID, workTypeID: canonicalWorkTypeID, in: stack.viewContext)
+        try stack.viewContext.save()
+        let first = try makeShift()
+        let second = try makeShift(id: first.id.uuidString, jobID: multiJobID)
+        let storage = ShiftStorage(stack: stack)
+        try storage.save(first, forJobID: canonicalWorkTypeID)
+        do {
+            try storage.save(second, forJobID: multiJobID)
+            Issue.record("Duplicate identity across Jobs was inserted")
+        } catch ShiftStorageError.duplicateShift {
+            #expect(!stack.viewContext.hasChanges)
+        }
+        _ = try insertShiftEntity(id: first.id, job: b.job, workType: b.workType,
+                                 start: second.start, end: second.end, in: stack.viewContext)
+        try stack.viewContext.save()
+        for id in [a.job.id, b.job.id] {
+            do {
+                _ = try storage.loadAll(forJobID: id)
+                Issue.record("Cross-Job duplicate persisted identity concealed")
+            } catch ShiftStorageError.corruptedData(.duplicateShiftIdentity(let duplicate)) {
+                #expect(duplicate == first.id)
+            }
+        }
+    }
+
+    @Test("Duplicate Job identity is corruption, missing Job identity is not-found")
+    func scopedJobLookupFailures() async throws {
+        let storeURL = try makeTemporaryStoreURL()
+        var stacks: [CoreDataStack] = []
+        defer { removeTemporaryStoreDirectory(for: storeURL, stacks: stacks) }
+        let stack = try await makeStack(storeURL: storeURL, stacks: &stacks)
+        _ = try insertPersistedJob(id: canonicalWorkTypeID, in: stack.viewContext)
+        _ = try insertPersistedJob(id: canonicalWorkTypeID, in: stack.viewContext)
+        try stack.viewContext.save()
+        do {
+            _ = try ShiftStorage(stack: stack).loadAll(forJobID: canonicalWorkTypeID)
+            Issue.record("Duplicate Job identity concealed")
+        } catch ShiftStorageError.corruptedData(.duplicateJobIdentity(let id)) {
+            #expect(id == canonicalWorkTypeID)
+        }
+        do {
+            _ = try ShiftStorage(stack: stack).loadAll(forJobID: multiJobID)
+            Issue.record("Missing Job resolved to another Job")
+        } catch ShiftStorageError.jobNotFound(let id) {
+            #expect(id == multiJobID)
+        }
+    }
+
+    @Test("Orphan and mismatched ownership remain corruption in scoped history", arguments: [0, 1, 2])
+    func scopedHistoryPreservesRelationshipIntegrity(_ corruption: Int) async throws {
+        let storeURL = try makeTemporaryStoreURL()
+        var stacks: [CoreDataStack] = []
+        defer { removeTemporaryStoreDirectory(for: storeURL, stacks: stacks) }
+        let stack = try await makeStack(storeURL: storeURL, stacks: &stacks)
+        let a = try insertPersistedJob(id: canonicalWorkTypeID, in: stack.viewContext)
+        let b = try insertPersistedJob(id: multiJobID, in: stack.viewContext)
+        let shift = try makeShift()
+        let entity = try insertShiftEntity(
+            id: shift.id, job: corruption == 1 ? b.job : nil,
+            workType: corruption == 2 ? nil : a.workType,
+            start: shift.start, end: shift.end, in: stack.viewContext
+        )
+        do {
+            _ = try ShiftStorage(stack: stack).loadAll(forJobID: canonicalWorkTypeID)
+            Issue.record("Scoped query concealed corrupted relationships")
+        } catch ShiftStorageError.corruptedData(let reason) {
+            switch reason {
+            case .missingShiftJobRelationship(let id): #expect(corruption != 1 && id == entity.id)
+            case .shiftJobBelongsToDifferentJob(let id, let expected, let actual):
+                #expect(corruption == 1 && id == entity.id)
+                #expect(expected == canonicalWorkTypeID && actual == multiJobID)
+            default: Issue.record("Unexpected corruption: \(reason)")
+            }
+        }
+        #expect(entity.job?.objectID == (corruption == 1 ? b.job.objectID : nil))
+        #expect(entity.workType?.objectID == (corruption == 2 ? nil : a.workType?.objectID))
+    }
+
+    @Test("A foreign WorkType cannot be assigned even with valid requested Shift ownership")
+    func scopedAssignmentRejectsForeignWorkType() async throws {
+        let storeURL = try makeTemporaryStoreURL()
+        var stacks: [CoreDataStack] = []
+        defer { removeTemporaryStoreDirectory(for: storeURL, stacks: stacks) }
+        let stack = try await makeStack(storeURL: storeURL, stacks: &stacks)
+        _ = try insertPersistedJob(id: canonicalWorkTypeID, in: stack.viewContext)
+        _ = try insertPersistedJob(id: multiJobID, in: stack.viewContext)
+        try stack.viewContext.save()
+        let proposed = try makeShift(workTypeID: multiJobID)
+        do {
+            try ShiftStorage(stack: stack).save(proposed, forJobID: canonicalWorkTypeID)
+            Issue.record("Another Job's WorkType was assigned")
+        } catch ShiftStorageError.workTypeNotFound(let id) {
+            #expect(id == multiJobID)
+        }
+        #expect(!stack.viewContext.hasChanges)
+        try close(stack)
+        let reopened = try await makeStack(storeURL: storeURL, stacks: &stacks)
+        #expect(try fetchShifts(in: reopened.viewContext).isEmpty)
+    }
+
+    @Test("An attributable orphan of Job B is not loaded into Job A's history")
+    func unrelatedCorruptionDoesNotMixHistories() async throws {
+        let storeURL = try makeTemporaryStoreURL()
+        var stacks: [CoreDataStack] = []
+        defer { removeTemporaryStoreDirectory(for: storeURL, stacks: stacks) }
+        let stack = try await makeStack(storeURL: storeURL, stacks: &stacks)
+        _ = try insertPersistedJob(id: canonicalWorkTypeID, in: stack.viewContext)
+        let b = try insertPersistedJob(id: multiJobID, in: stack.viewContext)
+        try stack.viewContext.save()
+        let storage = ShiftStorage(stack: stack)
+        let original = try makeShift()
+        try storage.save(original, forJobID: canonicalWorkTypeID)
+        let orphan = try insertShiftEntity(
+            id: secondWorkTypeID, job: nil, workType: b.workType,
+            start: original.start, end: original.end, in: stack.viewContext
+        )
+        #expect(try storage.loadAll(forJobID: canonicalWorkTypeID) == [original])
+        do {
+            _ = try storage.loadAll(forJobID: multiJobID)
+            Issue.record("Job B orphan was concealed")
+        } catch ShiftStorageError.corruptedData(.missingShiftJobRelationship(let id)) {
+            #expect(id == orphan.id)
+        }
+        #expect(orphan.job == nil)
     }
 
     private func makeShift(
@@ -1400,7 +1663,7 @@ struct ShiftStorageTests {
         }
 
         let payRate = PayRateEntity(entity: payRateDescription, insertInto: context)
-        payRate.id = UUID()
+        payRate.id = id
         payRate.amount = NSDecimalNumber(decimal: 100)
         payRate.effectiveFrom = nil
         payRate.job = job

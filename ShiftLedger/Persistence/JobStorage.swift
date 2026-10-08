@@ -273,7 +273,7 @@ final class JobStorage {
         let existingJob = try makeJob(from: jobEntity)
         let shifts: [Shift]
         do {
-            shifts = try shiftStorage.loadAll()
+            shifts = try shiftStorage.loadAll(forJobID: jobEntity.id)
         } catch let error as ShiftStorageError {
             throw JobStorageError.shiftLoadFailed(underlying: error)
         } catch {
