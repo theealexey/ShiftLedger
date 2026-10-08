@@ -213,10 +213,10 @@ struct CoreDataV6MigrationTests {
             timeZoneIdentifier: timeZone.identifier, payCalculationCycle: cycle.value,
             workTypes: [hourly, fixed], createdAt: Date(timeIntervalSinceReferenceDate: 900_000)),
             shifts: [
-                try Shift(id: id(8), workTypeID: hourly.id, start: earlier, end: earlier.addingTimeInterval(7200)),
-                try Shift(id: id(9), workTypeID: hourly.id, start: later, end: later.addingTimeInterval(7200),
+                try Shift(id: id(8), jobID: id(1), workTypeID: hourly.id, start: earlier, end: earlier.addingTimeInterval(7200)),
+                try Shift(id: id(9), jobID: id(1), workTypeID: hourly.id, start: later, end: later.addingTimeInterval(7200),
                     unpaidBreak: UnpaidBreak(start: later.addingTimeInterval(3600), end: later.addingTimeInterval(4500))),
-                try Shift(id: id(10), workTypeID: fixed.id, start: later.addingTimeInterval(10800), end: later.addingTimeInterval(14400))
+                try Shift(id: id(10), jobID: id(1), workTypeID: fixed.id, start: later.addingTimeInterval(10800), end: later.addingTimeInterval(14400))
             ])
     }
 

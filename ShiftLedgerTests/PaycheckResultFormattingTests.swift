@@ -721,6 +721,7 @@ struct PaycheckResultFormattingTests {
     private func makeShift(start: Date, end: Date) throws -> Shift {
         try Shift(
             id: try #require(UUID(uuidString: "00000000-0000-0000-0000-000000000010")),
+            jobID: testJobID,
             workTypeID: testWorkTypeID,
             start: start,
             end: end

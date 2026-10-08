@@ -31,8 +31,10 @@ struct ShiftFormState {
     private(set) var selectedWorkTypeID: UUID?
 
     let workTypeOptions: [ShiftFormWorkTypeOption]
+    let jobID: UUID
 
     init(
+        jobID: UUID,
         workTypes: [WorkType],
         selectedWorkTypeID: UUID?,
         start: Date? = nil,
@@ -41,6 +43,7 @@ struct ShiftFormState {
         breakStart: Date? = nil,
         breakEnd: Date? = nil
     ) {
+        self.jobID = jobID
         workTypeOptions = workTypes.map {
             ShiftFormWorkTypeOption(id: $0.id, name: $0.name, isArchived: $0.isArchived)
         }
@@ -73,6 +76,7 @@ struct ShiftFormState {
         do {
             _ = try Shift(
                 id: Self.validationID,
+                jobID: jobID,
                 workTypeID: selectedWorkTypeID,
                 start: start,
                 end: end,
@@ -152,6 +156,7 @@ struct ShiftFormState {
         do {
             return try Shift(
                 id: id,
+                jobID: jobID,
                 workTypeID: selectedWorkTypeID,
                 start: start,
                 end: end,

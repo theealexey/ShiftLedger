@@ -24,6 +24,7 @@ struct EditShiftViewControllerTests {
     )
     let shift = try Shift(
       id: shiftID,
+      jobID: testJobID,
       workTypeID: workType.id,
       start: start,
       end: end,
@@ -137,6 +138,7 @@ struct EditShiftViewControllerTests {
     )
     let shift = try Shift(
       id: shiftID,
+      jobID: testJobID,
       workTypeID: second.id,
       start: start,
       end: end
@@ -194,7 +196,7 @@ struct EditShiftViewControllerTests {
       id: try #require(UUID(uuidString: "87000000-0000-0000-0000-000000000004")),
       name: "Archived"
     ).archived()
-    let shift = try Shift(id: shiftID, workTypeID: archived.id, start: start, end: end)
+    let shift = try Shift(id: shiftID, jobID: testJobID, workTypeID: archived.id, start: start, end: end)
     let viewModel = EditShiftViewModel(
       timeZoneIdentifier: "UTC",
       workTypes: [active, archived],
@@ -232,6 +234,7 @@ struct EditShiftViewControllerTests {
     )
     let shift = try Shift(
       id: shiftID,
+      jobID: testJobID,
       workTypeID: workType.id,
       start: start,
       end: end,
@@ -297,6 +300,7 @@ struct EditShiftViewControllerTests {
     )
     let shift = try Shift(
       id: shiftID,
+      jobID: testJobID,
       workTypeID: unknownWorkTypeID,
       start: start,
       end: end
@@ -362,6 +366,7 @@ struct EditShiftViewControllerTests {
     let breakEnd = start.addingTimeInterval(5_400)
     let shift = try Shift(
       id: shiftID,
+      jobID: testJobID,
       workTypeID: workType.id,
       start: start,
       end: end,
@@ -484,6 +489,7 @@ struct EditShiftViewControllerTests {
     )
     let shift = try Shift(
       id: shiftID,
+      jobID: testJobID,
       workTypeID: workType.id,
       start: start,
       end: end
@@ -536,7 +542,7 @@ struct EditShiftViewControllerTests {
       ),
       name: "Lectures"
     )
-    let shift = try Shift(id: shiftID, workTypeID: workType.id, start: start, end: end)
+    let shift = try Shift(id: shiftID, jobID: testJobID, workTypeID: workType.id, start: start, end: end)
     let viewController = EditShiftViewController(
       viewModel: EditShiftViewModel(
         timeZoneIdentifier: "UTC",
@@ -574,7 +580,7 @@ struct EditShiftViewControllerTests {
       ),
       name: "Lectures"
     )
-    let shift = try Shift(id: shiftID, workTypeID: workType.id, start: start, end: end)
+    let shift = try Shift(id: shiftID, jobID: testJobID, workTypeID: workType.id, start: start, end: end)
     var outcomes: [Result<Void, EditShiftDeleteFailure>] = [
       .failure(.generic),
       .success(())
@@ -633,6 +639,7 @@ struct EditShiftViewControllerTests {
     )
     let shift = try Shift(
       id: shiftID,
+      jobID: testJobID,
       workTypeID: workType.id,
       start: start,
       end: end

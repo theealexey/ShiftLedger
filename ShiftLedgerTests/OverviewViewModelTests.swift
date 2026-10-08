@@ -411,6 +411,7 @@ struct OverviewViewModelTests {
         let editedStart = try date(year: 2026, month: 8, day: 20, hour: 8)
         let edited = try Shift(
             id: original.id,
+            jobID: job.id,
             workTypeID: original.workTypeID,
             start: editedStart,
             end: editedStart.addingTimeInterval(4 * hour)
@@ -963,6 +964,7 @@ struct OverviewViewModelTests {
         )
         let start = try date(year: 2026, month: 9, day: 20, hour: 8)
         let shift = try Shift(
+            jobID: initialJob.id,
             workTypeID: secondID,
             start: start,
             end: start.addingTimeInterval(hour)
@@ -1016,6 +1018,7 @@ struct OverviewViewModelTests {
         let start = try date(year: year, month: month, day: day, hour: hour)
         return try Shift(
             id: UUID(uuid: (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, id)),
+            jobID: testWorkTypeID,
             workTypeID: testWorkTypeID,
             start: start,
             end: start.addingTimeInterval(durationHours * self.hour)

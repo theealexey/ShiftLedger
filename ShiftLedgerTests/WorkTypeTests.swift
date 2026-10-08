@@ -328,6 +328,7 @@ struct WorkTypeTests {
         )
         let start = Date(timeIntervalSinceReferenceDate: 100_000)
         let shift = try Shift(
+            jobID: testJobID,
             workTypeID: workType.id,
             start: start,
             end: start.addingTimeInterval(8 * hour)
@@ -350,6 +351,7 @@ struct WorkTypeTests {
         )
         let start = Date(timeIntervalSinceReferenceDate: 100_000)
         let shift = try Shift(
+            jobID: testJobID,
             workTypeID: workType.id,
             start: start,
             end: start.addingTimeInterval(8 * hour)

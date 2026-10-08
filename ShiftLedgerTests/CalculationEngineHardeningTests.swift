@@ -28,6 +28,7 @@ struct CalculationEngineHardeningTests {
         let start = try date(day: 10)
         let shift = try Shift(
             id: shiftID,
+            jobID: job.id,
             workTypeID: testWorkTypeID,
             start: start,
             end: start.addingTimeInterval(8 * hour)
@@ -51,7 +52,7 @@ struct CalculationEngineHardeningTests {
         )
         let job = try makeJob(payRates: [initialRate, datedRate])
         let start = try date(day: 1, hour: 0)
-        let shift = try Shift(workTypeID: testWorkTypeID, start: start, end: start.addingTimeInterval(8 * hour))
+        let shift = try Shift(jobID: job.id, workTypeID: testWorkTypeID, start: start, end: start.addingTimeInterval(8 * hour))
         let period = try monthlyPeriod(month: 9)
 
         let result = try job.expectedGrossBreakdown(for: period, from: [shift])
@@ -70,6 +71,7 @@ struct CalculationEngineHardeningTests {
     func explainsFallBackElapsedPay() throws {
         let job = try makeJob()
         let shift = try Shift(
+            jobID: job.id,
             workTypeID: testWorkTypeID,
             start: date(month: 10, day: 25, hour: 0),
             end: date(month: 10, day: 25, hour: 8)
@@ -96,6 +98,7 @@ struct CalculationEngineHardeningTests {
         let breakStart = try date(month: 3, day: 29, hour: 1, minute: 30)
         let breakEnd = try date(month: 3, day: 29, hour: 3, minute: 30)
         let shift = try Shift(
+            jobID: job.id,
             workTypeID: testWorkTypeID,
             start: start,
             end: end,
@@ -163,6 +166,7 @@ struct CalculationEngineHardeningTests {
         let job = try makeJob(payRates: [initialRate, datedRate])
         let start = try date(day: 10)
         let first = try Shift(
+            jobID: job.id,
             workTypeID: testWorkTypeID,
             start: start,
             end: start.addingTimeInterval(8 * hour),
@@ -173,7 +177,7 @@ struct CalculationEngineHardeningTests {
         )
         let second = try makeShift(day: 20)
         let outsideStart = try date(month: 8, day: 31)
-        let outside = try Shift(workTypeID: testWorkTypeID, start: outsideStart, end: outsideStart.addingTimeInterval(8 * hour))
+        let outside = try Shift(jobID: job.id, workTypeID: testWorkTypeID, start: outsideStart, end: outsideStart.addingTimeInterval(8 * hour))
         let input = [second, outside, first]
         let period = try monthlyPeriod(month: 9)
 
@@ -194,6 +198,7 @@ struct CalculationEngineHardeningTests {
         let rate = try PayRate(amount: 175, effectiveFrom: nil)
         let job = try makeJob(basis: .fixedPerShift, payRates: [rate])
         let shift = try Shift(
+            jobID: job.id,
             workTypeID: testWorkTypeID,
             start: date(month: 10, day: 25, hour: 0),
             end: date(month: 10, day: 25, hour: 8)
@@ -217,7 +222,7 @@ struct CalculationEngineHardeningTests {
         let job = try makeJob(payRates: [rate])
         let start = try date(day: 10).addingTimeInterval(0.125)
         let end = start.addingTimeInterval(hour + 0.5625)
-        let shift = try Shift(workTypeID: testWorkTypeID, start: start, end: end)
+        let shift = try Shift(jobID: job.id, workTypeID: testWorkTypeID, start: start, end: end)
         let expectedPay = try decimal("17.12767578125")
 
         let result = try job.expectedGrossBreakdown(for: monthlyPeriod(month: 9), from: [shift])
@@ -250,6 +255,7 @@ struct CalculationEngineHardeningTests {
     private func makeShift(day: Int, hours: TimeInterval = 8) throws -> Shift {
         let start = try date(day: day)
         return try Shift(
+            jobID: testWorkTypeID,
             workTypeID: testWorkTypeID,
             start: start,
             end: start.addingTimeInterval(hours * hour)

@@ -51,6 +51,7 @@ struct ShiftDateTimePickerViewControllerTests {
         try tapDone(on: endPicker)
 
         let shift = try Shift(
+            jobID: testJobID,
             workTypeID: testWorkTypeID,
             start: try #require(start),
             end: try #require(end)

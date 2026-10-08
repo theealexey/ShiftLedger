@@ -17,6 +17,7 @@ struct AddShiftViewControllerTests {
         var completedShift: Shift?
         let workType = try makeWorkType(id: testWorkTypeID, name: "Lectures")
         let viewModel = AddShiftViewModel(
+            jobID: testJobID,
             timeZoneIdentifier: timeZoneIdentifier,
             workTypes: [workType],
             initialStart: start,
@@ -44,6 +45,7 @@ struct AddShiftViewControllerTests {
 
         let expectedShift = try Shift(
             id: knownID,
+            jobID: testJobID,
             workTypeID: testWorkTypeID,
             start: start,
             end: end
@@ -71,6 +73,7 @@ struct AddShiftViewControllerTests {
         var completionCallCount = 0
         let workType = try makeWorkType(id: testWorkTypeID, name: "Lectures")
         let viewModel = AddShiftViewModel(
+            jobID: testJobID,
             timeZoneIdentifier: timeZoneIdentifier,
             workTypes: [workType],
             initialStart: start,
@@ -101,6 +104,7 @@ struct AddShiftViewControllerTests {
         var saveCallCount = 0
         var savedShift: Shift?
         let viewModel = AddShiftViewModel(
+            jobID: testJobID,
             timeZoneIdentifier: timeZoneIdentifier,
             workTypes: [
                 try makeWorkType(id: firstID, name: "Lectures"),
@@ -156,6 +160,7 @@ struct AddShiftViewControllerTests {
         let workType = try makeWorkType(id: testWorkTypeID, name: nil)
         let viewController = AddShiftViewController(
             viewModel: AddShiftViewModel(
+                jobID: testJobID,
                 timeZoneIdentifier: timeZoneIdentifier,
                 workTypes: [workType],
                 saveShift: { _ in .success(()) }
@@ -173,6 +178,7 @@ struct AddShiftViewControllerTests {
         let archived = try makeWorkType(id: testWorkTypeID, name: "Lectures").archived()
         let viewController = AddShiftViewController(
             viewModel: AddShiftViewModel(
+                jobID: testJobID,
                 timeZoneIdentifier: timeZoneIdentifier,
                 workTypes: [archived],
                 initialStart: start,

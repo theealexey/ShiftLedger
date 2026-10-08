@@ -33,6 +33,7 @@ struct CoreDataV5MigrationTests {
             .addingTimeInterval(9 * 60 * 60)
         let expectedShift = try Shift(
             id: shiftID,
+            jobID: jobID,
             workTypeID: workTypeID,
             start: shiftStart,
             end: shiftStart.addingTimeInterval(2 * 60 * 60)

@@ -18,6 +18,7 @@ enum JobWorkTypeRenameError: Error, Equatable {
 }
 
 enum JobPayRateChangeError: Error, Equatable {
+    case foreignShiftOwner(shiftID: UUID, expectedJobID: UUID, actualJobID: UUID)
     case workTypeNotFound(workTypeID: UUID)
     case invalidPayRateChange(WorkTypePayRateChangeError)
     case historicalCompensationWouldChange(workTypeID: UUID, shiftID: UUID)
@@ -30,11 +31,13 @@ enum JobWorkTypeArchiveError: Error, Equatable {
 }
 
 enum JobShiftAssignmentError: Error, Equatable {
+    case foreignShiftOwner(shiftID: UUID, expectedJobID: UUID, actualJobID: UUID)
     case workTypeNotFound(workTypeID: UUID)
     case workTypeArchived(workTypeID: UUID)
 }
 
 enum PayRateResolutionError: Error, Equatable {
+    case foreignShiftOwner(shiftID: UUID, expectedJobID: UUID, actualJobID: UUID)
     case workTypeNotFound(workTypeID: UUID)
     case invalidJobTimeZoneIdentifier
     case localDateConversionFailed(LocalDateConversionError)
@@ -181,6 +184,9 @@ struct Job: Equatable {
         preservingHistoricalPayrollFor shifts: [Shift],
         asOf: Date
     ) throws(JobPayRateChangeError) -> Job {
+        for shift in shifts where shift.jobID != id {
+            throw .foreignShiftOwner(shiftID: shift.id, expectedJobID: id, actualJobID: shift.jobID)
+        }
         guard let index = workTypes.firstIndex(where: { $0.id == workTypeID }) else {
             throw .workTypeNotFound(workTypeID: workTypeID)
         }
@@ -253,6 +259,9 @@ struct Job: Equatable {
     func validateNewShiftAssignment(
         _ shift: Shift
     ) throws(JobShiftAssignmentError) {
+        guard shift.jobID == id else {
+            throw .foreignShiftOwner(shiftID: shift.id, expectedJobID: id, actualJobID: shift.jobID)
+        }
         guard let workType = workType(id: shift.workTypeID) else {
             throw .workTypeNotFound(workTypeID: shift.workTypeID)
         }
@@ -276,6 +285,9 @@ struct Job: Equatable {
     func payCalculationPeriod(
         for shift: Shift
     ) throws(PayCalculationPeriodResolutionError) -> PayCalculationPeriod {
+        guard shift.jobID == id else {
+            throw .foreignShiftOwner(shiftID: shift.id, expectedJobID: id, actualJobID: shift.jobID)
+        }
         switch payCalculationCycle {
         case .perShift:
             return .perShift(shiftID: shift.id)
@@ -299,6 +311,9 @@ struct Job: Equatable {
         _ shift: Shift,
         in period: PayCalculationPeriod
     ) throws(ShiftMembershipError) -> Bool {
+        guard shift.jobID == id else {
+            throw .foreignShiftOwner(shiftID: shift.id, expectedJobID: id, actualJobID: shift.jobID)
+        }
         switch period {
         case let .perShift(shiftID):
             return shift.id == shiftID
@@ -330,6 +345,11 @@ struct Job: Equatable {
         for period: PayCalculationPeriod,
         from shifts: [Shift]
     ) throws(ExpectedGrossCalculationError) -> ExpectedGrossBreakdown {
+        for shift in shifts where shift.jobID != id {
+            throw .membershipFailed(.foreignShiftOwner(
+                shiftID: shift.id, expectedJobID: id, actualJobID: shift.jobID
+            ))
+        }
         let orderedShifts = shifts.sorted(by: Self.isShiftOrderedBefore)
 
         var breakdowns: [ShiftPayBreakdown] = []
@@ -388,6 +408,9 @@ struct Job: Equatable {
     }
 
     private func compensationWorkType(for shift: Shift) throws(PayRateResolutionError) -> WorkType {
+        guard shift.jobID == id else {
+            throw .foreignShiftOwner(shiftID: shift.id, expectedJobID: id, actualJobID: shift.jobID)
+        }
         guard let workType = workType(id: shift.workTypeID) else {
             throw PayRateResolutionError.workTypeNotFound(workTypeID: shift.workTypeID)
         }

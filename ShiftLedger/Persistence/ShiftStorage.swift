@@ -30,6 +30,7 @@ enum ShiftStorageError: Error {
     }
 
     case jobNotFound
+    case foreignShiftOwner(shiftID: UUID, expectedJobID: UUID, actualJobID: UUID)
     case multipleJobsFound
     case workTypeNotFound(workTypeID: UUID)
     case workTypeArchived(workTypeID: UUID)
@@ -55,6 +56,7 @@ final class ShiftStorage {
 
     func save(_ shift: Shift) throws {
         let job = try singleJob()
+        try validateOwner(of: shift, job: job)
         let workTypes = try workTypes(for: job)
         let workType = try workType(id: shift.workTypeID, in: workTypes)
         try validateNewAssignment(to: workType)
@@ -100,6 +102,7 @@ final class ShiftStorage {
 
     func update(_ shift: Shift) throws {
         let job = try singleJob()
+        try validateOwner(of: shift, job: job)
         let workTypes = try workTypes(for: job)
         let existingShifts = try fetchShifts()
         let target = try uniqueShift(id: shift.id, in: existingShifts)
@@ -188,6 +191,14 @@ final class ShiftStorage {
             return jobs[0]
         default:
             throw ShiftStorageError.multipleJobsFound
+        }
+    }
+
+    private func validateOwner(of shift: Shift, job: JobEntity) throws {
+        guard shift.jobID == job.id else {
+            throw ShiftStorageError.foreignShiftOwner(
+                shiftID: shift.id, expectedJobID: job.id, actualJobID: shift.jobID
+            )
         }
     }
 
@@ -333,6 +344,7 @@ final class ShiftStorage {
         do {
             return try Shift(
                 id: entity.id,
+                jobID: job.id,
                 workTypeID: workType.id,
                 start: entity.start,
                 end: entity.end,

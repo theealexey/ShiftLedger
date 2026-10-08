@@ -17,6 +17,7 @@ struct EditShiftViewModelTests {
         )
         let shift = try Shift(
             id: shiftID,
+            jobID: testJobID,
             workTypeID: workTypes[1].id,
             start: start,
             end: end,
@@ -68,6 +69,7 @@ struct EditShiftViewModelTests {
 
         let updated = try viewModel.makeShift()
         #expect(updated.id == original.id)
+        #expect(updated.jobID == original.jobID)
         #expect(updated.workTypeID == workTypes[1].id)
         #expect(updated.start == newStart)
         #expect(updated.end == newEnd)
@@ -375,6 +377,7 @@ struct EditShiftViewModelTests {
     private func makeShift(workTypeID: UUID) throws -> Shift {
         try Shift(
             id: shiftID,
+            jobID: testJobID,
             workTypeID: workTypeID,
             start: start,
             end: end

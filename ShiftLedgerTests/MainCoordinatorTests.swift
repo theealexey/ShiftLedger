@@ -320,6 +320,7 @@ struct MainCoordinatorTests {
         let deletedShift = try makeShift()
         let remainingStart = deletedShift.end.addingTimeInterval(3_600)
         let remainingShift = try Shift(
+            jobID: testWorkTypeID,
             workTypeID: testWorkTypeID,
             start: remainingStart,
             end: remainingStart.addingTimeInterval(3_600)
@@ -432,6 +433,7 @@ struct MainCoordinatorTests {
                 metrics.addShiftJobs.append(job)
                 return AddShiftViewController(
                     viewModel: AddShiftViewModel(
+                        jobID: job.id,
                         timeZoneIdentifier: job.timeZoneIdentifier,
                         workTypes: job.workTypes,
                         saveShift: { _ in .success(()) }
@@ -544,6 +546,7 @@ struct MainCoordinatorTests {
     private func makeShift() throws -> Shift {
         let start = Date(timeIntervalSinceReferenceDate: 800_000_000)
         return try Shift(
+            jobID: testWorkTypeID,
             workTypeID: testWorkTypeID,
             start: start,
             end: start.addingTimeInterval(3_600)

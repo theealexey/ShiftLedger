@@ -683,6 +683,7 @@ struct PaycheckResultViewControllerTests {
         let start = try date(day: 20, hour: 8)
         let shift = try Shift(
             id: try uuid(20),
+            jobID: testWorkTypeID,
             workTypeID: testWorkTypeID,
             start: start,
             end: start.addingTimeInterval(8 * 3_600),
@@ -733,6 +734,7 @@ struct PaycheckResultViewControllerTests {
         let start = try date(day: day, hour: hour)
         return try Shift(
             id: try uuid(day),
+            jobID: testWorkTypeID,
             workTypeID: testWorkTypeID,
             start: start,
             end: start.addingTimeInterval(duration)

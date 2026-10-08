@@ -60,6 +60,7 @@ struct PaycheckComparisonHardeningTests {
         let rate = try PayRate(amount: Decimal(20), effectiveFrom: nil)
         let job = try makeJob(payRates: [rate])
         let shift = try Shift(
+            jobID: job.id,
             workTypeID: testWorkTypeID,
             start: date(month: 10, day: 25, hour: 0),
             end: date(month: 10, day: 25, hour: 8)
@@ -88,6 +89,7 @@ struct PaycheckComparisonHardeningTests {
         let breakStart = try date(month: 3, day: 29, hour: 1, minute: 30)
         let breakEnd = try date(month: 3, day: 29, hour: 3, minute: 30)
         let shift = try Shift(
+            jobID: job.id,
             workTypeID: testWorkTypeID,
             start: start,
             end: end,
@@ -162,6 +164,7 @@ struct PaycheckComparisonHardeningTests {
         )
         let job = try makeJob(payRates: [initialRate, octoberRate])
         let shift = try Shift(
+            jobID: job.id,
             workTypeID: testWorkTypeID,
             start: date(month: 9, day: 30, hour: 23),
             end: date(month: 10, day: 1, hour: 7)
@@ -189,6 +192,7 @@ struct PaycheckComparisonHardeningTests {
         let job = try makeJob(basis: .fixedPerShift, payRates: [rate])
         let start = try date(month: 9, day: 10, hour: 8)
         let shift = try Shift(
+            jobID: job.id,
             workTypeID: testWorkTypeID,
             start: start,
             end: start.addingTimeInterval(8 * hour),
@@ -266,6 +270,7 @@ struct PaycheckComparisonHardeningTests {
     ) throws -> Shift {
         let start = try date(month: month, day: day, hour: 8)
         return try Shift(
+            jobID: testWorkTypeID,
             workTypeID: testWorkTypeID,
             start: start,
             end: start.addingTimeInterval(hours * hour)

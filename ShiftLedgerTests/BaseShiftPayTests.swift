@@ -11,6 +11,7 @@ struct BaseShiftPayTests {
         let job = try makeJob(basePayBasis: .hourly, payRates: [payRate])
         let start = Date(timeIntervalSinceReferenceDate: 100_000)
         let shift = try Shift(
+            jobID: job.id,
             workTypeID: testWorkTypeID,
             start: start,
             end: start.addingTimeInterval(8 * hour)
@@ -25,6 +26,7 @@ struct BaseShiftPayTests {
         let job = try makeJob(basePayBasis: .hourly, payRates: [payRate])
         let start = Date(timeIntervalSinceReferenceDate: 100_000)
         let shift = try Shift(
+            jobID: job.id,
             workTypeID: testWorkTypeID,
             start: start,
             end: start.addingTimeInterval(8 * hour),
@@ -43,6 +45,7 @@ struct BaseShiftPayTests {
         let job = try makeJob(basePayBasis: .fixedPerShift, payRates: [payRate])
         let start = Date(timeIntervalSinceReferenceDate: 100_000)
         let shift = try Shift(
+            jobID: job.id,
             workTypeID: testWorkTypeID,
             start: start,
             end: start.addingTimeInterval(8 * hour)
@@ -57,6 +60,7 @@ struct BaseShiftPayTests {
         let job = try makeJob(basePayBasis: .fixedPerShift, payRates: [payRate])
         let start = Date(timeIntervalSinceReferenceDate: 100_000)
         let shift = try Shift(
+            jobID: job.id,
             workTypeID: testWorkTypeID,
             start: start,
             end: start.addingTimeInterval(8 * hour),
@@ -85,6 +89,7 @@ struct BaseShiftPayTests {
             date(year: 2026, month: 9, day: 2, hour: 8, in: stockholm)
         )
         let shift = try Shift(
+            jobID: job.id,
             workTypeID: testWorkTypeID,
             start: start,
             end: start.addingTimeInterval(8 * hour)
@@ -111,7 +116,7 @@ struct BaseShiftPayTests {
         let end = try #require(
             date(year: 2026, month: 9, day: 1, hour: 7, in: stockholm)
         )
-        let shift = try Shift(workTypeID: testWorkTypeID, start: start, end: end)
+        let shift = try Shift(jobID: job.id, workTypeID: testWorkTypeID, start: start, end: end)
 
         #expect(try job.basePay(for: shift) == Decimal(160))
     }
@@ -125,6 +130,7 @@ struct BaseShiftPayTests {
         let job = try makeJob(basePayBasis: .hourly, payRates: [payRate])
         let start = Date(timeIntervalSinceReferenceDate: 100_000)
         let shift = try Shift(
+            jobID: job.id,
             workTypeID: testWorkTypeID,
             start: start,
             end: start.addingTimeInterval(1.5 * hour)
@@ -144,7 +150,7 @@ struct BaseShiftPayTests {
         let end = try #require(
             date(year: 2026, month: 3, day: 29, hour: 8, in: stockholm)
         )
-        let shift = try Shift(workTypeID: testWorkTypeID, start: start, end: end)
+        let shift = try Shift(jobID: job.id, workTypeID: testWorkTypeID, start: start, end: end)
 
         #expect(try job.basePay(for: shift) == Decimal(140))
     }

@@ -10,6 +10,48 @@ struct ShiftStorageTests {
     private let firstWorkTypeID = UUID(uuid: (0x72, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2))
     private let secondWorkTypeID = UUID(uuid: (0x72, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3))
 
+    @Test("Foreign ownership is rejected before save/update mutation and survives SQLite reopen",
+          arguments: [false, true])
+    func rejectsForeignOwnerWithoutMutation(_ updating: Bool) async throws {
+        let storeURL = try makeTemporaryStoreURL()
+        var stacks: [CoreDataStack] = []
+        defer { removeTemporaryStoreDirectory(for: storeURL, stacks: stacks) }
+        let stack = try await makeStack(storeURL: storeURL, stacks: &stacks)
+        let job = try makeJob()
+        try JobStorage(stack: stack).save(job)
+        let original = try makeShift(jobID: job.id)
+        let storage = ShiftStorage(stack: stack)
+        try storage.save(original)
+        let foreignOwner = testJobID
+        let proposed = try Shift(
+            id: updating ? original.id : testWorkTypeID,
+            jobID: foreignOwner,
+            workTypeID: original.workTypeID,
+            start: original.start.addingTimeInterval(86_400),
+            end: original.end.addingTimeInterval(86_400)
+        )
+        var rejected = false
+        do {
+            if updating { try storage.update(proposed) }
+            else { try storage.save(proposed) }
+        } catch ShiftStorageError.foreignShiftOwner(let shiftID, let expected, let actual) {
+            rejected = true
+            #expect(shiftID == proposed.id)
+            #expect(expected == job.id)
+            #expect(actual == foreignOwner)
+        }
+        #expect(rejected)
+        #expect(stack.viewContext.hasChanges == false)
+        #expect(try storage.loadAll() == [original])
+        #expect(try JobStorage(stack: stack).load() == job)
+        try close(stack)
+        let reopened = try await makeStack(storeURL: storeURL, stacks: &stacks)
+        #expect(try ShiftStorage(stack: reopened).loadAll() == [original])
+        #expect(try ShiftStorage(stack: reopened).loadAll().first?.jobID == job.id)
+        #expect(try JobStorage(stack: reopened).load() == job)
+        #expect(try fetchShifts(in: reopened.viewContext).count == 1)
+    }
+
     @Test("Смена без перерыва переживает SQLite reopen")
     func roundTripsShiftWithoutBreak() async throws {
         let storeURL = try makeTemporaryStoreURL()
@@ -71,6 +113,7 @@ struct ShiftStorageTests {
         let start = Date(timeIntervalSinceReferenceDate: 20_000)
         let shift = try Shift(
             id: try #require(UUID(uuidString: "2E80C3A1-7F3C-4D6C-BDA9-1E62C2A4A1F4")),
+            jobID: canonicalWorkTypeID,
             workTypeID: canonicalWorkTypeID,
             start: start,
             end: start.addingTimeInterval(8 * 60 * 60),
@@ -102,12 +145,12 @@ struct ShiftStorageTests {
         let firstShift = try makeShift(
             id: "72000000-0000-0000-0000-000000000011",
             start: 10 * 60 * 60,
-            workTypeID: firstWorkTypeID
+            workTypeID: firstWorkTypeID, jobID: multiJobID
         )
         let secondShift = try makeShift(
             id: "72000000-0000-0000-0000-000000000012",
             start: 20 * 60 * 60,
-            workTypeID: secondWorkTypeID
+            workTypeID: secondWorkTypeID, jobID: multiJobID
         )
         let stackA = try await makeStack(storeURL: storeURL, stacks: &stacks)
         try JobStorage(stack: stackA).save(job)
@@ -191,7 +234,7 @@ struct ShiftStorageTests {
         let initial = try makeShift(
             id: "73000000-0000-0000-0000-000000000001",
             start: 10 * 60 * 60,
-            workTypeID: firstWorkTypeID
+            workTypeID: firstWorkTypeID, jobID: multiJobID
         )
         let storage = ShiftStorage(stack: stack)
         try storage.save(initial)
@@ -200,6 +243,7 @@ struct ShiftStorageTests {
 
         let movedInTime = try Shift(
             id: initial.id,
+            jobID: multiJobID,
             workTypeID: firstWorkTypeID,
             start: initial.start.addingTimeInterval(60 * 60),
             end: initial.end.addingTimeInterval(60 * 60)
@@ -210,6 +254,7 @@ struct ShiftStorageTests {
         _ = try jobStorage.archiveWorkType(id: secondWorkTypeID)
         let reassigned = try Shift(
             id: initial.id,
+            jobID: multiJobID,
             workTypeID: secondWorkTypeID,
             start: movedInTime.start,
             end: movedInTime.end
@@ -236,12 +281,12 @@ struct ShiftStorageTests {
         let original = try makeShift(
             id: "74000000-0000-0000-0000-000000000001",
             start: 10 * 60 * 60,
-            workTypeID: firstWorkTypeID
+            workTypeID: firstWorkTypeID, jobID: multiJobID
         )
         let unrelated = try makeShift(
             id: "74000000-0000-0000-0000-000000000002",
             start: 50 * 60 * 60,
-            workTypeID: firstWorkTypeID
+            workTypeID: firstWorkTypeID, jobID: multiJobID
         )
         let storage = ShiftStorage(stack: stackA)
         try storage.save(original)
@@ -263,6 +308,7 @@ struct ShiftStorageTests {
         let updatedStart = Date(timeIntervalSinceReferenceDate: 25 * 60 * 60)
         let updated = try Shift(
             id: original.id,
+            jobID: multiJobID,
             workTypeID: secondWorkTypeID,
             start: updatedStart,
             end: updatedStart.addingTimeInterval(10 * 60 * 60),
@@ -335,12 +381,12 @@ struct ShiftStorageTests {
         let target = try makeShift(
             id: "76000000-0000-0000-0000-000000000001",
             start: 10 * 60 * 60,
-            workTypeID: firstWorkTypeID
+            workTypeID: firstWorkTypeID, jobID: multiJobID
         )
         let other = try makeShift(
             id: "76000000-0000-0000-0000-000000000002",
             start: 20 * 60 * 60,
-            workTypeID: secondWorkTypeID
+            workTypeID: secondWorkTypeID, jobID: multiJobID
         )
         let storage = ShiftStorage(stack: stack)
         try storage.save(target)
@@ -351,6 +397,7 @@ struct ShiftStorageTests {
         let proposedStart = Date(timeIntervalSinceReferenceDate: 19 * 60 * 60)
         let proposed = try Shift(
             id: target.id,
+            jobID: multiJobID,
             workTypeID: firstWorkTypeID,
             start: proposedStart,
             end: proposedStart.addingTimeInterval(2 * 60 * 60)
@@ -381,12 +428,12 @@ struct ShiftStorageTests {
         let target = try makeShift(
             id: "77000000-0000-0000-0000-000000000001",
             start: 10 * 60 * 60,
-            workTypeID: firstWorkTypeID
+            workTypeID: firstWorkTypeID, jobID: multiJobID
         )
         let other = try makeShift(
             id: "77000000-0000-0000-0000-000000000002",
             start: 20 * 60 * 60,
-            workTypeID: secondWorkTypeID
+            workTypeID: secondWorkTypeID, jobID: multiJobID
         )
         let storage = ShiftStorage(stack: stack)
         try storage.save(target)
@@ -394,6 +441,7 @@ struct ShiftStorageTests {
         let adjacentStart = Date(timeIntervalSinceReferenceDate: 12 * 60 * 60)
         let adjacent = try Shift(
             id: target.id,
+            jobID: multiJobID,
             workTypeID: firstWorkTypeID,
             start: adjacentStart,
             end: other.start
@@ -414,13 +462,14 @@ struct ShiftStorageTests {
         try JobStorage(stack: stack).save(try makeMultiWorkTypeJob())
         let target = try makeShift(
             id: "78000000-0000-0000-0000-000000000001",
-            workTypeID: firstWorkTypeID
+            workTypeID: firstWorkTypeID, jobID: multiJobID
         )
         let storage = ShiftStorage(stack: stack)
         try storage.save(target)
         let unknownID = UUID(uuid: (0x78, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 9))
         let proposed = try Shift(
             id: target.id,
+            jobID: target.jobID,
             workTypeID: unknownID,
             start: target.start.addingTimeInterval(60),
             end: target.end.addingTimeInterval(60)
@@ -493,6 +542,7 @@ struct ShiftStorageTests {
         let secondStart = second.start
         let proposed = try Shift(
             id: duplicateID,
+            jobID: canonicalWorkTypeID,
             workTypeID: canonicalWorkTypeID,
             start: Date(timeIntervalSinceReferenceDate: 50 * 60 * 60),
             end: Date(timeIntervalSinceReferenceDate: 58 * 60 * 60)
@@ -535,6 +585,7 @@ struct ShiftStorageTests {
         let originalStart = target.start
         let proposed = try Shift(
             id: targetID,
+            jobID: canonicalWorkTypeID,
             workTypeID: canonicalWorkTypeID,
             start: Date(timeIntervalSinceReferenceDate: 20 * 60 * 60),
             end: Date(timeIntervalSinceReferenceDate: 28 * 60 * 60)
@@ -566,12 +617,12 @@ struct ShiftStorageTests {
         let target = try makeShift(
             id: "7C000000-0000-0000-0000-000000000001",
             start: 10 * 60 * 60,
-            workTypeID: firstWorkTypeID
+            workTypeID: firstWorkTypeID, jobID: multiJobID
         )
         let unrelated = try makeShift(
             id: "7C000000-0000-0000-0000-000000000002",
             start: 30 * 60 * 60,
-            workTypeID: secondWorkTypeID
+            workTypeID: secondWorkTypeID, jobID: multiJobID
         )
         let storage = ShiftStorage(stack: stack)
         try storage.save(target)
@@ -642,12 +693,12 @@ struct ShiftStorageTests {
         try JobStorage(stack: stackA).save(job)
         let target = try makeShift(
             id: "7D000000-0000-0000-0000-000000000001",
-            workTypeID: firstWorkTypeID
+            workTypeID: firstWorkTypeID, jobID: multiJobID
         )
         let remaining = try makeShift(
             id: "7D000000-0000-0000-0000-000000000002",
             start: 30 * 60 * 60,
-            workTypeID: secondWorkTypeID
+            workTypeID: secondWorkTypeID, jobID: multiJobID
         )
         let storage = ShiftStorage(stack: stackA)
         try storage.save(target)
@@ -675,7 +726,7 @@ struct ShiftStorageTests {
         try jobStorage.save(try makeMultiWorkTypeJob())
         let target = try makeShift(
             id: "7E000000-0000-0000-0000-000000000001",
-            workTypeID: firstWorkTypeID
+            workTypeID: firstWorkTypeID, jobID: multiJobID
         )
         let storage = ShiftStorage(stack: stack)
         try storage.save(target)
@@ -862,7 +913,7 @@ struct ShiftStorageTests {
         )
         let shift = try makeShift(
             id: "73000000-0000-0000-0000-000000000004",
-            workTypeID: workTypeID
+            workTypeID: workTypeID, jobID: job.id
         )
         let stackA = try await makeStack(storeURL: storeURL, stacks: &stacks)
         try JobStorage(stack: stackA).save(job)
@@ -906,7 +957,7 @@ struct ShiftStorageTests {
         let first = try makeShift(
             id: "A0000000-0000-0000-0000-000000000001",
             start: 10 * 60 * 60,
-            workTypeID: firstWorkTypeID
+            workTypeID: firstWorkTypeID, jobID: multiJobID
         )
         try ShiftStorage(stack: stack).save(first)
 
@@ -919,14 +970,14 @@ struct ShiftStorageTests {
         let adjacent = try makeShift(
             id: "A0000000-0000-0000-0000-000000000002",
             start: 18 * 60 * 60,
-            workTypeID: secondWorkTypeID
+            workTypeID: secondWorkTypeID, jobID: multiJobID
         )
         try ShiftStorage(stack: stack).save(adjacent)
 
         let overlapping = try makeShift(
             id: "A0000000-0000-0000-0000-000000000003",
             start: 17 * 60 * 60 + 59 * 60,
-            workTypeID: secondWorkTypeID
+            workTypeID: secondWorkTypeID, jobID: multiJobID
         )
         do {
             try ShiftStorage(stack: stack).save(overlapping)
@@ -961,6 +1012,7 @@ struct ShiftStorageTests {
         let unsupportedID = UUID(uuid: (0x71, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1))
         let start = Date(timeIntervalSinceReferenceDate: 1_000)
         let shift = try Shift(
+            jobID: multiJobID,
             workTypeID: unsupportedID,
             start: start,
             end: start.addingTimeInterval(60)
@@ -1156,11 +1208,13 @@ struct ShiftStorageTests {
     private func makeShift(
         id: String = "90000000-0000-0000-0000-000000000001",
         start offset: TimeInterval = 10 * 60 * 60,
-        workTypeID: UUID? = nil
+        workTypeID: UUID? = nil,
+        jobID: UUID = UUID(uuid: (0x70, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1))
     ) throws -> Shift {
         let start = Date(timeIntervalSinceReferenceDate: offset)
         return try Shift(
             id: try #require(UUID(uuidString: id)),
+            jobID: jobID,
             workTypeID: workTypeID ?? canonicalWorkTypeID,
             start: start,
             end: start.addingTimeInterval(8 * 60 * 60)

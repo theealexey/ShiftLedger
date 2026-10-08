@@ -562,6 +562,7 @@ struct OverviewViewControllerTests {
         let job = try makeJob(cycle: .scheduled(.calendarMonthly))
         let start = try date(year: 2026, month: 9, day: 20, hour: 8)
         let shift = try Shift(
+            jobID: job.id,
             workTypeID: testWorkTypeID,
             start: start,
             end: start.addingTimeInterval(8 * 60 * 60),
@@ -626,6 +627,7 @@ struct OverviewViewControllerTests {
         let start = try date(year: 2026, month: 9, day: 10, hour: 22)
         let overnight = try Shift(
             id: UUID(uuid: (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1)),
+            jobID: job.id,
             workTypeID: testWorkTypeID,
             start: start,
             end: try date(year: 2026, month: 9, day: 11, hour: 6)
@@ -758,6 +760,7 @@ struct OverviewViewControllerTests {
         let start = try date(year: 2026, month: 9, day: 20, hour: 8)
         let withBreak = try Shift(
             id: UUID(uuid: (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2)),
+            jobID: job.id,
             workTypeID: testWorkTypeID,
             start: start,
             end: start.addingTimeInterval(8 * 60 * 60),
@@ -1894,6 +1897,7 @@ struct OverviewViewControllerTests {
         let start = try date(year: 2026, month: month, day: day, hour: 8)
         return try Shift(
             id: UUID(uuid: (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, id)),
+            jobID: testWorkTypeID,
             workTypeID: testWorkTypeID,
             start: start,
             end: start.addingTimeInterval(8 * 60 * 60)

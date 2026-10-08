@@ -394,7 +394,7 @@ struct AppCoordinatorTests {
     func multiWorkTypeSelectionPersistsExactAssignment() async throws {
         let job = try makeMultiWorkTypeJob()
         let selectedWorkType = try #require(job.workTypes.dropFirst().first)
-        let expectedShift = try makeShift(day: 22, workTypeID: selectedWorkType.id)
+        let expectedShift = try makeShift(day: 22, workTypeID: selectedWorkType.id, jobID: job.id)
 
         try await withOverview(job: job) { stack, navigation, overview in
             overview.onAddShift?()
@@ -596,20 +596,32 @@ struct AppCoordinatorTests {
         let job = try makeMultiWorkTypeJob()
         let firstWorkType = try #require(job.workTypes.first)
         let secondWorkType = try #require(job.workTypes.dropFirst().first)
-        let original = try makeShift(day: 20, workTypeID: firstWorkType.id)
-        let edited = try makeShift(day: 23, workTypeID: secondWorkType.id)
+        let original = try makeShift(day: 20, workTypeID: firstWorkType.id, jobID: job.id)
+        let edited = try makeShift(day: 23, workTypeID: secondWorkType.id, jobID: job.id)
 
         try await withOverview(job: job) { stack, navigation, overview in
             try ShiftStorage(stack: stack).save(original)
             overview.reload(selectingShiftID: original.id)
             let originalOverview = overview
+            let initiallySelectedCard: UIControl = try requireView(
+                "overview.shift.\(original.id.uuidString)",
+                in: overview.view
+            )
             let editButton: UIButton = try requireView(
                 "overview.shift.\(original.id.uuidString).edit",
                 in: overview.view
             )
-            #expect(editButton.isHidden == false)
+            #expect(initiallySelectedCard.accessibilityTraits.contains(.selected))
+            #expect(editButton.isHidden)
 
-            editButton.sendActions(for: .touchUpInside)
+            initiallySelectedCard.sendActions(for: .touchUpInside)
+            let expandedEditButton: UIButton = try requireView(
+                "overview.shift.\(original.id.uuidString).edit",
+                in: overview.view
+            )
+            #expect(expandedEditButton.isHidden == false)
+
+            expandedEditButton.sendActions(for: .touchUpInside)
             let editShift = try #require(
                 navigation.topViewController as? EditShiftViewController
             )
@@ -650,7 +662,17 @@ struct AppCoordinatorTests {
                 "overview.shift.\(original.id.uuidString).edit",
                 in: overview.view
             )
-            #expect(reloadedEditButton.isHidden == false)
+            #expect(reloadedEditButton.isHidden)
+            let reloadedCard: UIControl = try requireView(
+                "overview.shift.\(original.id.uuidString)",
+                in: overview.view
+            )
+            reloadedCard.sendActions(for: .touchUpInside)
+            let reexpandedEditButton: UIButton = try requireView(
+                "overview.shift.\(original.id.uuidString).edit",
+                in: overview.view
+            )
+            #expect(reexpandedEditButton.isHidden == false)
             let expectedGross: UILabel = try requireView(
                 "overview.expectedGross.amount",
                 in: overview.view
@@ -966,12 +988,13 @@ struct AppCoordinatorTests {
         return try #require(find(in: root))
     }
 
-    private func makeShift(day: Int, workTypeID: UUID = testWorkTypeID) throws -> Shift {
+    private func makeShift(day: Int, workTypeID: UUID = testWorkTypeID, jobID: UUID = testWorkTypeID) throws -> Shift {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = try #require(TimeZone(identifier: "Europe/Stockholm"))
         let start = try #require(calendar.date(from: DateComponents(year: 2026, month: 9, day: day, hour: 8)))
         return try Shift(
             id: try #require(UUID(uuidString: String(format: "B0000000-0000-0000-0000-%012d", day))),
+            jobID: jobID,
             workTypeID: workTypeID,
             start: start,
             end: start.addingTimeInterval(8 * 3_600)

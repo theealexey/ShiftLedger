@@ -81,23 +81,27 @@ struct PaycheckComparisonInvariantTests {
         let higherID = try #require(UUID(uuidString: "50000000-0000-0000-0000-000000000002"))
         let start = try date(day: 10)
         let earliest = try Shift(
+            jobID: job.id,
             workTypeID: testWorkTypeID,
             start: start.addingTimeInterval(-hour),
             end: start
         )
         let shorter = try Shift(
+            jobID: job.id,
             workTypeID: testWorkTypeID,
             start: start,
             end: start.addingTimeInterval(hour)
         )
         let lowerUUID = try Shift(
             id: lowerID,
+            jobID: job.id,
             workTypeID: testWorkTypeID,
             start: start,
             end: start.addingTimeInterval(2 * hour)
         )
         let higherUUID = try Shift(
             id: higherID,
+            jobID: job.id,
             workTypeID: testWorkTypeID,
             start: start,
             end: start.addingTimeInterval(2 * hour)
@@ -246,6 +250,7 @@ struct PaycheckComparisonInvariantTests {
         let job = try makeJob(payRates: [initialRate, datedRate])
         let firstStart = try date(day: 10)
         let first = try Shift(
+            jobID: job.id,
             workTypeID: testWorkTypeID,
             start: firstStart,
             end: firstStart.addingTimeInterval(8 * hour),
@@ -290,6 +295,7 @@ struct PaycheckComparisonInvariantTests {
     ) throws -> Shift {
         let start = try date(month: month, day: day)
         return try Shift(
+            jobID: testWorkTypeID,
             workTypeID: testWorkTypeID,
             start: start,
             end: start.addingTimeInterval(hours * hour)

@@ -25,6 +25,7 @@ final class AddShiftViewModel {
     private let makeID: () -> UUID
 
     init(
+        jobID: UUID,
         timeZoneIdentifier: String,
         workTypes: [WorkType],
         initialStart: Date? = nil,
@@ -38,6 +39,7 @@ final class AddShiftViewModel {
         self.timeZoneIdentifier = timeZoneIdentifier
         let activeWorkTypes = workTypes.filter { !$0.isArchived }
         formState = ShiftFormState(
+            jobID: jobID,
             workTypes: activeWorkTypes,
             selectedWorkTypeID: activeWorkTypes.count == 1 ? activeWorkTypes[0].id : nil,
             start: initialStart,

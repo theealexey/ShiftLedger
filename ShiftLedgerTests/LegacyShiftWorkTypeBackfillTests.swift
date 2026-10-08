@@ -434,6 +434,7 @@ struct LegacyShiftWorkTypeBackfillTests {
         #expect(Set(domainWorkType.payRates.map(\.id)) == expectedLegacy.job.payRateIDs)
 
         let domainShifts = try ShiftStorage(stack: stack).loadAll()
+        #expect(domainShifts.allSatisfy { $0.jobID == job.id })
         let domainSnapshots = domainShifts.map {
             LegacyShiftSnapshot(
                 id: $0.id,

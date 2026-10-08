@@ -5,6 +5,7 @@ enum AddShiftAssembly {
     static func make(job: Job, stack: CoreDataStack) -> AddShiftViewController {
         let shiftStorage = ShiftStorage(stack: stack)
         let viewModel = AddShiftViewModel(
+            jobID: job.id,
             timeZoneIdentifier: job.timeZoneIdentifier,
             workTypes: job.workTypes,
             saveShift: { shift in

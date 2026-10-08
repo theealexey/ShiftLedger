@@ -201,11 +201,13 @@ struct JobStorageTests {
         let beforeStart = try beforeDate.startOfDay(in: timeZone).addingTimeInterval(9 * 60 * 60)
         let afterStart = try afterDate.startOfDay(in: timeZone).addingTimeInterval(9 * 60 * 60)
         let beforeShift = try Shift(
+            jobID: originalJob.id,
             workTypeID: renameTargetID,
             start: beforeStart,
             end: beforeStart.addingTimeInterval(2 * 60 * 60)
         )
         let afterShift = try Shift(
+            jobID: originalJob.id,
             workTypeID: renameTargetID,
             start: afterStart,
             end: afterStart.addingTimeInterval(2 * 60 * 60)
@@ -336,6 +338,7 @@ struct JobStorageTests {
             .addingTimeInterval(9 * 60 * 60)
         let shift = try Shift(
             id: UUID(uuid: (0x79, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 8)),
+            jobID: originalJob.id,
             workTypeID: renameTargetID,
             start: shiftStart,
             end: shiftStart.addingTimeInterval(2 * 60 * 60)
@@ -526,11 +529,13 @@ struct JobStorageTests {
         let beforeStart = try beforeDate.startOfDay(in: timeZone).addingTimeInterval(9 * 60 * 60)
         let afterStart = try effectiveDate.startOfDay(in: timeZone).addingTimeInterval(9 * 60 * 60)
         let beforeShift = try Shift(
+            jobID: original.id,
             workTypeID: renameTargetID,
             start: beforeStart,
             end: beforeStart.addingTimeInterval(2 * 60 * 60)
         )
         let afterShift = try Shift(
+            jobID: original.id,
             workTypeID: renameTargetID,
             start: afterStart,
             end: afterStart.addingTimeInterval(2 * 60 * 60)
@@ -2018,7 +2023,7 @@ struct JobStorageTests {
     private func rateProtectionShift(day: Int) throws -> Shift {
         let zone = try #require(TimeZone(identifier: "Europe/Stockholm"))
         let start = try LocalDate(year: 2026, month: 3, day: day).startOfDay(in: zone).addingTimeInterval(9 * 3_600)
-        return try Shift(workTypeID: renameTargetID, start: start, end: start.addingTimeInterval(2 * 3_600))
+        return try Shift(jobID: renameJobID, workTypeID: renameTargetID, start: start, end: start.addingTimeInterval(2 * 3_600))
     }
 
     private func makeRenameJob() throws -> Job {

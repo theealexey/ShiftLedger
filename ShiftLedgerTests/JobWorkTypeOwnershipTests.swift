@@ -554,10 +554,10 @@ struct JobWorkTypeOwnershipTests {
         // For start/end ordering, deliberately put the earlier Shift's UUID last.
         let firstID = orderingDimension == 2 ? lectureID : examID
         let secondID = orderingDimension == 2 ? examID : lectureID
-        let first = try Shift(id: firstID, workTypeID: lectureID, start: start, end: start.addingTimeInterval(3_600))
+        let first = try Shift(id: firstID, jobID: jobID, workTypeID: lectureID, start: start, end: start.addingTimeInterval(3_600))
         let secondStart = start.addingTimeInterval(orderingDimension == 0 ? 1 : 0)
         let secondEnd = start.addingTimeInterval(orderingDimension == 1 ? 7_200 : 3_600)
-        let second = try Shift(id: secondID, workTypeID: lectureID, start: secondStart, end: secondEnd)
+        let second = try Shift(id: secondID, jobID: jobID, workTypeID: lectureID, start: secondStart, end: secondEnd)
         let added = try PayRate(amount: 25, effectiveFrom: LocalDate(year: 2026, month: 9, day: 1))
         #expect(throws: JobPayRateChangeError.historicalCompensationWouldChange(
             workTypeID: lectureID, shiftID: first.id
@@ -575,7 +575,7 @@ struct JobWorkTypeOwnershipTests {
         let zone = try #require(TimeZone(identifier: job.timeZoneIdentifier))
         let start = try LocalDate(year: 2026, month: 10, day: 24).startOfDay(in: zone).addingTimeInterval(23 * 3_600)
         let end = try LocalDate(year: 2026, month: 10, day: 25).startOfDay(in: zone).addingTimeInterval(4 * 3_600)
-        let shift = try Shift(workTypeID: lectureID, start: start, end: end)
+        let shift = try Shift(jobID: jobID, workTypeID: lectureID, start: start, end: end)
         let nextDayRate = try PayRate(amount: 25, effectiveFrom: LocalDate(year: 2026, month: 10, day: 25))
         let updated = try job.addingPayRate(
             nextDayRate, toWorkTypeID: lectureID,
@@ -597,7 +597,7 @@ struct JobWorkTypeOwnershipTests {
         let zone = try #require(TimeZone(identifier: "Europe/Stockholm"))
         let start = try LocalDate(year: 2026, month: 9, day: day).startOfDay(in: zone)
             .addingTimeInterval(TimeInterval(hour) * 3_600)
-        return try Shift(workTypeID: workTypeID ?? lectureID, start: start, end: start.addingTimeInterval(4 * 3_600))
+        return try Shift(jobID: jobID, workTypeID: workTypeID ?? lectureID, start: start, end: start.addingTimeInterval(4 * 3_600))
     }
 
     private func makeJob(workTypes: [WorkType]) throws -> Job {
@@ -639,6 +639,7 @@ struct JobWorkTypeOwnershipTests {
     ) throws -> Shift {
         let start = Date(timeIntervalSinceReferenceDate: startOffset)
         return try Shift(
+            jobID: jobID,
             workTypeID: workTypeID,
             start: start,
             end: start.addingTimeInterval(hours * 60 * 60)

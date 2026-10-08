@@ -10,7 +10,7 @@ struct ShiftFormStateTests {
     @Test("Empty state неполон, exact selection и UUID сохраняются")
     func selectionAndIdentity() throws {
         let workTypes = try makeWorkTypes()
-        var state = ShiftFormState(workTypes: workTypes, selectedWorkTypeID: nil)
+        var state = ShiftFormState(jobID: testJobID, workTypes: workTypes, selectedWorkTypeID: nil)
 
         #expect(state.canBuildShift == false)
 
@@ -22,6 +22,7 @@ struct ShiftFormStateTests {
 
         let shift = try state.makeShift(id: shiftID)
         #expect(shift.id == shiftID)
+        #expect(shift.jobID == testJobID)
         #expect(shift.workTypeID == workTypes[1].id)
         #expect(state.selectedWorkType?.id == workTypes[1].id)
     }
@@ -30,6 +31,7 @@ struct ShiftFormStateTests {
     func unknownSelectionIsRejected() throws {
         let workTypes = try makeWorkTypes()
         var state = ShiftFormState(
+            jobID: testJobID,
             workTypes: workTypes,
             selectedWorkTypeID: workTypes[1].id
         )
@@ -44,6 +46,7 @@ struct ShiftFormStateTests {
         let workTypes = try makeWorkTypes()
         let workType = workTypes[0]
         var state = ShiftFormState(
+            jobID: testJobID,
             workTypes: [workType],
             selectedWorkTypeID: workType.id,
             start: start,

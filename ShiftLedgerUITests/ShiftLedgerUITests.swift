@@ -148,6 +148,16 @@ final class ShiftLedgerUITests: XCTestCase {
         let editedLabel = normalizedWhitespace(editedCard.label)
 
         try requireCondition(
+            editedCard.isSelected,
+            message: "Edited Shift must remain selected after saving"
+        )
+
+        try requireCondition(
+            String(describing: editedCard.value).contains("Collapsed"),
+            message: "Edited Shift must return collapsed after saving"
+        )
+
+        try requireCondition(
             editedLabel.contains("12:00"),
             message:
                 "Edited Shift must expose 12:00 start. "
@@ -851,7 +861,7 @@ final class ShiftLedgerUITests: XCTestCase {
         forCardIdentifier cardIdentifier: String,
         in app: XCUIApplication
     ) throws {
-        let card = try scrollToHittable(
+        var card = try scrollToHittable(
             requerying: {
                 app.buttons[cardIdentifier]
             },
@@ -864,6 +874,50 @@ final class ShiftLedgerUITests: XCTestCase {
             _ = try requireHittable(
                 card,
                 message: "Collapsed Shift card must be hittable"
+            )
+
+            if card.isSelected == false {
+                card.tap()
+
+                let selectedAndCollapsed = XCTNSPredicateExpectation(
+                    predicate: NSPredicate { _, _ in
+                        let reselectedCard = app.buttons[cardIdentifier]
+                        return reselectedCard.exists
+                            && reselectedCard.isSelected
+                            && String(describing: reselectedCard.value).contains("Collapsed")
+                    },
+                    object: app
+                )
+
+                try requireCondition(
+                    XCTWaiter.wait(for: [selectedAndCollapsed], timeout: 5) == .completed,
+                    message:
+                        "Background Shift card \(cardIdentifier) must become selected and remain Collapsed"
+                )
+
+                attachScreenshot(
+                    named: "03a-overview-selected-collapsed",
+                    from: app
+                )
+
+                card = try scrollToHittable(
+                    requerying: {
+                        app.buttons[cardIdentifier]
+                    },
+                    in: app,
+                    direction: .towardTop,
+                    message: "Selected Shift card \(cardIdentifier) must remain reachable"
+                )
+            }
+
+            try requireCondition(
+                card.isSelected,
+                message: "Shift card \(cardIdentifier) must be selected before expanding"
+            )
+
+            try requireCondition(
+                String(describing: card.value).contains("Collapsed"),
+                message: "Selected Shift card \(cardIdentifier) must remain Collapsed before expanding"
             )
 
             card.tap()
@@ -890,6 +944,11 @@ final class ShiftLedgerUITests: XCTestCase {
         try requireCondition(
             String(describing: expandedCard.value).contains("Expanded"),
             message: "Shift card \(cardIdentifier) must remain Expanded"
+        )
+
+        attachScreenshot(
+            named: "03b-overview-expanded",
+            from: app
         )
 
         let checkPaycheck = try scrollToHittable(
@@ -937,6 +996,11 @@ final class ShiftLedgerUITests: XCTestCase {
                 + "card=\(cardIdentifier), value=\(cardValueBeforeTap), "
                 + "cardFrame=\(cardFrame), checkPaycheckFrame=\(checkPaycheckFrame), "
                 + "editPoint=(\(editX), \(editY))"
+        )
+
+        attachScreenshot(
+            named: "03c-edit-shift",
+            from: app
         )
     }
 

@@ -12,6 +12,7 @@ struct ShiftPeriodMembershipTests {
         let start = Date(timeIntervalSinceReferenceDate: 100_000)
         let shift = try Shift(
             id: shiftID,
+            jobID: job.id,
             workTypeID: testWorkTypeID,
             start: start,
             end: start.addingTimeInterval(hour)
@@ -28,12 +29,14 @@ struct ShiftPeriodMembershipTests {
         let start = Date(timeIntervalSinceReferenceDate: 100_000)
         let firstShift = try Shift(
             id: firstID,
+            jobID: job.id,
             workTypeID: testWorkTypeID,
             start: start,
             end: start.addingTimeInterval(hour)
         )
         let secondShift = try Shift(
             id: secondID,
+            jobID: job.id,
             workTypeID: testWorkTypeID,
             start: start,
             end: start.addingTimeInterval(hour)
@@ -49,7 +52,7 @@ struct ShiftPeriodMembershipTests {
         let start = try #require(
             date(year: 2026, month: 9, day: 15, hour: 8, in: stockholm)
         )
-        let shift = try Shift(workTypeID: testWorkTypeID, start: start, end: start.addingTimeInterval(hour))
+        let shift = try Shift(jobID: job.id, workTypeID: testWorkTypeID, start: start, end: start.addingTimeInterval(hour))
 
         #expect(try job.contains(shift, in: .scheduled(septemberPeriod())))
     }
@@ -61,7 +64,7 @@ struct ShiftPeriodMembershipTests {
         let start = try #require(
             date(year: 2026, month: 9, day: 1, hour: 0, in: stockholm)
         )
-        let shift = try Shift(workTypeID: testWorkTypeID, start: start, end: start.addingTimeInterval(hour))
+        let shift = try Shift(jobID: job.id, workTypeID: testWorkTypeID, start: start, end: start.addingTimeInterval(hour))
 
         #expect(try job.contains(shift, in: .scheduled(septemberPeriod())))
     }
@@ -73,7 +76,7 @@ struct ShiftPeriodMembershipTests {
         let start = try #require(
             date(year: 2026, month: 10, day: 1, hour: 0, in: stockholm)
         )
-        let shift = try Shift(workTypeID: testWorkTypeID, start: start, end: start.addingTimeInterval(hour))
+        let shift = try Shift(jobID: job.id, workTypeID: testWorkTypeID, start: start, end: start.addingTimeInterval(hour))
 
         #expect(try job.contains(shift, in: .scheduled(septemberPeriod())) == false)
     }
@@ -85,7 +88,7 @@ struct ShiftPeriodMembershipTests {
         let start = try #require(
             date(year: 2026, month: 8, day: 31, hour: 8, in: stockholm)
         )
-        let shift = try Shift(workTypeID: testWorkTypeID, start: start, end: start.addingTimeInterval(hour))
+        let shift = try Shift(jobID: job.id, workTypeID: testWorkTypeID, start: start, end: start.addingTimeInterval(hour))
 
         #expect(try job.contains(shift, in: .scheduled(septemberPeriod())) == false)
     }
@@ -98,11 +101,12 @@ struct ShiftPeriodMembershipTests {
         let start = try #require(
             date(year: 2026, month: 9, day: 1, hour: 0, minute: 30, in: utc)
         )
-        let shift = try Shift(workTypeID: testWorkTypeID, start: start, end: start.addingTimeInterval(hour))
+        let shift = try Shift(jobID: stockholmJob.id, workTypeID: testWorkTypeID, start: start, end: start.addingTimeInterval(hour))
         let period = try septemberPeriod()
 
         #expect(try stockholmJob.contains(shift, in: .scheduled(period)))
-        #expect(try newYorkJob.contains(shift, in: .scheduled(period)) == false)
+        let newYorkShift = try Shift(jobID: newYorkJob.id, workTypeID: shift.workTypeID, start: shift.start, end: shift.end)
+        #expect(try newYorkJob.contains(newYorkShift, in: .scheduled(period)) == false)
     }
 
     @Test("Ночная смена относится к периоду только по дате начала")
@@ -115,7 +119,7 @@ struct ShiftPeriodMembershipTests {
         let end = try #require(
             date(year: 2026, month: 9, day: 1, hour: 7, in: stockholm)
         )
-        let shift = try Shift(workTypeID: testWorkTypeID, start: start, end: end)
+        let shift = try Shift(jobID: job.id, workTypeID: testWorkTypeID, start: start, end: end)
         let augustPeriod = PayPeriod(
             start: try LocalDate(year: 2026, month: 8, day: 1),
             endExclusive: try LocalDate(year: 2026, month: 9, day: 1)

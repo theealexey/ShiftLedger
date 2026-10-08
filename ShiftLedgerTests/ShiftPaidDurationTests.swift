@@ -9,6 +9,7 @@ struct ShiftPaidDurationTests {
     func calculatesDurationWithoutBreak() throws {
         let start = Date(timeIntervalSinceReferenceDate: 100_000)
         let shift = try Shift(
+            jobID: testJobID,
             workTypeID: testWorkTypeID,
             start: start,
             end: start.addingTimeInterval(8 * hour)
@@ -21,6 +22,7 @@ struct ShiftPaidDurationTests {
     func subtractsUnpaidBreakDuration() throws {
         let start = Date(timeIntervalSinceReferenceDate: 100_000)
         let shift = try Shift(
+            jobID: testJobID,
             workTypeID: testWorkTypeID,
             start: start,
             end: start.addingTimeInterval(8 * hour),
@@ -37,6 +39,7 @@ struct ShiftPaidDurationTests {
     func calculatesOvernightDuration() throws {
         let start = Date(timeIntervalSinceReferenceDate: 100_000)
         let shift = try Shift(
+            jobID: testJobID,
             workTypeID: testWorkTypeID,
             start: start,
             end: start.addingTimeInterval(12 * hour)
@@ -50,7 +53,7 @@ struct ShiftPaidDurationTests {
         let timeZone = try #require(TimeZone(identifier: "Europe/Stockholm"))
         let start = try #require(date(year: 2026, month: 3, day: 29, hour: 0, in: timeZone))
         let end = try #require(date(year: 2026, month: 3, day: 29, hour: 8, in: timeZone))
-        let shift = try Shift(workTypeID: testWorkTypeID, start: start, end: end)
+        let shift = try Shift(jobID: testJobID, workTypeID: testWorkTypeID, start: start, end: end)
 
         #expect(shift.paidDuration == 7 * hour)
     }
@@ -60,7 +63,7 @@ struct ShiftPaidDurationTests {
         let timeZone = try #require(TimeZone(identifier: "Europe/Stockholm"))
         let start = try #require(date(year: 2026, month: 10, day: 25, hour: 0, in: timeZone))
         let end = try #require(date(year: 2026, month: 10, day: 25, hour: 8, in: timeZone))
-        let shift = try Shift(workTypeID: testWorkTypeID, start: start, end: end)
+        let shift = try Shift(jobID: testJobID, workTypeID: testWorkTypeID, start: start, end: end)
 
         #expect(shift.paidDuration == 9 * hour)
     }
@@ -73,6 +76,7 @@ struct ShiftPaidDurationTests {
         let breakStart = try #require(date(year: 2026, month: 3, day: 29, hour: 1, minute: 30, in: timeZone))
         let breakEnd = try #require(date(year: 2026, month: 3, day: 29, hour: 3, minute: 30, in: timeZone))
         let shift = try Shift(
+            jobID: testJobID,
             workTypeID: testWorkTypeID,
             start: start,
             end: end,
@@ -88,7 +92,7 @@ struct ShiftPaidDurationTests {
     func preservesFractionalSecondDuration() throws {
         let start = Date(timeIntervalSinceReferenceDate: 100_000.125)
         let end = start.addingTimeInterval(8 * hour + 0.75)
-        let shift = try Shift(workTypeID: testWorkTypeID, start: start, end: end)
+        let shift = try Shift(jobID: testJobID, workTypeID: testWorkTypeID, start: start, end: end)
 
         #expect(shift.paidDuration == end.timeIntervalSince(start))
         #expect(shift.paidDuration == 8 * hour + 0.75)

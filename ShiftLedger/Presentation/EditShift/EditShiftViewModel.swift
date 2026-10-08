@@ -46,6 +46,7 @@ final class EditShiftViewModel {
             !$0.isArchived || $0.id == shift.workTypeID
         }
         formState = ShiftFormState(
+            jobID: shift.jobID,
             workTypes: selectableWorkTypes,
             selectedWorkTypeID: shift.workTypeID,
             start: shift.start,

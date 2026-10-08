@@ -38,6 +38,7 @@ enum JobStorageError: Error {
     case invalidWorkTypeName(underlying: WorkTypeNameValidationError)
     case invalidPayRateChange(underlying: WorkTypePayRateChangeError)
     case historicalCompensationWouldChange(workTypeID: UUID, shiftID: UUID)
+    case foreignShiftOwner(shiftID: UUID, expectedJobID: UUID, actualJobID: UUID)
     case payRateResolutionFailed(underlying: PayRateResolutionError)
     case shiftLoadFailed(underlying: ShiftStorageError)
     case fetchFailed(underlying: Error)
@@ -299,6 +300,10 @@ final class JobStorage {
                 )
             case let .payRateResolutionFailed(underlying):
                 throw JobStorageError.payRateResolutionFailed(underlying: underlying)
+            case let .foreignShiftOwner(shiftID, expectedJobID, actualJobID):
+                throw JobStorageError.foreignShiftOwner(
+                    shiftID: shiftID, expectedJobID: expectedJobID, actualJobID: actualJobID
+                )
             }
         }
 
