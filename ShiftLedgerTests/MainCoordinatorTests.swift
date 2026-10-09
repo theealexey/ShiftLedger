@@ -430,6 +430,8 @@ struct MainCoordinatorTests {
         )
         let navigationController = NonAnimatingNavigationController()
         let dependencies = MainCoordinator.Dependencies(
+            loadArchivedJobs: { [] },
+            makeArchivedJobHistory: { id in throw ArchivedJobHistoryError.jobNotFound(jobID: id) },
             makeOverview: { _ in overview },
             makeAddShift: { job in
                 metrics.addShiftJobs.append(job)

@@ -4,6 +4,8 @@ import UIKit
 @MainActor
 final class MainCoordinator {
     struct Dependencies {
+        let loadArchivedJobs: @MainActor () throws -> [JobSelectionItem]
+        let makeArchivedJobHistory: @MainActor (UUID) throws -> ArchivedJobHistoryViewController
         let makeOverview: @MainActor (Job) -> OverviewViewController
         let makeAddShift: @MainActor (Job) -> AddShiftViewController
         let makeWorkTypes: @MainActor (Job) -> WorkTypesViewController
@@ -60,6 +62,7 @@ final class MainCoordinator {
         overviewViewController.onManageWorkTypes = { [weak self] in
             self?.navigate(to: .workTypes)
         }
+        overviewViewController.onArchivedJobs = { [weak self] in self?.showArchivedJobs() }
         overviewViewController.onEditShift = { [weak self] shift in
             self?.navigate(to: .editShift(shift))
         }
@@ -99,6 +102,30 @@ final class MainCoordinator {
             self?.completeAddShift(selectingShiftID: shift.id)
         }
         navigationController.pushViewController(viewController, animated: true)
+    }
+
+    private func showArchivedJobs() {
+        let controller = ArchivedJobsViewController()
+        controller.onReload = { [weak self, weak controller] in
+            guard let self, let controller else { return }
+            do {
+                controller.reload(items: try self.dependencies.loadArchivedJobs())
+            } catch {
+                controller.showLoadFailure()
+            }
+        }
+        controller.onSelectJob = { [weak self, weak controller] id in
+            guard let self, let controller,
+                  self.navigationController.topViewController === controller else { return }
+            do {
+                let history = try self.dependencies.makeArchivedJobHistory(id)
+                self.navigationController.pushViewController(history, animated: true)
+            } catch {
+                controller.presentLoadError()
+            }
+        }
+        controller.onReload?()
+        navigationController.pushViewController(controller, animated: true)
     }
 
     private func completeAddShift(selectingShiftID: UUID) {

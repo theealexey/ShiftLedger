@@ -1558,8 +1558,10 @@ struct OverviewViewControllerTests {
         #expect(item.accessibilityIdentifier == "overview.more")
         #expect(item.image == UIImage(systemName: "ellipsis.circle"))
         let menu = try #require(item.menu)
-        #expect(menu.children.count == 1)
+        #expect(menu.children.count == 2)
         #expect(menu.children.first?.title == OverviewStrings.workTypes)
+        #expect(menu.children.map(\.title).contains(OverviewStrings.workTypes))
+        #expect(menu.children.map(\.title).contains(OverviewStrings.archivedJobs))
     }
 
     @Test("Check Paycheck forwards the selected Domain period")

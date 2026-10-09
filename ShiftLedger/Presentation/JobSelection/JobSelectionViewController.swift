@@ -2,6 +2,7 @@ import UIKit
 
 final class JobSelectionViewController: UIViewController, UITableViewDataSource, UITableViewDelegate {
     var onSelectJob: ((UUID) -> Void)?
+    var onSelectArchivedJob: ((UUID) -> Void)?
     var onReload: (() -> Void)?
     private var items: [JobSelectionItem]
     private let selectionView = JobSelectionView()
@@ -61,13 +62,17 @@ final class JobSelectionViewController: UIViewController, UITableViewDataSource,
     }
 
     func tableView(_ tableView: UITableView, willSelectRowAt indexPath: IndexPath) -> IndexPath? {
-        item(at: indexPath)?.isArchived == false ? indexPath : nil
+        item(at: indexPath) == nil ? nil : indexPath
     }
 
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
-        guard let item = item(at: indexPath), !item.isArchived else { return }
-        onSelectJob?(item.id)
+        guard let item = item(at: indexPath) else { return }
+        if item.isArchived {
+            onSelectArchivedJob?(item.id)
+        } else {
+            onSelectJob?(item.id)
+        }
     }
 
     private func rows(in section: Int) -> [JobSelectionItem] {

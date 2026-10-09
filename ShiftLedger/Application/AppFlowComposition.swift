@@ -17,6 +17,10 @@ struct AppFlowComposition {
         JobSelectionAssembly.items(from: try JobStorage(stack: stack).loadCatalog())
     }
 
+    func makeArchivedJobHistory(id: UUID) throws -> ArchivedJobHistoryViewController {
+        ArchivedJobHistoryViewController(content: try ArchivedJobHistoryAssembly.load(id: id, stack: stack))
+    }
+
     func resolveSelectedJob(id: UUID) throws -> Job {
         let catalog = try JobStorage(stack: stack).loadCatalog()
         guard let entry = catalog.first(where: { $0.job.id == id }) else {
@@ -47,6 +51,8 @@ struct AppFlowComposition {
 
     func makeMainDependencies() -> MainCoordinator.Dependencies {
         MainCoordinator.Dependencies(
+            loadArchivedJobs: { try loadJobSelectionItems().filter(\.isArchived) },
+            makeArchivedJobHistory: { id in try makeArchivedJobHistory(id: id) },
             makeOverview: { job in
                 OverviewAssembly.make(job: job, stack: stack)
             },

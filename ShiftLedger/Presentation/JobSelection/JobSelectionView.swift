@@ -54,14 +54,14 @@ final class JobSelectionView: UIView {
         content.secondaryTextProperties.numberOfLines = 0
         content.secondaryTextProperties.color = .secondaryLabel
         cell.contentConfiguration = content
-        cell.accessoryType = item.isArchived ? .none : .disclosureIndicator
-        cell.selectionStyle = item.isArchived ? .none : .default
+        cell.accessoryType = .disclosureIndicator
+        cell.selectionStyle = .default
         cell.isAccessibilityElement = true
         cell.accessibilityIdentifier = "jobSelection.job.\(item.id.uuidString)"
         cell.accessibilityLabel = item.displayName
         cell.accessibilityValue = "\(item.currencyCode), \(item.timeZoneIdentifier), \(item.id.uuidString)"
             + (item.isArchived ? ", \(JobSelectionStrings.archivedStatus)" : "")
-        cell.accessibilityTraits = item.isArchived ? .staticText : .button
+        cell.accessibilityTraits = .button
         return cell
     }
 }

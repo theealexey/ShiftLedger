@@ -4,7 +4,7 @@ import Testing
 
 @MainActor
 struct JobSelectionViewControllerTests {
-    @Test("Native list exposes active buttons and informational archived rows")
+    @Test("Native list exposes distinct active and archived history actions")
     func sectionsAndAccessibility() throws {
         let active = try item(index: 1, name: "Same Name")
         let other = try item(index: 2, name: "Same Name")
@@ -31,14 +31,17 @@ struct JobSelectionViewControllerTests {
         #expect(activeCell.accessoryType == .disclosureIndicator)
         #expect(archivedCell.accessibilityLabel == JobSelectionStrings.unnamed)
         #expect(archivedCell.accessibilityValue?.contains(JobSelectionStrings.archivedStatus) == true)
-        #expect(!archivedCell.accessibilityTraits.contains(.button))
-        #expect(archivedCell.accessoryType == .none)
-        #expect(controller.tableView(table, willSelectRowAt: IndexPath(row: 0, section: 1)) == nil)
+        #expect(archivedCell.accessibilityTraits.contains(.button))
+        #expect(archivedCell.accessoryType == .disclosureIndicator)
+        #expect(controller.tableView(table, willSelectRowAt: IndexPath(row: 0, section: 1)) == IndexPath(row: 0, section: 1))
         var selected: [UUID] = []
+        var selectedArchived: [UUID] = []
         controller.onSelectJob = { selected.append($0) }
+        controller.onSelectArchivedJob = { selectedArchived.append($0) }
         controller.tableView(table, didSelectRowAt: IndexPath(row: 1, section: 0))
         controller.tableView(table, didSelectRowAt: IndexPath(row: 0, section: 1))
         #expect(selected == [other.id])
+        #expect(selectedArchived == [archived.id])
         controller.reload(items: [other, archived, active])
         let reloadedCell = controller.tableView(table, cellForRowAt: IndexPath(row: 0, section: 0))
         #expect(reloadedCell.accessibilityIdentifier == "jobSelection.job.\(other.id.uuidString)")

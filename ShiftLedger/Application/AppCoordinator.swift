@@ -132,6 +132,17 @@ final class AppCoordinator {
                 controller?.presentSelectionError()
             }
         }
+        controller.onSelectArchivedJob = { [weak self, weak controller, weak navigationController] id in
+            guard let self, let controller, let navigationController,
+                  case .jobSelection = self.activeFlow,
+                  navigationController.topViewController === controller else { return }
+            do {
+                let history = try composition.makeArchivedJobHistory(id: id)
+                navigationController.pushViewController(history, animated: true)
+            } catch {
+                controller.presentSelectionError()
+            }
+        }
         navigationController.setViewControllers([controller], animated: false)
         activeFlow = .jobSelection(navigationController)
         installRoot(navigationController)
