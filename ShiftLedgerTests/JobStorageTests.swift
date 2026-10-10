@@ -1651,6 +1651,54 @@ struct JobStorageTests {
         }
     }
 
+    @Test("Noncanonical PayRate date precedes invalid amount without repair across SQLite reopen")
+    func payRateDateCorruptionPrecedesInvalidAmount() async throws {
+        let storeURL = try makeTemporaryStoreURL()
+        var stacks: [CoreDataStack] = []
+        defer { removeTemporaryStoreDirectory(for: storeURL, stacks: stacks) }
+        let zone = try #require(TimeZone(identifier: "Europe/Stockholm"))
+        let anchor = try LocalDate(year: 2026, month: 9, day: 1).startOfDay(in: zone)
+        let storedDate = anchor.addingTimeInterval(1)
+        let rateID = try #require(UUID(uuidString: "00000000-0000-0000-0000-000000005502"))
+        let stack = try await CoreDataStack.load(storeURL: storeURL)
+        stacks.append(stack)
+        try insertPersistedJob(
+            id: try #require(UUID(uuidString: "00000000-0000-0000-0000-000000005501")),
+            payRateID: rateID,
+            payRateEffectiveFrom: storedDate,
+            payRateAmount: 0,
+            payPeriodAnchorDate: anchor,
+            in: stack.viewContext
+        )
+        try stack.viewContext.save()
+        for attempt in 0...1 {
+            let current: CoreDataStack
+            if attempt == 0 {
+                current = stack
+            } else {
+                current = try await CoreDataStack.load(storeURL: storeURL)
+                stacks.append(current)
+            }
+            do {
+                _ = try JobStorage(stack: current).load()
+                Issue.record("Invalid PayRate was accepted")
+            } catch JobStorageError.corruptedData(let corruption) {
+                switch corruption {
+                case .nonCanonicalPayRateEffectiveFrom:
+                    #expect(current.viewContext.hasChanges == false)
+                default:
+                    Issue.record("Unexpected corruption: \(corruption)")
+                }
+            }
+            #expect(current.viewContext.hasChanges == false)
+            let request = NSFetchRequest<PayRateEntity>(entityName: "PayRateEntity")
+            let rate = try #require(current.viewContext.fetch(request).first { $0.id == rateID })
+            #expect(rate.effectiveFrom == storedDate)
+            #expect(rate.amount.decimalValue == 0)
+            try close(current)
+        }
+    }
+
     @Test("Некорректная сумма ставки в SQLite отклоняется typed corruption")
     func rejectsPersistedPayRateWithInvalidAmount() async throws {
         let storeURL = try makeTemporaryStoreURL()

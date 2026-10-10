@@ -15,17 +15,6 @@ private enum ManagedObjectCreationError: Error {
 
 @MainActor
 final class JobStorage {
-    private struct StoredPayRate {
-        let payRate: PayRate
-        let effectiveFrom: Date?
-    }
-
-    private struct StoredWorkType {
-        let workType: WorkType
-        let basePayKind: StoredBasePayKind
-        let payRates: [StoredPayRate]
-    }
-
     private let context: NSManagedObjectContext
     private let shiftStorage: ShiftStorage
     private let now: @MainActor () -> Date
@@ -48,7 +37,7 @@ final class JobStorage {
 
         let timeZone = try JobPersistenceValues.makeTimeZone(from: job.timeZoneIdentifier)
         let storedPayPeriod = try JobPersistenceValues.encodePayCalculationCycle(job.payCalculationCycle, timeZone: timeZone)
-        let storedWorkTypes = try prepareStoredWorkTypes(job.workTypes, timeZone: timeZone)
+        let storedWorkTypes = try JobPersistenceValues.prepareStoredWorkTypes(job.workTypes, timeZone: timeZone)
 
         guard let jobEntityDescription = NSEntityDescription.entity(
             forEntityName: "JobEntity",
@@ -122,7 +111,7 @@ final class JobStorage {
         }
 
         let timeZone = try JobPersistenceValues.makeTimeZone(from: existingJob.timeZoneIdentifier)
-        let storedWorkType = try prepareStoredWorkType(workType, timeZone: timeZone)
+        let storedWorkType = try JobPersistenceValues.prepareStoredWorkType(workType, timeZone: timeZone)
 
         guard let payRateEntityDescription = NSEntityDescription.entity(
             forEntityName: "PayRateEntity",
@@ -239,7 +228,7 @@ final class JobStorage {
             throw JobStorageError.corruptedData(.missingWorkType)
         }
         let timeZone = try JobPersistenceValues.makeTimeZone(from: existingJob.timeZoneIdentifier)
-        let storedPayRate = try prepareStoredPayRate(payRate, timeZone: timeZone)
+        let storedPayRate = try JobPersistenceValues.prepareStoredPayRate(payRate, timeZone: timeZone)
         guard let payRateEntityDescription = NSEntityDescription.entity(
             forEntityName: "PayRateEntity",
             in: context
@@ -400,44 +389,8 @@ final class JobStorage {
         }
     }
 
-    private func prepareStoredWorkTypes(
-        _ workTypes: [WorkType],
-        timeZone: TimeZone
-    ) throws -> [StoredWorkType] {
-        try workTypes.sorted { $0.id.uuidString < $1.id.uuidString }.map {
-            try prepareStoredWorkType($0, timeZone: timeZone)
-        }
-    }
-
-    private func prepareStoredWorkType(
-        _ workType: WorkType,
-        timeZone: TimeZone
-    ) throws -> StoredWorkType {
-        let payRates = try workType.payRates.map { payRate in
-            try prepareStoredPayRate(payRate, timeZone: timeZone)
-        }
-
-        return StoredWorkType(
-            workType: workType,
-            basePayKind: encodeBasePayBasis(workType.basePayBasis),
-            payRates: payRates
-        )
-    }
-
-    private func prepareStoredPayRate(
-        _ payRate: PayRate,
-        timeZone: TimeZone
-    ) throws -> StoredPayRate {
-        StoredPayRate(
-            payRate: payRate,
-            effectiveFrom: try payRate.effectiveFrom.map {
-                try $0.startOfDay(in: timeZone)
-            }
-        )
-    }
-
     private func insert(
-        _ storedWorkType: StoredWorkType,
+        _ storedWorkType: JobPersistenceValues.StoredWorkType,
         into jobEntity: JobEntity,
         workTypeEntityDescription: NSEntityDescription,
         payRateEntityDescription: NSEntityDescription
@@ -460,15 +413,6 @@ final class JobStorage {
             payRateEntity.effectiveFrom = storedPayRate.effectiveFrom
             payRateEntity.job = jobEntity
             payRateEntity.workType = workTypeEntity
-        }
-    }
-
-    private func encodeBasePayBasis(_ basis: BasePayBasis) -> StoredBasePayKind {
-        switch basis {
-        case .hourly:
-            .hourly
-        case .fixedPerShift:
-            .fixedPerShift
         }
     }
 
@@ -506,7 +450,7 @@ final class JobStorage {
             )
         }
 
-        let basePayBasis = try makeBasePayBasis(from: workTypeEntity)
+        let basePayBasis = try JobPersistenceValues.makeBasePayBasis(from: workTypeEntity.basePayKind)
         let payRateEntities = try payRateEntities(for: workTypeEntity)
         var payRates: [PayRate] = []
 
@@ -600,21 +544,6 @@ final class JobStorage {
         }
     }
 
-    private func makeBasePayBasis(from workTypeEntity: WorkTypeEntity) throws -> BasePayBasis {
-        guard let storedKind = StoredBasePayKind(rawValue: workTypeEntity.basePayKind) else {
-            throw JobStorageError.corruptedData(
-                .unknownBasePayKind(workTypeEntity.basePayKind)
-            )
-        }
-
-        switch storedKind {
-        case .hourly:
-            return .hourly
-        case .fixedPerShift:
-            return .fixedPerShift
-        }
-    }
-
     private func makePayCalculationCycle(
         from jobEntity: JobEntity,
         timeZone: TimeZone
@@ -632,44 +561,21 @@ final class JobStorage {
         timeZone: TimeZone
     ) throws -> PayRate {
         guard let storedEffectiveFrom = payRateEntity.effectiveFrom else {
-            do {
-                return try PayRate(
-                    id: payRateEntity.id,
-                    amount: payRateEntity.amount.decimalValue,
-                    effectiveFrom: nil
-                )
-            } catch {
-                throw JobStorageError.corruptedData(.invalidPayRate(underlying: error))
-            }
-        }
-
-        let effectiveFrom: LocalDate
-
-        do {
-            effectiveFrom = try LocalDate(date: storedEffectiveFrom, in: timeZone)
-        } catch {
-            throw JobStorageError.corruptedData(.invalidPayRateEffectiveFrom(underlying: error))
-        }
-
-        let canonicalDate: Date
-        do {
-            canonicalDate = try effectiveFrom.startOfDay(in: timeZone)
-        } catch {
-            throw JobStorageError.corruptedData(.invalidPayRateEffectiveFrom(underlying: error))
-        }
-
-        guard canonicalDate == storedEffectiveFrom else {
-            throw JobStorageError.corruptedData(.nonCanonicalPayRateEffectiveFrom)
-        }
-
-        do {
-            return try PayRate(
+            return try JobPersistenceValues.makePayRate(
                 id: payRateEntity.id,
                 amount: payRateEntity.amount.decimalValue,
-                effectiveFrom: effectiveFrom
+                effectiveFrom: nil
             )
-        } catch {
-            throw JobStorageError.corruptedData(.invalidPayRate(underlying: error))
         }
+
+        let effectiveFrom = try JobPersistenceValues.makePayRateEffectiveFrom(
+            from: storedEffectiveFrom,
+            timeZone: timeZone
+        )
+        return try JobPersistenceValues.makePayRate(
+            id: payRateEntity.id,
+            amount: payRateEntity.amount.decimalValue,
+            effectiveFrom: effectiveFrom
+        )
     }
 }

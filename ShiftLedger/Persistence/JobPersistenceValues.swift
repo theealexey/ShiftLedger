@@ -1,6 +1,17 @@
 import Foundation
 
 enum JobPersistenceValues {
+    struct StoredPayRate {
+        let payRate: PayRate
+        let effectiveFrom: Date?
+    }
+
+    struct StoredWorkType {
+        let workType: WorkType
+        let basePayKind: StoredBasePayKind
+        let payRates: [StoredPayRate]
+    }
+
     enum StoredPayPeriodKind: String {
         case weekly
         case biweekly
@@ -129,5 +140,107 @@ enum JobPersistenceValues {
         }
 
         return anchorDate
+    }
+
+    static func prepareStoredWorkTypes(
+        _ workTypes: [WorkType],
+        timeZone: TimeZone
+    ) throws -> [StoredWorkType] {
+        try workTypes.sorted { $0.id.uuidString < $1.id.uuidString }.map {
+            try prepareStoredWorkType($0, timeZone: timeZone)
+        }
+    }
+
+    static func prepareStoredWorkType(
+        _ workType: WorkType,
+        timeZone: TimeZone
+    ) throws -> StoredWorkType {
+        let payRates = try workType.payRates.map { payRate in
+            try prepareStoredPayRate(payRate, timeZone: timeZone)
+        }
+
+        return StoredWorkType(
+            workType: workType,
+            basePayKind: encodeBasePayBasis(workType.basePayBasis),
+            payRates: payRates
+        )
+    }
+
+    static func prepareStoredPayRate(
+        _ payRate: PayRate,
+        timeZone: TimeZone
+    ) throws -> StoredPayRate {
+        StoredPayRate(
+            payRate: payRate,
+            effectiveFrom: try payRate.effectiveFrom.map {
+                try $0.startOfDay(in: timeZone)
+            }
+        )
+    }
+
+    private static func encodeBasePayBasis(_ basis: BasePayBasis) -> StoredBasePayKind {
+        switch basis {
+        case .hourly:
+            .hourly
+        case .fixedPerShift:
+            .fixedPerShift
+        }
+    }
+
+    static func makeBasePayBasis(from rawValue: String) throws -> BasePayBasis {
+        guard let storedKind = StoredBasePayKind(rawValue: rawValue) else {
+            throw JobStorageError.corruptedData(
+                .unknownBasePayKind(rawValue)
+            )
+        }
+
+        switch storedKind {
+        case .hourly:
+            return .hourly
+        case .fixedPerShift:
+            return .fixedPerShift
+        }
+    }
+
+    static func makePayRateEffectiveFrom(
+        from storedEffectiveFrom: Date,
+        timeZone: TimeZone
+    ) throws -> LocalDate {
+        let effectiveFrom: LocalDate
+
+        do {
+            effectiveFrom = try LocalDate(date: storedEffectiveFrom, in: timeZone)
+        } catch {
+            throw JobStorageError.corruptedData(.invalidPayRateEffectiveFrom(underlying: error))
+        }
+
+        let canonicalDate: Date
+        do {
+            canonicalDate = try effectiveFrom.startOfDay(in: timeZone)
+        } catch {
+            throw JobStorageError.corruptedData(.invalidPayRateEffectiveFrom(underlying: error))
+        }
+
+        guard canonicalDate == storedEffectiveFrom else {
+            throw JobStorageError.corruptedData(.nonCanonicalPayRateEffectiveFrom)
+        }
+
+        return effectiveFrom
+    }
+
+    static func makePayRate(
+        id: UUID,
+        amount: Decimal,
+        effectiveFrom: LocalDate?
+    ) throws -> PayRate {
+        do {
+            return try PayRate(
+                id: id,
+                amount: amount,
+                effectiveFrom: effectiveFrom
+            )
+        } catch {
+            throw JobStorageError.corruptedData(.invalidPayRate(underlying: error))
+        }
     }
 }
