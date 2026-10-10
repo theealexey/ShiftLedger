@@ -1469,6 +1469,54 @@ struct ShiftStorageTests {
         #expect(orphan.job == nil)
     }
 
+    @Test("Characterization: Shift save commits or rolls back unrelated pending Job metadata",
+          arguments: [false, true])
+    func characterizesShiftSaveWithPendingMetadata(_ failing: Bool) async throws {
+        let url = try makeTemporaryStoreURL()
+        var stacks: [CoreDataStack] = []
+        defer { removeTemporaryStoreDirectory(for: url, stacks: stacks) }
+        let stack = try await makeStack(storeURL: url, stacks: &stacks)
+        let original = try makeJob()
+        try JobStorage(stack: stack).save(original)
+        if failing {
+            try close(stack)
+            let coordinator = try #require(stack.viewContext.persistentStoreCoordinator)
+            _ = try coordinator.addPersistentStore(
+                ofType: NSSQLiteStoreType, configurationName: nil, at: url,
+                options: [NSReadOnlyPersistentStoreOption: true]
+            )
+        }
+        let context = stack.viewContext
+        let sentinel = try #require(try fetchOnlyJob(in: context))
+        #expect(sentinel.name == nil)
+        #expect(!context.hasChanges)
+        sentinel.name = "Pending Job metadata"
+        #expect(context.hasChanges)
+        let shift = try makeShift()
+        var failed = false
+        do {
+            try ShiftStorage(stack: stack).save(shift, forJobID: original.id)
+        } catch ShiftStorageError.saveFailed {
+            failed = true
+        }
+        #expect(failed == failing)
+        #expect(!context.hasChanges)
+        #expect(sentinel.name == (failing ? nil : "Pending Job metadata"))
+        let expectedHistory = failing ? [] : [shift]
+        #expect(try ShiftStorage(stack: stack).loadAll(forJobID: original.id) == expectedHistory)
+        #expect(try fetchShifts(in: context).count == expectedHistory.count)
+        #expect(try fetchWorkTypes(in: context).count == 1)
+        #expect(try fetchPayRates(in: context).count == original.soleWorkType?.payRates.count)
+        #expect(try JobStorage(stack: stack).load() == original)
+        try close(stack)
+        let reopened = try await makeStack(storeURL: url, stacks: &stacks)
+        #expect(try ShiftStorage(stack: reopened).loadAll(forJobID: original.id) == expectedHistory)
+        #expect(try fetchShifts(in: reopened.viewContext).count == expectedHistory.count)
+        #expect(try fetchOnlyJob(in: reopened.viewContext)?.name == (failing ? nil : "Pending Job metadata"))
+        #expect(try JobStorage(stack: reopened).load() == original)
+        #expect(!reopened.viewContext.hasChanges)
+    }
+
     private func makeShift(
         id: String = "90000000-0000-0000-0000-000000000001",
         start offset: TimeInterval = 10 * 60 * 60,
