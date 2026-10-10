@@ -2134,16 +2134,16 @@ struct JobStorageTests {
         #expect(storedRateStates(try context.fetch(NSFetchRequest<PayRateEntity>(entityName: "PayRateEntity"))) == before)
     }
 
-    @Test("Characterization: Job write commits or rolls back unrelated pending metadata",
+    @Test("Job rename rejects pending metadata without saving or rolling back it",
           arguments: [false, true])
-    func characterizesJobWriteWithPendingMetadata(_ failing: Bool) async throws {
+    func rejectsJobRenameWithPendingMetadata(_ readOnly: Bool) async throws {
         let url = try makeTemporaryStoreURL()
         var stacks: [CoreDataStack] = []
         defer { removeTemporaryStoreDirectory(for: url, stacks: stacks) }
         let stack = try await CoreDataStack.load(storeURL: url)
         stacks.append(stack)
         try seedScopedJobs(in: stack.viewContext)
-        if failing {
+        if readOnly {
             try close(stack)
             let coordinator = try #require(stack.viewContext.persistentStoreCoordinator)
             _ = try coordinator.addPersistentStore(
@@ -2161,17 +2161,24 @@ struct JobStorageTests {
         #expect(!context.hasChanges)
         sentinel.name = "Pending B"
         #expect(context.hasChanges)
-        var failed = false
-        var accepted: Job?
+        var rejected = false
         do {
-            accepted = try storage.renameWorkType(id: renameTargetID, to: "Committed A", inJobID: renameJobID)
-        } catch JobStorageError.saveFailed {
-            failed = true
+            _ = try storage.renameWorkType(id: renameTargetID, to: "Committed A", inJobID: renameJobID)
+            Issue.record("Dirty context accepted Job rename")
+        } catch JobStorageError.pendingContextChanges {
+            rejected = true
         }
-        #expect(failed == failing)
-        #expect(accepted?.workType(id: renameTargetID)?.name == (failing ? nil : "Committed A"))
-        #expect(sentinel.name == (failing ? nil : "Pending B"))
-        #expect(!context.hasChanges)
+        #expect(rejected)
+        #expect(try storage.load(forJobID: renameJobID) == originalA)
+        #expect(sentinel.name == "Pending B")
+        #expect(context.hasChanges)
+        // Clean-entry lookup would reject this missing identity instead.
+        do {
+            _ = try storage.renameWorkType(id: renameTargetID, to: "Missing Job", inJobID: addedRateID)
+            Issue.record("Missing identity bypassed the dirty-context precondition")
+        } catch JobStorageError.pendingContextChanges {
+            #expect(sentinel.name == "Pending B")
+        }
         #expect(try storage.load(forJobID: renameOtherID) == originalB)
         #expect(try context.fetch(NSFetchRequest<WorkTypeEntity>(entityName: "WorkTypeEntity")).count == 2)
         #expect(try context.fetch(NSFetchRequest<PayRateEntity>(entityName: "PayRateEntity")).count == 2)
@@ -2179,11 +2186,66 @@ struct JobStorageTests {
         let reopened = try await CoreDataStack.load(storeURL: url)
         stacks.append(reopened)
         let restored = JobStorage(stack: reopened)
-        #expect(try restored.load(forJobID: renameJobID) == (accepted ?? originalA))
+        #expect(try restored.load(forJobID: renameJobID) == originalA)
         #expect(try restored.load(forJobID: renameOtherID) == originalB)
         let catalog = try restored.loadCatalog()
         #expect(catalog.count == 2)
-        #expect(catalog.first { $0.job.id == renameOtherID }?.name == (failing ? nil : "Pending B"))
+        #expect(catalog.first { $0.job.id == renameOtherID }?.name == nil)
+        #expect(!reopened.viewContext.hasChanges)
+    }
+
+    @Test("Job save/addWorkType/archive reject dirty entry and preserve the committed graph",
+          arguments: 0...2)
+    func rejectsRemainingJobWritersWithPendingMetadata(_ operation: Int) async throws {
+        let url = try makeTemporaryStoreURL()
+        var stacks: [CoreDataStack] = []
+        defer { removeTemporaryStoreDirectory(for: url, stacks: stacks) }
+        let stack = try await CoreDataStack.load(storeURL: url)
+        stacks.append(stack)
+        let storage = JobStorage(stack: stack)
+        let original = try makeRenameJob()
+        try storage.save(original)
+        let context = stack.viewContext
+        let sentinel = try #require(context.fetch(NSFetchRequest<JobEntity>(entityName: "JobEntity")).first)
+        let ratesBefore = storedRateStates(try context.fetch(NSFetchRequest<PayRateEntity>(entityName: "PayRateEntity")))
+        #expect(!context.hasChanges)
+        sentinel.name = "Pending Job metadata"
+        #expect(context.hasChanges)
+        let inserted = context.insertedObjects
+        let updated = context.updatedObjects
+        let deleted = context.deletedObjects
+        let extra = WorkType(id: addedRateID, name: "Extra", basePayBasis: .hourly,
+                             payRateHistory: try PayRateHistory(payRates: [
+                                PayRate(id: renameJobID, amount: 200, effectiveFrom: nil)
+                             ]))
+        var rejected = false
+        do {
+            switch operation {
+            case 0: try storage.save(original)
+            case 1: _ = try storage.addWorkType(extra, toJobID: original.id)
+            default: _ = try storage.archiveWorkType(id: renameTargetID, inJobID: original.id)
+            }
+            Issue.record("Job writer accepted pending context changes")
+        } catch JobStorageError.pendingContextChanges {
+            rejected = true
+        }
+        #expect(rejected)
+        #expect(sentinel.name == "Pending Job metadata")
+        #expect(context.hasChanges)
+        #expect(context.insertedObjects == inserted)
+        #expect(context.updatedObjects == updated)
+        #expect(context.deletedObjects == deleted)
+        #expect(try storage.load(forJobID: original.id) == original)
+        #expect(try context.fetch(NSFetchRequest<JobEntity>(entityName: "JobEntity")).count == 1)
+        #expect(try context.fetch(NSFetchRequest<WorkTypeEntity>(entityName: "WorkTypeEntity")).count == original.workTypes.count)
+        #expect(storedRateStates(try context.fetch(NSFetchRequest<PayRateEntity>(entityName: "PayRateEntity"))) == ratesBefore)
+        try close(stack)
+        let reopened = try await CoreDataStack.load(storeURL: url)
+        stacks.append(reopened)
+        let catalog = try JobStorage(stack: reopened).loadCatalog()
+        #expect(catalog.count == 1)
+        #expect(catalog.first?.job == original)
+        #expect(catalog.first?.name == nil)
         #expect(!reopened.viewContext.hasChanges)
     }
 
@@ -2214,9 +2276,9 @@ struct JobStorageTests {
         #expect(!reopened.viewContext.hasChanges)
     }
 
-    @Test("Characterization: pending Shift insert/update/delete supplies the historical rate snapshot",
+    @Test("PayRate writes reject pending Shift insert/update/delete before history and clock",
           arguments: 0...2)
-    func characterizesPendingHistoricalSnapshot(_ operation: Int) async throws {
+    func rejectsPayRateWithPendingHistoricalSnapshot(_ operation: Int) async throws {
         let url = try makeTemporaryStoreURL()
         var stacks: [CoreDataStack] = []
         defer { removeTemporaryStoreDirectory(for: url, stacks: stacks) }
@@ -2264,38 +2326,42 @@ struct JobStorageTests {
         #expect(context.hasChanges)
         #expect(try history.loadAll(forJobID: renameJobID) == pendingHistory)
         #expect(context.hasChanges)
+        let inserted = context.insertedObjects
+        let updated = context.updatedObjects
+        let deleted = context.deletedObjects
         var clockCalls = 0
         let storage = JobStorage(stack: stack, now: { clockCalls += 1; return shift.end })
         let rate = try PayRate(id: renameJobID, amount: 150,
                                effectiveFrom: LocalDate(year: 2026, month: 3, day: 1))
         var rejected = false
-        var accepted: Job?
         do {
-            accepted = try storage.addPayRate(rate, toWorkTypeID: renameTargetID, inJobID: renameJobID)
-        } catch JobStorageError.historicalCompensationWouldChange(let typeID, let shiftID) {
+            _ = try storage.addPayRate(rate, toWorkTypeID: renameTargetID, inJobID: renameJobID)
+            Issue.record("Dirty Shift snapshot accepted PayRate mutation")
+        } catch JobStorageError.pendingContextChanges {
             rejected = true
-            #expect(typeID == renameTargetID)
-            #expect(shiftID == shift.id)
         }
-        #expect(clockCalls == 1)
-        #expect(rejected == (operation == 0))
-        #expect(context.hasChanges == (operation == 0))
+        #expect(clockCalls == 0)
+        #expect(rejected)
+        #expect(context.hasChanges)
+        #expect(context.insertedObjects == inserted)
+        #expect(context.updatedObjects == updated)
+        #expect(context.deletedObjects == deleted)
         #expect(try history.loadAll(forJobID: renameJobID) == pendingHistory)
         let ratesAfter = try context.fetch(NSFetchRequest<PayRateEntity>(entityName: "PayRateEntity"))
-        #expect(ratesAfter.count == ratesBefore + (operation == 0 ? 0 : 1))
-        #expect(ratesAfter.contains { $0.id == rate.id } == (operation != 0))
-        #expect(try storage.load(forJobID: renameJobID) == (accepted ?? original))
+        #expect(ratesAfter.count == ratesBefore)
+        #expect(!ratesAfter.contains { $0.id == rate.id })
+        #expect(try storage.load(forJobID: renameJobID) == original)
         try close(stack)
         let reopened = try await CoreDataStack.load(storeURL: url)
         stacks.append(reopened)
         let restoredJob = try JobStorage(stack: reopened).load(forJobID: renameJobID)
-        #expect(restoredJob == (accepted ?? original))
+        #expect(restoredJob == original)
         #expect(try ShiftStorage(stack: reopened).loadAll(forJobID: renameJobID)
-                == (operation == 0 ? committedHistory : pendingHistory))
+                == committedHistory)
         #expect(try reopened.viewContext.fetch(NSFetchRequest<ShiftEntity>(entityName: "ShiftEntity")).count
-                == (operation == 1 ? 1 : 0))
+                == committedHistory.count)
         #expect(try reopened.viewContext.fetch(NSFetchRequest<PayRateEntity>(entityName: "PayRateEntity")).count
-                == ratesBefore + (operation == 0 ? 0 : 1))
+                == ratesBefore)
         #expect(!reopened.viewContext.hasChanges)
     }
 

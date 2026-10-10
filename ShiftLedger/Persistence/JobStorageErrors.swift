@@ -29,6 +29,7 @@ enum JobStorageError: Error {
         case invalidJob(underlying: JobValidationError)
     }
 
+    case pendingContextChanges
     case jobAlreadyExists
     case jobNotFound(jobID: UUID)
     case jobArchived(jobID: UUID)

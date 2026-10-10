@@ -30,6 +30,7 @@ enum ShiftStorageError: Error {
         case invalidShift(underlying: ShiftValidationError)
     }
 
+    case pendingContextChanges
     case jobNotFound(jobID: UUID)
     case jobArchived(jobID: UUID)
     case foreignShiftOwner(shiftID: UUID, expectedJobID: UUID, actualJobID: UUID)
@@ -56,6 +57,9 @@ final class ShiftStorage {
     }
 
     func save(_ shift: Shift, forJobID jobID: UUID) throws {
+        guard !context.hasChanges else {
+            throw ShiftStorageError.pendingContextChanges
+        }
         let job = try job(id: jobID)
         try validateOwner(of: shift, job: job)
         try validateWritable(job)
@@ -104,6 +108,9 @@ final class ShiftStorage {
     }
 
     func update(_ shift: Shift, forJobID jobID: UUID) throws {
+        guard !context.hasChanges else {
+            throw ShiftStorageError.pendingContextChanges
+        }
         let job = try job(id: jobID)
         try validateOwner(of: shift, job: job)
         try validateWritable(job)
@@ -143,6 +150,9 @@ final class ShiftStorage {
     }
 
     func delete(id shiftID: UUID, inJobID jobID: UUID) throws {
+        guard !context.hasChanges else {
+            throw ShiftStorageError.pendingContextChanges
+        }
         let job = try job(id: jobID)
         try validateWritable(job)
         _ = try workTypes(for: job)

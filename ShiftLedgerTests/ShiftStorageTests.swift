@@ -1469,16 +1469,16 @@ struct ShiftStorageTests {
         #expect(orphan.job == nil)
     }
 
-    @Test("Characterization: Shift save commits or rolls back unrelated pending Job metadata",
+    @Test("Shift save rejects pending metadata without saving or rolling back it",
           arguments: [false, true])
-    func characterizesShiftSaveWithPendingMetadata(_ failing: Bool) async throws {
+    func rejectsShiftSaveWithPendingMetadata(_ readOnly: Bool) async throws {
         let url = try makeTemporaryStoreURL()
         var stacks: [CoreDataStack] = []
         defer { removeTemporaryStoreDirectory(for: url, stacks: stacks) }
         let stack = try await makeStack(storeURL: url, stacks: &stacks)
         let original = try makeJob()
         try JobStorage(stack: stack).save(original)
-        if failing {
+        if readOnly {
             try close(stack)
             let coordinator = try #require(stack.viewContext.persistentStoreCoordinator)
             _ = try coordinator.addPersistentStore(
@@ -1493,16 +1493,19 @@ struct ShiftStorageTests {
         sentinel.name = "Pending Job metadata"
         #expect(context.hasChanges)
         let shift = try makeShift()
-        var failed = false
+        var rejected = false
         do {
             try ShiftStorage(stack: stack).save(shift, forJobID: original.id)
-        } catch ShiftStorageError.saveFailed {
-            failed = true
+            Issue.record("Dirty context accepted Shift insertion")
+        } catch ShiftStorageError.pendingContextChanges {
+            rejected = true
         }
-        #expect(failed == failing)
-        #expect(!context.hasChanges)
-        #expect(sentinel.name == (failing ? nil : "Pending Job metadata"))
-        let expectedHistory = failing ? [] : [shift]
+        #expect(rejected)
+        #expect(context.hasChanges)
+        #expect(sentinel.name == "Pending Job metadata")
+        #expect(context.insertedObjects.isEmpty)
+        #expect(context.deletedObjects.isEmpty)
+        let expectedHistory: [Shift] = []
         #expect(try ShiftStorage(stack: stack).loadAll(forJobID: original.id) == expectedHistory)
         #expect(try fetchShifts(in: context).count == expectedHistory.count)
         #expect(try fetchWorkTypes(in: context).count == 1)
@@ -1512,7 +1515,92 @@ struct ShiftStorageTests {
         let reopened = try await makeStack(storeURL: url, stacks: &stacks)
         #expect(try ShiftStorage(stack: reopened).loadAll(forJobID: original.id) == expectedHistory)
         #expect(try fetchShifts(in: reopened.viewContext).count == expectedHistory.count)
-        #expect(try fetchOnlyJob(in: reopened.viewContext)?.name == (failing ? nil : "Pending Job metadata"))
+        #expect(try fetchOnlyJob(in: reopened.viewContext)?.name == nil)
+        #expect(try JobStorage(stack: reopened).load() == original)
+        #expect(!reopened.viewContext.hasChanges)
+    }
+
+    @Test("Shift update/delete reject dirty entry and preserve the committed graph", arguments: [false, true])
+    func rejectsRemainingShiftWritersWithPendingMetadata(_ deleting: Bool) async throws {
+        let url = try makeTemporaryStoreURL()
+        var stacks: [CoreDataStack] = []
+        defer { removeTemporaryStoreDirectory(for: url, stacks: stacks) }
+        let stack = try await makeStack(storeURL: url, stacks: &stacks)
+        let original = try makeJob()
+        try JobStorage(stack: stack).save(original)
+        let shift = try makeShift()
+        let storage = ShiftStorage(stack: stack)
+        try storage.save(shift, forJobID: original.id)
+        let candidate = try makeShift(start: 2 * 86_400)
+        let context = stack.viewContext
+        let sentinel = try #require(try fetchOnlyJob(in: context))
+        #expect(!context.hasChanges)
+        sentinel.name = "Pending Job metadata"
+        #expect(context.hasChanges)
+        let inserted = context.insertedObjects
+        let updated = context.updatedObjects
+        let deleted = context.deletedObjects
+        var rejected = false
+        do {
+            if deleting { try storage.delete(id: shift.id, inJobID: original.id) }
+            else { try storage.update(candidate, forJobID: original.id) }
+            Issue.record("Shift writer accepted pending context changes")
+        } catch ShiftStorageError.pendingContextChanges {
+            rejected = true
+        }
+        #expect(rejected)
+        #expect(sentinel.name == "Pending Job metadata")
+        #expect(context.hasChanges)
+        #expect(context.insertedObjects == inserted)
+        #expect(context.updatedObjects == updated)
+        #expect(context.deletedObjects == deleted)
+        #expect(try storage.loadAll(forJobID: original.id) == [shift])
+        #expect(try fetchShifts(in: context).count == 1)
+        #expect(try JobStorage(stack: stack).load() == original)
+        #expect(try fetchWorkTypes(in: context).count == 1)
+        #expect(try fetchPayRates(in: context).count == original.soleWorkType?.payRates.count)
+        try close(stack)
+        let reopened = try await makeStack(storeURL: url, stacks: &stacks)
+        #expect(try ShiftStorage(stack: reopened).loadAll(forJobID: original.id) == [shift])
+        #expect(try fetchOnlyJob(in: reopened.viewContext)?.name == nil)
+        #expect(try JobStorage(stack: reopened).load() == original)
+        #expect(!reopened.viewContext.hasChanges)
+    }
+
+    @Test("Clean-entry Shift save failure rolls back and preserves SQLite baseline")
+    func cleanShiftSaveFailureRollsBack() async throws {
+        let url = try makeTemporaryStoreURL()
+        var stacks: [CoreDataStack] = []
+        defer { removeTemporaryStoreDirectory(for: url, stacks: stacks) }
+        let stack = try await makeStack(storeURL: url, stacks: &stacks)
+        let original = try makeJob()
+        try JobStorage(stack: stack).save(original)
+        try close(stack)
+        let context = stack.viewContext
+        let coordinator = try #require(context.persistentStoreCoordinator)
+        _ = try coordinator.addPersistentStore(
+            ofType: NSSQLiteStoreType, configurationName: nil, at: url,
+            options: [NSReadOnlyPersistentStoreOption: true]
+        )
+        #expect(!context.hasChanges)
+        var rejected = false
+        do {
+            try ShiftStorage(stack: stack).save(makeShift(), forJobID: original.id)
+            Issue.record("Read-only SQLite accepted a clean-entry Shift save")
+        } catch ShiftStorageError.saveFailed {
+            rejected = true
+        }
+        #expect(rejected)
+        #expect(!context.hasChanges)
+        #expect(context.insertedObjects.isEmpty)
+        #expect(try fetchShifts(in: context).isEmpty)
+        #expect(try JobStorage(stack: stack).load() == original)
+        #expect(try fetchWorkTypes(in: context).count == 1)
+        #expect(try fetchPayRates(in: context).count == original.soleWorkType?.payRates.count)
+        try close(stack)
+        let reopened = try await makeStack(storeURL: url, stacks: &stacks)
+        #expect(try ShiftStorage(stack: reopened).loadAll(forJobID: original.id).isEmpty)
+        #expect(try fetchShifts(in: reopened.viewContext).isEmpty)
         #expect(try JobStorage(stack: reopened).load() == original)
         #expect(!reopened.viewContext.hasChanges)
     }

@@ -26,6 +26,9 @@ final class JobStorage {
     }
 
     func save(_ job: Job) throws {
+        guard !context.hasChanges else {
+            throw JobStorageError.pendingContextChanges
+        }
         switch try fetchJobs().count {
         case 0:
             break
@@ -93,6 +96,9 @@ final class JobStorage {
     }
 
     func addWorkType(_ workType: WorkType, toJobID jobID: UUID) throws -> Job {
+        guard !context.hasChanges else {
+            throw JobStorageError.pendingContextChanges
+        }
         let jobEntity = try writableJob(id: jobID)
 
         let existingJob = try makeJob(from: jobEntity)
@@ -149,6 +155,9 @@ final class JobStorage {
     }
 
     func renameWorkType(id workTypeID: UUID, to rawName: String, inJobID jobID: UUID) throws -> Job {
+        guard !context.hasChanges else {
+            throw JobStorageError.pendingContextChanges
+        }
         let jobEntity = try writableJob(id: jobID)
 
         let existingJob = try makeJob(from: jobEntity)
@@ -184,6 +193,9 @@ final class JobStorage {
     }
 
     func addPayRate(_ payRate: PayRate, toWorkTypeID workTypeID: UUID, inJobID jobID: UUID) throws -> Job {
+        guard !context.hasChanges else {
+            throw JobStorageError.pendingContextChanges
+        }
         let jobEntity = try writableJob(id: jobID)
 
         let existingJob = try makeJob(from: jobEntity)
@@ -256,6 +268,9 @@ final class JobStorage {
     }
 
     func archiveWorkType(id workTypeID: UUID, inJobID jobID: UUID) throws -> Job {
+        guard !context.hasChanges else {
+            throw JobStorageError.pendingContextChanges
+        }
         let jobEntity = try writableJob(id: jobID)
 
         let existingJob = try makeJob(from: jobEntity)
