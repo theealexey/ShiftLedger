@@ -1819,6 +1819,66 @@ struct JobStorageTests {
         }
     }
 
+    @Test("Invalid persisted cycle values fail precisely without repair across reopen",
+          arguments: 0...5)
+    func rejectsInvalidCycleValues(_ scenario: Int) async throws {
+        let storeURL = try makeTemporaryStoreURL()
+        var stacks: [CoreDataStack] = []
+        defer { removeTemporaryStoreDirectory(for: storeURL, stacks: stacks) }
+        let zone = try #require(TimeZone(identifier: "Europe/Stockholm"))
+        let date = try LocalDate(year: 2026, month: 9, day: 1).startOfDay(in: zone)
+        let kinds = ["unknown", "weekly", "biweekly", "calendarMonthly", "weekly", "biweekly"]
+        let kind = kinds[scenario]
+        let anchor: Date? = switch scenario {
+        case 1, 2: nil
+        case 4, 5: date.addingTimeInterval(1)
+        default: date
+        }
+        let stack = try await CoreDataStack.load(storeURL: storeURL)
+        stacks.append(stack)
+        try insertPersistedJob(
+            id: try #require(UUID(uuidString: "00000000-0000-0000-0000-000000005501")),
+            payRateID: try #require(UUID(uuidString: "00000000-0000-0000-0000-000000005502")),
+            payRateEffectiveFrom: nil,
+            payPeriodKind: kind,
+            payPeriodAnchorDate: anchor,
+            in: stack.viewContext
+        )
+        try stack.viewContext.save()
+        for attempt in 0...1 {
+            let current: CoreDataStack
+            if attempt == 0 {
+                current = stack
+            } else {
+                current = try await CoreDataStack.load(storeURL: storeURL)
+                stacks.append(current)
+            }
+            do {
+                _ = try JobStorage(stack: current).load()
+                Issue.record("Invalid cycle was accepted")
+            } catch JobStorageError.corruptedData(let corruption) {
+                switch (scenario, corruption) {
+                case (0, .unknownPayPeriodKind(let value)):
+                    #expect(value == kind)
+                case (1...2, .missingPayPeriodAnchorDate(let value)):
+                    #expect(value == kind)
+                case (3, .unexpectedPayPeriodAnchorDate(let value)):
+                    #expect(value == kind)
+                case (4...5, .nonCanonicalPayPeriodAnchorDate(let value)):
+                    #expect(value == kind)
+                default:
+                    Issue.record("Unexpected cycle corruption: \(corruption)")
+                }
+            }
+            #expect(current.viewContext.hasChanges == false)
+            let request = NSFetchRequest<JobEntity>(entityName: "JobEntity")
+            let entity = try #require(current.viewContext.fetch(request).first)
+            #expect(entity.payPeriodKind == kind)
+            #expect(entity.payPeriodAnchorDate == anchor)
+            try close(current)
+        }
+    }
+
     @Test("Несколько Job в SQLite отклоняются как corruption")
     func rejectsMultiplePersistedJobs() async throws {
         let storeURL = try makeTemporaryStoreURL()

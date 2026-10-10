@@ -26,13 +26,6 @@ final class JobStorage {
         let payRates: [StoredPayRate]
     }
 
-    private enum StoredPayPeriodKind: String {
-        case weekly
-        case biweekly
-        case calendarMonthly
-        case perShift
-    }
-
     private let context: NSManagedObjectContext
     private let shiftStorage: ShiftStorage
     private let now: @MainActor () -> Date
@@ -53,8 +46,8 @@ final class JobStorage {
             throw JobStorageError.multipleJobsFound
         }
 
-        let timeZone = try makeTimeZone(from: job.timeZoneIdentifier)
-        let storedPayPeriod = try encodePayCalculationCycle(job.payCalculationCycle, timeZone: timeZone)
+        let timeZone = try JobPersistenceValues.makeTimeZone(from: job.timeZoneIdentifier)
+        let storedPayPeriod = try JobPersistenceValues.encodePayCalculationCycle(job.payCalculationCycle, timeZone: timeZone)
         let storedWorkTypes = try prepareStoredWorkTypes(job.workTypes, timeZone: timeZone)
 
         guard let jobEntityDescription = NSEntityDescription.entity(
@@ -128,7 +121,7 @@ final class JobStorage {
             throw JobStorageError.invalidWorkTypeAddition(underlying: error)
         }
 
-        let timeZone = try makeTimeZone(from: existingJob.timeZoneIdentifier)
+        let timeZone = try JobPersistenceValues.makeTimeZone(from: existingJob.timeZoneIdentifier)
         let storedWorkType = try prepareStoredWorkType(workType, timeZone: timeZone)
 
         guard let payRateEntityDescription = NSEntityDescription.entity(
@@ -245,7 +238,7 @@ final class JobStorage {
             .first(where: { $0.id == workTypeID }) else {
             throw JobStorageError.corruptedData(.missingWorkType)
         }
-        let timeZone = try makeTimeZone(from: existingJob.timeZoneIdentifier)
+        let timeZone = try JobPersistenceValues.makeTimeZone(from: existingJob.timeZoneIdentifier)
         let storedPayRate = try prepareStoredPayRate(payRate, timeZone: timeZone)
         guard let payRateEntityDescription = NSEntityDescription.entity(
             forEntityName: "PayRateEntity",
@@ -386,7 +379,7 @@ final class JobStorage {
     }
 
     private func makeJob(from jobEntity: JobEntity) throws -> Job {
-        let timeZone = try makeTimeZone(from: jobEntity.timeZoneIdentifier)
+        let timeZone = try JobPersistenceValues.makeTimeZone(from: jobEntity.timeZoneIdentifier)
         let workTypeEntities = try workTypeEntities(for: jobEntity)
         let workTypes = try workTypeEntities.map {
             try makeWorkType(from: $0, jobEntity: jobEntity, timeZone: timeZone)
@@ -622,123 +615,16 @@ final class JobStorage {
         }
     }
 
-    private func encodePayCalculationCycle(
-        _ payCalculationCycle: PayCalculationCycle,
-        timeZone: TimeZone
-    ) throws -> (kind: StoredPayPeriodKind, anchorDate: Date?) {
-        switch payCalculationCycle {
-        case .perShift:
-            return (.perShift, nil)
-        case let .scheduled(schedule):
-            switch schedule {
-            case let .weekly(anchorDate):
-                return (.weekly, try anchorDate.startOfDay(in: timeZone))
-            case let .biweekly(anchorDate):
-                return (.biweekly, try anchorDate.startOfDay(in: timeZone))
-            case .calendarMonthly:
-                return (.calendarMonthly, nil)
-            }
-        }
-    }
-
     private func makePayCalculationCycle(
         from jobEntity: JobEntity,
         timeZone: TimeZone
     ) throws -> PayCalculationCycle {
-        guard let storedKind = StoredPayPeriodKind(rawValue: jobEntity.payPeriodKind) else {
-            throw JobStorageError.corruptedData(.unknownPayPeriodKind(jobEntity.payPeriodKind))
-        }
-
-        switch storedKind {
-        case .perShift:
-            guard jobEntity.payPeriodAnchorDate == nil else {
-                throw JobStorageError.corruptedData(
-                    .unexpectedPayPeriodAnchorDate(payPeriodKind: storedKind.rawValue)
-                )
-            }
-            return .perShift
-        case .weekly:
-            guard let anchorDate = jobEntity.payPeriodAnchorDate else {
-                throw JobStorageError.corruptedData(
-                    .missingPayPeriodAnchorDate(payPeriodKind: storedKind.rawValue)
-                )
-            }
-            return .scheduled(
-                .weekly(
-                    anchorDate: try makePayPeriodAnchorDate(
-                        from: anchorDate,
-                        kind: storedKind,
-                        timeZone: timeZone
-                    )
-                )
-            )
-        case .biweekly:
-            guard let anchorDate = jobEntity.payPeriodAnchorDate else {
-                throw JobStorageError.corruptedData(
-                    .missingPayPeriodAnchorDate(payPeriodKind: storedKind.rawValue)
-                )
-            }
-            return .scheduled(
-                .biweekly(
-                    anchorDate: try makePayPeriodAnchorDate(
-                        from: anchorDate,
-                        kind: storedKind,
-                        timeZone: timeZone
-                    )
-                )
-            )
-        case .calendarMonthly:
-            guard jobEntity.payPeriodAnchorDate == nil else {
-                throw JobStorageError.corruptedData(
-                    .unexpectedPayPeriodAnchorDate(payPeriodKind: storedKind.rawValue)
-                )
-            }
-            return .scheduled(.calendarMonthly)
-        }
-    }
-
-    private func makeTimeZone(from identifier: String) throws -> TimeZone {
-        guard
-            TimeZone.knownTimeZoneIdentifiers.contains(identifier),
-            let timeZone = TimeZone(identifier: identifier)
-        else {
-            throw JobStorageError.corruptedData(.invalidTimeZoneIdentifier(identifier))
-        }
-
-        return timeZone
-    }
-
-    private func makePayPeriodAnchorDate(
-        from storedDate: Date,
-        kind: StoredPayPeriodKind,
-        timeZone: TimeZone
-    ) throws -> LocalDate {
-        let anchorDate: LocalDate
-
-        do {
-            anchorDate = try LocalDate(date: storedDate, in: timeZone)
-        } catch {
-            throw JobStorageError.corruptedData(
-                .invalidPayPeriodAnchorDate(payPeriodKind: kind.rawValue, underlying: error)
-            )
-        }
-
-        let canonicalDate: Date
-        do {
-            canonicalDate = try anchorDate.startOfDay(in: timeZone)
-        } catch {
-            throw JobStorageError.corruptedData(
-                .invalidPayPeriodAnchorDate(payPeriodKind: kind.rawValue, underlying: error)
-            )
-        }
-
-        guard canonicalDate == storedDate else {
-            throw JobStorageError.corruptedData(
-                .nonCanonicalPayPeriodAnchorDate(payPeriodKind: kind.rawValue)
-            )
-        }
-
-        return anchorDate
+        let kind = try JobPersistenceValues.decodePayPeriodKind(jobEntity.payPeriodKind)
+        return try JobPersistenceValues.makePayCalculationCycle(
+            kind: kind,
+            anchorDate: jobEntity.payPeriodAnchorDate,
+            timeZone: timeZone
+        )
     }
 
     private func makePayRate(
