@@ -13,11 +13,6 @@ struct Job: Equatable {
         let timeZoneIdentifier: String
     }
 
-    private struct ShiftCalculationContext {
-        let workType: WorkType
-        let applicablePayRate: PayRate
-    }
-
     var soleWorkType: WorkType? {
         guard workTypes.count == 1 else {
             return nil
@@ -228,12 +223,11 @@ struct Job: Equatable {
     }
 
     func applicablePayRate(for shift: Shift) throws(PayRateResolutionError) -> PayRate {
-        try calculationContext(for: shift).applicablePayRate
+        try JobPayrollCalculator(job: self).applicablePayRate(for: shift)
     }
 
     func basePay(for shift: Shift) throws(PayRateResolutionError) -> Decimal {
-        let context = try calculationContext(for: shift)
-        return context.workType.basePay(for: shift, using: context.applicablePayRate)
+        try JobPayrollCalculator(job: self).basePay(for: shift)
     }
 
     func payCalculationPeriod(
@@ -347,36 +341,7 @@ struct Job: Equatable {
     }
 
     private func shiftPayBreakdown(for shift: Shift) throws(PayRateResolutionError) -> ShiftPayBreakdown {
-        let context = try calculationContext(for: shift)
-        let amount = context.workType.basePay(for: shift, using: context.applicablePayRate)
-
-        return ShiftPayBreakdown(
-            shift: shift,
-            basePayBasis: context.workType.basePayBasis,
-            appliedPayRate: context.applicablePayRate,
-            paidDuration: shift.paidDuration,
-            basePay: amount
-        )
-    }
-
-    private func calculationContext(for shift: Shift) throws(PayRateResolutionError) -> ShiftCalculationContext {
-        let workType = try compensationWorkType(for: shift)
-        let localStartDate = try localStartDate(for: shift)
-        let payRate = workType.applicablePayRate(on: localStartDate)
-        return ShiftCalculationContext(
-            workType: workType,
-            applicablePayRate: payRate
-        )
-    }
-
-    private func compensationWorkType(for shift: Shift) throws(PayRateResolutionError) -> WorkType {
-        guard shift.jobID == id else {
-            throw .foreignShiftOwner(shiftID: shift.id, expectedJobID: id, actualJobID: shift.jobID)
-        }
-        guard let workType = workType(id: shift.workTypeID) else {
-            throw PayRateResolutionError.workTypeNotFound(workTypeID: shift.workTypeID)
-        }
-        return workType
+        try JobPayrollCalculator(job: self).shiftPayBreakdown(for: shift)
     }
 
     private static func validateMetadata(
@@ -424,18 +389,6 @@ struct Job: Equatable {
             case .duplicatePayRateID:
                 throw JobValidationError.duplicatePayRateID
             }
-        }
-    }
-
-    private func localStartDate(for shift: Shift) throws(PayRateResolutionError) -> LocalDate {
-        guard let timeZone = TimeZone(identifier: timeZoneIdentifier) else {
-            throw PayRateResolutionError.invalidJobTimeZoneIdentifier
-        }
-
-        do {
-            return try LocalDate(date: shift.start, in: timeZone)
-        } catch {
-            throw PayRateResolutionError.localDateConversionFailed(error)
         }
     }
 
