@@ -13,6 +13,11 @@ struct Job: Equatable {
         let timeZoneIdentifier: String
     }
 
+    private struct ShiftCalculationContext {
+        let workType: WorkType
+        let applicablePayRate: PayRate
+    }
+
     var soleWorkType: WorkType? {
         guard workTypes.count == 1 else {
             return nil
@@ -223,15 +228,12 @@ struct Job: Equatable {
     }
 
     func applicablePayRate(for shift: Shift) throws(PayRateResolutionError) -> PayRate {
-        let workType = try compensationWorkType(for: shift)
-        let localStartDate = try localStartDate(for: shift)
-        return workType.applicablePayRate(on: localStartDate)
+        try calculationContext(for: shift).applicablePayRate
     }
 
     func basePay(for shift: Shift) throws(PayRateResolutionError) -> Decimal {
-        let workType = try compensationWorkType(for: shift)
-        let localStartDate = try localStartDate(for: shift)
-        return workType.basePay(for: shift, on: localStartDate)
+        let context = try calculationContext(for: shift)
+        return context.workType.basePay(for: shift, using: context.applicablePayRate)
     }
 
     func payCalculationPeriod(
@@ -345,17 +347,25 @@ struct Job: Equatable {
     }
 
     private func shiftPayBreakdown(for shift: Shift) throws(PayRateResolutionError) -> ShiftPayBreakdown {
-        let workType = try compensationWorkType(for: shift)
-        let localStartDate = try localStartDate(for: shift)
-        let payRate = workType.applicablePayRate(on: localStartDate)
-        let amount = workType.basePay(for: shift, using: payRate)
+        let context = try calculationContext(for: shift)
+        let amount = context.workType.basePay(for: shift, using: context.applicablePayRate)
 
         return ShiftPayBreakdown(
             shift: shift,
-            basePayBasis: workType.basePayBasis,
-            appliedPayRate: payRate,
+            basePayBasis: context.workType.basePayBasis,
+            appliedPayRate: context.applicablePayRate,
             paidDuration: shift.paidDuration,
             basePay: amount
+        )
+    }
+
+    private func calculationContext(for shift: Shift) throws(PayRateResolutionError) -> ShiftCalculationContext {
+        let workType = try compensationWorkType(for: shift)
+        let localStartDate = try localStartDate(for: shift)
+        let payRate = workType.applicablePayRate(on: localStartDate)
+        return ShiftCalculationContext(
+            workType: workType,
+            applicablePayRate: payRate
         )
     }
 
