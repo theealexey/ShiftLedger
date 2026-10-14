@@ -301,7 +301,7 @@ final class OverviewViewModel {
     ) throws {
         let period = PayCalculationPeriod.scheduled(selectedPayPeriod)
         let breakdown = try job.expectedGrossBreakdown(for: period, from: shifts)
-        let shiftHistoryBreakdowns = breakdown.shiftBreakdowns
+        let shiftHistoryBreakdowns = try allShiftHistoryBreakdowns()
 
         let selection = selection(in: shiftHistoryBreakdowns)
         publish(Content(

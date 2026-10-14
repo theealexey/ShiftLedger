@@ -136,7 +136,7 @@ struct OverviewViewModelTests {
         #expect(content.selectedPeriod == breakdown.period)
         #expect(breakdown.shiftBreakdowns.isEmpty)
         #expect(breakdown.expectedGross == .zero)
-        #expect(content.shiftHistoryBreakdowns.isEmpty)
+        #expect(content.shiftHistoryBreakdowns.map(\.shift) == [augustShift])
         #expect(content.showPeriodNavigation)
         #expect(content.selectedShiftID == nil)
         #expect(content.expandedShiftID == nil)
@@ -162,7 +162,7 @@ struct OverviewViewModelTests {
         let breakdown = try #require(content.expectedBreakdown)
         #expect(breakdown.shiftBreakdowns.map(\.shift) == [septemberFirst, septemberSecond])
         #expect(breakdown.expectedGross == Decimal(320))
-        #expect(content.shiftHistoryBreakdowns == breakdown.shiftBreakdowns)
+        #expect(content.shiftHistoryBreakdowns.map(\.shift) == [august, septemberFirst, septemberSecond, october])
         #expect(content.showPeriodNavigation)
     }
 
@@ -401,7 +401,7 @@ struct OverviewViewModelTests {
         #expect(content.selectedShiftID == historical.id)
         #expect(content.expandedShiftID == nil)
         #expect(content.expectedBreakdown?.shiftBreakdowns.map(\.shift) == [historical])
-        #expect(content.shiftHistoryBreakdowns.map(\.shift) == [historical])
+        #expect(content.shiftHistoryBreakdowns.map(\.shift) == [historical, current])
     }
 
     @Test("Reload follows an edited Shift with the same ID into its historical period")
@@ -692,7 +692,7 @@ struct OverviewViewModelTests {
         let content = try requireContent(viewModel.state)
         #expect(content.selectedPeriod == historicalPeriod)
         #expect(content.expectedBreakdown?.shiftBreakdowns.map(\.shift) == [august])
-        #expect(content.shiftHistoryBreakdowns.map(\.shift) == [august])
+        #expect(content.shiftHistoryBreakdowns.map(\.shift) == [august, september])
         #expect(content.canNavigateNext)
     }
 
@@ -783,8 +783,8 @@ struct OverviewViewModelTests {
         #expect(content.shiftHistoryBreakdowns.map(\.shift) == [edited, newer])
     }
 
-    @Test("Scheduled Previous and Next publish one matching period, gross and visible deck")
-    func scheduledNavigationChangesEntirePayrollContext() throws {
+    @Test("Scheduled Previous and Next change payroll while preserving global history and expansion")
+    func scheduledNavigationPreservesGlobalHistory() throws {
         let job = try makeJob(cycle: .scheduled(.calendarMonthly))
         let august = try makeShift(id: 1, month: 8, day: 20, durationHours: 4)
         let september = try makeShift(id: 2, month: 9, day: 20, durationHours: 8)
@@ -808,10 +808,10 @@ struct OverviewViewModelTests {
             endExclusive: try localDate(year: 2026, month: 9, day: 1)
         )))
         #expect(breakdown.expectedGross == Decimal(80))
-        #expect(content.shiftHistoryBreakdowns == breakdown.shiftBreakdowns)
-        #expect(content.shiftHistoryBreakdowns.map(\.shift) == [august])
-        #expect(content.selectedShiftID == nil)
-        #expect(content.expandedShiftID == nil)
+        #expect(breakdown.shiftBreakdowns.map(\.shift) == [august])
+        #expect(content.shiftHistoryBreakdowns.map(\.shift) == [august, september])
+        #expect(content.selectedShiftID == september.id)
+        #expect(content.expandedShiftID == september.id)
 
         viewModel.handleShiftCardTap(with: august.id)
         viewModel.handleShiftCardTap(with: august.id)
@@ -822,14 +822,14 @@ struct OverviewViewModelTests {
         #expect(content.selectedPeriod == currentPeriod)
         #expect(content.selectedPeriod == breakdown.period)
         #expect(breakdown.expectedGross == Decimal(160))
-        #expect(content.shiftHistoryBreakdowns == breakdown.shiftBreakdowns)
-        #expect(content.shiftHistoryBreakdowns.map(\.shift) == [september])
-        #expect(content.selectedShiftID == nil)
-        #expect(content.expandedShiftID == nil)
+        #expect(breakdown.shiftBreakdowns.map(\.shift) == [september])
+        #expect(content.shiftHistoryBreakdowns.map(\.shift) == [august, september])
+        #expect(content.selectedShiftID == august.id)
+        #expect(content.expandedShiftID == august.id)
     }
 
-    @Test("Selecting a scheduled rail period clears an out-of-period card selection")
-    func scheduledRailSelectionClearsHiddenCardState() throws {
+    @Test("Selecting a scheduled rail period preserves an out-of-period expanded card")
+    func scheduledRailSelectionPreservesGlobalCardState() throws {
         let job = try makeJob(cycle: .scheduled(.calendarMonthly))
         let august = try makeShift(id: 1, month: 8, day: 20)
         let september = try makeShift(id: 2, month: 9, day: 20)
@@ -847,13 +847,79 @@ struct OverviewViewModelTests {
 
         let content = try requireContent(viewModel.state)
         #expect(content.selectedPeriod == historical)
-        #expect(content.shiftHistoryBreakdowns.map(\.shift) == [august])
-        #expect(content.shiftHistoryBreakdowns == content.expectedBreakdown?.shiftBreakdowns)
+        #expect(content.shiftHistoryBreakdowns.map(\.shift) == [august, september])
+        #expect(content.expectedBreakdown?.shiftBreakdowns.map(\.shift) == [august])
+        #expect(content.selectedShiftID == september.id)
+        #expect(content.expandedShiftID == september.id)
+        viewModel.handleShiftCardTap(with: september.id)
+        let collapsed = try requireContent(viewModel.state)
+        #expect(collapsed.selectedPeriod == historical)
+        #expect(collapsed.selectedShiftID == september.id)
+        #expect(collapsed.expandedShiftID == nil)
+    }
+
+    @Test("Populated and empty scheduled periods preserve global history, expansion and reload identity")
+    func scheduledGlobalHistoryAcrossEmptyPeriodAndReload() throws {
+        let job = try makeJob(cycle: .scheduled(.calendarMonthly))
+        let august = try makeShift(id: 1, month: 8, day: 20, durationHours: 4)
+        let october = try makeShift(id: 2, month: 10, day: 10, durationHours: 8)
+        var loadCalls = 0
+        let now = try date(year: 2026, month: 10, day: 18, hour: 12)
+        let viewModel = OverviewViewModel(
+            job: job,
+            loadShifts: {
+                loadCalls += 1
+                return loadCalls < 3 ? [october, august] : [october]
+            },
+            currentDate: { now }
+        )
+        viewModel.load()
+        let initial = try requireContent(viewModel.state)
+        #expect(initial.expectedBreakdown?.expectedGross == Decimal(160))
+        #expect(initial.shiftHistoryBreakdowns.map(\.shift) == [august, october])
+        #expect(initial.shiftHistoryBreakdowns.map(\.basePay) == [Decimal(80), Decimal(160)])
+        viewModel.handleShiftCardTap(with: august.id)
+        viewModel.handleShiftCardTap(with: august.id)
+        #expect(try requireContent(viewModel.state).selectedPeriod == initial.selectedPeriod)
+        #expect(try requireContent(viewModel.state).expectedBreakdown == initial.expectedBreakdown)
+
+        viewModel.navigateToPreviousPeriod()
+        var content = try requireContent(viewModel.state)
+        let september = PayCalculationPeriod.scheduled(PayPeriod(
+            start: try localDate(year: 2026, month: 9, day: 1),
+            endExclusive: try localDate(year: 2026, month: 10, day: 1)
+        ))
+        #expect(content.selectedPeriod == september)
+        #expect(content.expectedBreakdown?.expectedGross == .zero)
+        #expect(content.shiftHistoryBreakdowns == initial.shiftHistoryBreakdowns)
+        #expect(content.selectedShiftID == august.id)
+        #expect(content.expandedShiftID == august.id)
+        viewModel.navigateToPreviousPeriod()
+        content = try requireContent(viewModel.state)
+        #expect(content.expectedBreakdown?.expectedGross == Decimal(80))
+        #expect(content.expectedBreakdown?.shiftBreakdowns.map(\.shift) == [august])
+        #expect(content.shiftHistoryBreakdowns == initial.shiftHistoryBreakdowns)
+        viewModel.navigateToNextPeriod()
+        viewModel.navigateToNextPeriod()
+        content = try requireContent(viewModel.state)
+        #expect(content.selectedPeriod == initial.selectedPeriod)
+        #expect(content.expectedBreakdown == initial.expectedBreakdown)
+        #expect(content.selectedShiftID == august.id)
+        #expect(content.expandedShiftID == august.id)
+        viewModel.selectPeriod(september)
+        viewModel.reload()
+        content = try requireContent(viewModel.state)
+        #expect(content.selectedPeriod == september)
+        #expect(content.selectedShiftID == august.id)
+        #expect(content.expandedShiftID == august.id)
+        #expect(content.shiftHistoryBreakdowns == initial.shiftHistoryBreakdowns)
+        viewModel.reload()
+        content = try requireContent(viewModel.state)
+        #expect(content.selectedPeriod == september)
+        #expect(content.expectedBreakdown?.expectedGross == .zero)
+        #expect(content.shiftHistoryBreakdowns.map(\.shift) == [october])
         #expect(content.selectedShiftID == nil)
         #expect(content.expandedShiftID == nil)
-        let stateBeforeHiddenCardTap = viewModel.state
-        viewModel.handleShiftCardTap(with: september.id)
-        #expect(viewModel.state == stateBeforeHiddenCardTap)
     }
 
     @Test("Card taps separate selection from expansion without changing scheduled payroll")

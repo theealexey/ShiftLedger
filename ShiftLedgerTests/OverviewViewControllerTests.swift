@@ -219,7 +219,7 @@ struct OverviewViewControllerTests {
         #expect(background.resolvedColor(with: dark) == ShiftLedgerColors.backgroundSecondary.resolvedColor(with: dark))
     }
 
-    @Test("Tapping a scheduled rail item updates payroll, count, and visible cards together")
+    @Test("Tapping a scheduled rail item updates payroll while retaining global count and cards")
     func scheduledRailTapUpdatesVisibleContent() throws {
         let job = try makeJob(cycle: .scheduled(.calendarMonthly))
         let august = try makeShift(id: 1, month: 8, day: 20)
@@ -228,7 +228,7 @@ struct OverviewViewControllerTests {
         var receivedPeriod: PayCalculationPeriod?
         subject.viewController.onCheckPaycheck = { receivedPeriod = $0 }
         subject.viewController.loadViewIfNeeded()
-        #expect(shiftCardIdentifiers(in: try requireRootView(subject.viewController)) == [september.id])
+        #expect(shiftCardIdentifiers(in: try requireRootView(subject.viewController)) == [september.id, august.id])
         let railItem: UIControl = try requireView(
             identifier: "overview.period.item.0",
             in: try requireRootView(subject.viewController)
@@ -242,10 +242,10 @@ struct OverviewViewControllerTests {
             endExclusive: try LocalDate(year: 2026, month: 9, day: 1)
         )))
         #expect(content.expectedBreakdown?.shiftBreakdowns.map(\.shift) == [august])
-        #expect(shiftCardIdentifiers(in: try requireRootView(subject.viewController)) == [august.id])
+        #expect(shiftCardIdentifiers(in: try requireRootView(subject.viewController)) == [september.id, august.id])
         let count: UILabel = try requireView(identifier: "overview.shiftCount.value", in: try requireRootView(subject.viewController))
-        #expect(count.text == "1")
-        #expect(content.shiftHistoryBreakdowns == content.expectedBreakdown?.shiftBreakdowns)
+        #expect(count.text == "2")
+        #expect(content.shiftHistoryBreakdowns.map(\.shift) == [august, september])
         let selectedRailItem: UIControl = try requireView(
             identifier: "overview.period.item.1",
             in: try requireRootView(subject.viewController)
@@ -257,6 +257,59 @@ struct OverviewViewControllerTests {
         )
         checkPaycheck.sendActions(for: .touchUpInside)
         #expect(receivedPeriod == content.selectedPeriod)
+    }
+
+    @Test("Cross-period card selection preserves payroll destination and global visible history")
+    func scheduledCrossPeriodCardKeepsPayrollDestination() throws {
+        let job = try makeJob(cycle: .scheduled(.calendarMonthly))
+        let original = try makeShift(id: 1, month: 8, day: 20)
+        let older = try Shift(
+            id: original.id, jobID: original.jobID, workTypeID: original.workTypeID,
+            start: original.start, end: original.start.addingTimeInterval(4 * 60 * 60)
+        )
+        let newer = try makeShift(id: 2, month: 10, day: 10)
+        let now = try date(year: 2026, month: 10, day: 18, hour: 12)
+        let subject = makeSubject(job: job, loadShifts: { [newer, older] }, now: now)
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+        window.rootViewController = subject.viewController
+        window.isHidden = false
+        defer { window.isHidden = true }
+        let root = try requireRootView(subject.viewController)
+        window.layoutIfNeeded()
+        #expect(visibleFrontCardIdentifiers(in: root) == [newer.id])
+        let initial = try requireContent(subject.viewModel.state)
+        #expect(initial.expectedBreakdown?.expectedGross == Decimal(160))
+        let card: UIControl = try requireView(identifier: "overview.shift.\(older.id.uuidString)", in: root)
+        card.sendActions(for: .touchUpInside)
+        window.layoutIfNeeded()
+        #expect(visibleFrontCardIdentifiers(in: root) == [older.id])
+        #expect(try requireContent(subject.viewModel.state).selectedPeriod == initial.selectedPeriod)
+        #expect(try requireContent(subject.viewModel.state).expectedBreakdown == initial.expectedBreakdown)
+        let amount: UILabel = try requireView(identifier: "overview.shift.\(older.id.uuidString).frontExpected", in: root)
+        #expect(amount.text == OverviewFormatting.currency(
+            Decimal(80), currencyCode: job.currencyCode, locale: displayLocale
+        ))
+        let count: UILabel = try requireView(identifier: "overview.shiftCount.value", in: root)
+        #expect(count.text == "2")
+        var received: PayCalculationPeriod?
+        subject.viewController.onCheckPaycheck = { received = $0 }
+        let check: UIButton = try requireView(identifier: "overview.checkPaycheck", in: root)
+        check.sendActions(for: .touchUpInside)
+        #expect(received == initial.selectedPeriod)
+        let selected: UIControl = try requireView(identifier: "overview.shift.\(older.id.uuidString)", in: root)
+        selected.sendActions(for: .touchUpInside)
+        let previous: UIButton = try requireView(identifier: "overview.period.previous", in: root)
+        previous.sendActions(for: .touchUpInside)
+        window.layoutIfNeeded()
+        let content = try requireContent(subject.viewModel.state)
+        #expect(content.expectedBreakdown?.expectedGross == .zero)
+        #expect(content.selectedShiftID == older.id)
+        #expect(content.expandedShiftID == older.id)
+        #expect(visibleFrontCardIdentifiers(in: root) == [older.id])
+        #expect(shiftCardIdentifiers(in: root) == [newer.id, older.id])
+        #expect(count.text == "2")
+        check.sendActions(for: .touchUpInside)
+        #expect(received == content.selectedPeriod)
     }
 
     @Test("Content displays the selected scheduled period")
@@ -274,7 +327,7 @@ struct OverviewViewControllerTests {
         #expect(label.text?.contains("30") == true)
     }
 
-    @Test("Scheduled Shift count represents only the selected period")
+    @Test("Scheduled Shift count represents all persisted Shifts")
     func shiftCountUsesAllPersistedShifts() throws {
         let job = try makeJob(cycle: .scheduled(.calendarMonthly))
         let august = try makeShift(id: 1, month: 8, day: 20)
@@ -287,9 +340,9 @@ struct OverviewViewControllerTests {
             identifier: "overview.shiftCount.value",
             in: try requireRootView(subject.viewController)
         )
-        #expect(label.text == "1")
+        #expect(label.text == "2")
         let content = try requireContent(subject.viewModel.state)
-        #expect(content.shiftHistoryBreakdowns.map(\.shift) == [september])
+        #expect(content.shiftHistoryBreakdowns.map(\.shift) == [august, september])
     }
 
     @Test("Shift history renders every persisted Shift in deterministic reverse chronology")
@@ -355,6 +408,7 @@ struct OverviewViewControllerTests {
         let older = try makeShift(id: 1, month: 9, day: 10)
         let newer = try makeShift(id: 2, month: 9, day: 20)
         let subject = try makeSubject(job: job, shifts: [older, newer])
+        subject.viewController.traitOverrides.preferredContentSizeCategory = .large
         let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
         window.rootViewController = subject.viewController
         window.isHidden = false
@@ -1016,6 +1070,7 @@ struct OverviewViewControllerTests {
             makeShift(id: 4, month: 9, day: 21)
         ]
         let subject = try makeSubject(job: job, shifts: shifts)
+        subject.viewController.traitOverrides.preferredContentSizeCategory = .large
         let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
         window.rootViewController = subject.viewController
         window.isHidden = false
@@ -1203,6 +1258,7 @@ struct OverviewViewControllerTests {
             let view = OverviewView(frame: .zero)
             let host = UIViewController()
             host.view = view
+            host.traitOverrides.preferredContentSizeCategory = .large
             let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
             window.rootViewController = host
             window.isHidden = false
@@ -1234,6 +1290,7 @@ struct OverviewViewControllerTests {
         let view = OverviewView(frame: .zero)
         let host = UIViewController()
         host.view = view
+        host.traitOverrides.preferredContentSizeCategory = .large
         let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
         window.rootViewController = host
         window.isHidden = false
@@ -1393,23 +1450,32 @@ struct OverviewViewControllerTests {
         }
     }
 
-    @Test("Scheduled zero-shift period renders an honest Shift history empty state")
-    func scheduledZeroShiftPeriodRendersShiftHistoryEmptyState() throws {
+    @Test("Scheduled zero-gross period retains persisted Shift history")
+    func scheduledZeroGrossPeriodRetainsShiftHistory() throws {
         let job = try makeJob(cycle: .scheduled(.calendarMonthly))
-        let subject = try makeSubject(job: job, shifts: [makeShift(id: 1, month: 8, day: 10)])
+        let shift = try makeShift(id: 1, month: 8, day: 10)
+        let subject = try makeSubject(job: job, shifts: [shift])
+        subject.viewController.traitOverrides.preferredContentSizeCategory = .large
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+        window.rootViewController = subject.viewController
+        window.isHidden = false
+        defer { window.isHidden = true }
 
         subject.viewController.loadViewIfNeeded()
+        window.layoutIfNeeded()
+
+        let root = try requireRootView(subject.viewController)
+        #expect(root.traitCollection.preferredContentSizeCategory == .large)
 
         let label: UILabel = try requireView(
             identifier: "overview.shiftHistory.empty",
-            in: try requireRootView(subject.viewController)
+            in: root
         )
-        #expect(isEffectivelyHidden(label) == false)
+        #expect(isEffectivelyHidden(label))
         #expect(label.text == OverviewStrings.shiftHistoryEmpty)
-        let root = try requireRootView(subject.viewController)
-        #expect(shiftCardIdentifiers(in: root).isEmpty)
+        #expect(shiftCardIdentifiers(in: root) == [shift.id])
         let count: UILabel = try requireView(identifier: "overview.shiftCount.value", in: root)
-        #expect(count.text == "0")
+        #expect(count.text == "1")
         let amount: UILabel = try requireView(identifier: "overview.expectedGross.amount", in: root)
         #expect(amount.text == OverviewFormatting.heroAmount(.zero, currencyCode: job.currencyCode, locale: displayLocale))
         let check: UIButton = try requireView(identifier: "overview.checkPaycheck", in: root)
