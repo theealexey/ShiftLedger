@@ -776,7 +776,7 @@
       "extractionState" : "manual",
       "localizations" : {
         "en" : { "stringUnit" : { "state" : "translated", "value" : "Edit Shift" } },
-        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Редактировать смену" } }
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Изменить смену" } }
       }
     },
     "editShift.save" : {

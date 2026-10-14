@@ -10,6 +10,39 @@ struct EditShiftViewControllerTests {
   )
   private let start = Date(timeIntervalSinceReferenceDate: 300_000)
   private let end = Date(timeIntervalSinceReferenceDate: 328_800)
+
+  @Test("Edit Shift keeps a readable localized title and standard navigation items")
+  func localizedNavigationTitle() throws {
+    for (language, expected) in [("en", "Edit Shift"), ("ru", "Изменить смену")] {
+      let stringsURL = Bundle.main.bundleURL.appending(
+        path: "\(language).lproj/Localizable.strings"
+      )
+      let data = try Data(contentsOf: stringsURL)
+      let strings = try #require(
+        PropertyListSerialization.propertyList(from: data, options: [], format: nil)
+          as? [String: String]
+      )
+      #expect(strings["editShift.title"] == expected)
+    }
+
+    let workType = try makeWorkType(id: testWorkTypeID, name: "Lectures")
+    let shift = try Shift(
+      id: shiftID, jobID: testJobID, workTypeID: workType.id,
+      start: start, end: end
+    )
+    let viewController = EditShiftViewController(viewModel: EditShiftViewModel(
+      timeZoneIdentifier: "UTC", workTypes: [workType], shift: shift,
+      saveShift: { _ in .success(()) }, deleteShift: { _ in .success(()) }
+    ))
+    viewController.loadViewIfNeeded()
+    #expect(viewController.title == EditShiftStrings.title)
+    #expect(viewController.navigationItem.titleView == nil)
+    #expect(viewController.navigationItem.largeTitleDisplayMode == .never)
+    #expect(viewController.navigationItem.rightBarButtonItem?.title == EditShiftStrings.save)
+    #expect(viewController.navigationItem.rightBarButtonItem?.accessibilityIdentifier == "editShift.save")
+    #expect(viewController.navigationItem.rightBarButtonItem?.isEnabled == true)
+  }
+
   @Test("Edit Shift matches Add Shift display language and preserves overnight dates",
         arguments: ["en_US", "ru_RU"], ["Asia/Tokyo", "America/New_York"])
   func dateRowsUseDisplayLocale(localeIdentifier: String, timeZoneIdentifier: String) throws {
