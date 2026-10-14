@@ -13,11 +13,11 @@ final class EditShiftViewController: UIViewController {
     init(
         viewModel: EditShiftViewModel,
         displayLocale: Locale = CurrencySelectionItem.applicationDisplayLocale,
-        dateFormattingLocale: Locale = .autoupdatingCurrent
+        dateFormattingLocale: Locale? = nil
     ) {
         self.viewModel = viewModel
         self.displayLocale = displayLocale
-        self.dateFormattingLocale = dateFormattingLocale
+        self.dateFormattingLocale = dateFormattingLocale ?? displayLocale
         super.init(nibName: nil, bundle: nil)
     }
 

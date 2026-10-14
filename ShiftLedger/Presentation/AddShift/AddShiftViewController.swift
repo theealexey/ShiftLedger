@@ -13,11 +13,11 @@ final class AddShiftViewController: UIViewController {
     init(
         viewModel: AddShiftViewModel,
         displayLocale: Locale = CurrencySelectionItem.applicationDisplayLocale,
-        dateFormattingLocale: Locale = .autoupdatingCurrent
+        dateFormattingLocale: Locale? = nil
     ) {
         self.viewModel = viewModel
         self.displayLocale = displayLocale
-        self.dateFormattingLocale = dateFormattingLocale
+        self.dateFormattingLocale = dateFormattingLocale ?? displayLocale
         super.init(nibName: nil, bundle: nil)
     }
 

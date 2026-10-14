@@ -9,6 +9,55 @@ struct AddShiftViewControllerTests {
     private let timeZoneIdentifier = "Europe/Stockholm"
     private let knownID = UUID(uuid: (0x50, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1))
 
+    @Test("Add Shift uses the display language for every date row without changing overnight dates",
+          arguments: ["en_US", "ru_RU"], ["Asia/Tokyo", "America/New_York"])
+    func dateRowsUseDisplayLocale(localeIdentifier: String, timeZoneIdentifier: String) throws {
+        let locale = Locale(identifier: localeIdentifier)
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try #require(TimeZone(identifier: timeZoneIdentifier))
+        let start = try #require(calendar.date(from: DateComponents(year: 2026, month: 8, day: 31, hour: 23, minute: 30)))
+        let end = start.addingTimeInterval(2 * 60 * 60)
+        let breakStart = start.addingTimeInterval(25 * 60)
+        let breakEnd = start.addingTimeInterval(40 * 60)
+        var saved: Shift?
+        let viewModel = AddShiftViewModel(
+            jobID: testJobID,
+            timeZoneIdentifier: timeZoneIdentifier,
+            workTypes: [try makeWorkType(id: testWorkTypeID, name: "Lectures")],
+            initialStart: start,
+            initialEnd: end,
+            initialUnpaidBreakEnabled: true,
+            initialBreakStart: breakStart,
+            initialBreakEnd: breakEnd,
+            saveShift: { saved = $0; return .success(()) }
+        )
+        let controller = AddShiftViewController(viewModel: viewModel, displayLocale: locale)
+        controller.loadViewIfNeeded()
+        let formatter = DateFormatter()
+        formatter.calendar = calendar
+        formatter.timeZone = calendar.timeZone
+        formatter.locale = locale
+        formatter.timeStyle = .short
+        for (field, date) in [("start", start), ("end", end), ("breakStart", breakStart), ("breakEnd", breakEnd)] {
+            let row: UIControl = try requireView("addShift.\(field)", in: controller.view)
+            formatter.dateStyle = .long
+            #expect(row.accessibilityValue == formatter.string(from: date))
+            formatter.dateStyle = .medium
+            #expect(containsLabel(with: formatter.string(from: date), in: row))
+        }
+        let startRow: UIControl = try requireView("addShift.start", in: controller.view)
+        #expect(startRow.accessibilityValue?.contains(localeIdentifier == "en_US" ? "August" : "августа") == true)
+        #expect(calendar.component(.day, from: end) == 1)
+        #expect(viewModel.start == start)
+        #expect(viewModel.end == end)
+        #expect(viewModel.breakStart == breakStart)
+        #expect(viewModel.breakEnd == breakEnd)
+        try tapSave(on: controller)
+        #expect(saved?.start == start)
+        #expect(saved?.end == end)
+        #expect(saved?.unpaidBreak == UnpaidBreak(start: breakStart, end: breakEnd))
+    }
+
     @Test("Успешное сохранение очищает draft и не повторяет вставку")
     func successfulSaveResetsDraftAndPreventsDuplicate() throws {
         var persistenceCallCount = 0
@@ -192,6 +241,11 @@ struct AddShiftViewControllerTests {
         #expect(row.accessibilityValue == AddShiftStrings.noActiveWorkTypes)
         #expect(row.isUserInteractionEnabled == false)
         #expect(viewController.navigationItem.rightBarButtonItem?.isEnabled == false)
+    }
+
+    private func containsLabel(with text: String, in root: UIView) -> Bool {
+        if let label = root as? UILabel, label.text == text { return true }
+        return root.subviews.contains { containsLabel(with: text, in: $0) }
     }
 
     private func tapSave(on viewController: AddShiftViewController) throws {

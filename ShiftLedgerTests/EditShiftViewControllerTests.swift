@@ -10,6 +10,51 @@ struct EditShiftViewControllerTests {
   )
   private let start = Date(timeIntervalSinceReferenceDate: 300_000)
   private let end = Date(timeIntervalSinceReferenceDate: 328_800)
+  @Test("Edit Shift matches Add Shift display language and preserves overnight dates",
+        arguments: ["en_US", "ru_RU"], ["Asia/Tokyo", "America/New_York"])
+  func dateRowsUseDisplayLocale(localeIdentifier: String, timeZoneIdentifier: String) throws {
+    let locale = Locale(identifier: localeIdentifier)
+    var calendar = Calendar(identifier: .gregorian)
+    calendar.timeZone = try #require(TimeZone(identifier: timeZoneIdentifier))
+    let start = try #require(calendar.date(from: DateComponents(year: 2026, month: 8, day: 31, hour: 23, minute: 30)))
+    let end = start.addingTimeInterval(2 * 60 * 60)
+    let unpaidBreak = UnpaidBreak(start: start.addingTimeInterval(25 * 60), end: start.addingTimeInterval(40 * 60))
+    let workType = try makeWorkType(id: testWorkTypeID, name: "Lectures")
+    let shift = try Shift(id: shiftID, jobID: testJobID, workTypeID: workType.id,
+                          start: start, end: end, unpaidBreak: unpaidBreak)
+    var saved: Shift?
+    let viewModel = EditShiftViewModel(
+      timeZoneIdentifier: timeZoneIdentifier, workTypes: [workType], shift: shift,
+      saveShift: { saved = $0; return .success(()) }, deleteShift: { _ in .success(()) }
+    )
+    let controller = EditShiftViewController(viewModel: viewModel, displayLocale: locale)
+    controller.loadViewIfNeeded()
+    let add = AddShiftViewController(
+      viewModel: AddShiftViewModel(
+        jobID: testJobID, timeZoneIdentifier: timeZoneIdentifier, workTypes: [workType],
+        initialStart: start, initialEnd: end, initialUnpaidBreakEnabled: true,
+        initialBreakStart: unpaidBreak.start, initialBreakEnd: unpaidBreak.end,
+        saveShift: { _ in .success(()) }
+      ), displayLocale: locale
+    )
+    add.loadViewIfNeeded()
+    for (field, date) in [("start", start), ("end", end), ("breakStart", unpaidBreak.start), ("breakEnd", unpaidBreak.end)] {
+      let row: UIControl = try requireView("editShift.\(field)", in: controller.view)
+      let addRow: UIControl = try requireView("addShift.\(field)", in: add.view)
+      expectDate(date, in: row, timeZoneIdentifier: timeZoneIdentifier, locale: locale)
+      #expect(row.accessibilityValue == addRow.accessibilityValue)
+    }
+    let startRow: UIControl = try requireView("editShift.start", in: controller.view)
+    #expect(startRow.accessibilityValue?.contains(localeIdentifier == "en_US" ? "August" : "августа") == true)
+    #expect(calendar.component(.day, from: end) == 1)
+    #expect(viewModel.start == start)
+    #expect(viewModel.end == end)
+    #expect(viewModel.breakStart == unpaidBreak.start)
+    #expect(viewModel.breakEnd == unpaidBreak.end)
+    try tapSave(on: controller)
+    #expect(saved == shift)
+  }
+
   @Test("Screen prefill, identifiers и unchanged Save сохраняют UUID")
   func prefillAndSave() throws {
     let workType = try makeWorkType(
@@ -510,7 +555,7 @@ struct EditShiftViewControllerTests {
     let screen: UIScrollView = try requireView("editShift.screen", in: viewController.view)
     #expect(deleteButton.configuration?.title == EditShiftStrings.delete)
     #expect(deleteButton.accessibilityLabel == EditShiftStrings.delete)
-    #expect(deleteButton.accessibilityTraits.contains(.button))
+    #expect(deleteButton.allControlEvents.contains(.touchUpInside))
     #expect(deleteButton.configuration?.baseForegroundColor == ShiftLedgerColors.statusNegative)
     #expect(deleteButton.bounds.height >= 44)
     #expect(deleteButton.isEnabled)
