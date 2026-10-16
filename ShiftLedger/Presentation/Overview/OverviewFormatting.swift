@@ -78,6 +78,32 @@ enum OverviewFormatting {
         amount.formatted(.currency(code: currencyCode).locale(locale))
     }
 
+    static func exactCurrency(
+        _ amount: Decimal,
+        currencyCode: String,
+        locale: Locale
+    ) -> String? {
+        let formatter = NumberFormatter()
+        formatter.locale = locale
+        formatter.numberStyle = .currency
+        formatter.currencyCode = currencyCode
+        let standardDigits = formatter.maximumFractionDigits
+        formatter.minimumFractionDigits = standardDigits
+        formatter.maximumFractionDigits = 38
+        return formatter.string(from: NSDecimalNumber(decimal: amount))
+    }
+
+    /// Parses our displayed currency, not a payroll input. Decimal parsing avoids binary arithmetic.
+    static func displayedCurrencyValue(_ amount: Decimal, currencyCode: String, locale: Locale) -> Decimal? {
+        let formatter = NumberFormatter()
+        formatter.locale = locale
+        formatter.numberStyle = .currency
+        formatter.currencyCode = currencyCode
+        formatter.generatesDecimalNumbers = true
+        return (formatter.number(from: currency(amount, currencyCode: currencyCode, locale: locale))
+                as? NSDecimalNumber)?.decimalValue
+    }
+
     static func scheduledPeriod(
         _ period: PayPeriod,
         timeZoneIdentifier: String,
@@ -264,13 +290,10 @@ enum OverviewFormatting {
         basis: BasePayBasis,
         currencyCode: String,
         locale: Locale
-    ) -> String {
-        PaycheckResultFormatting.rate(
-            amount: amount,
-            basis: basis,
-            currencyCode: currencyCode,
-            locale: locale
-        )
+    ) -> String? {
+        guard let formatted = exactCurrency(amount, currencyCode: currencyCode, locale: locale) else { return nil }
+        let unit = basis == .hourly ? PaycheckResultStrings.rateHour : PaycheckResultStrings.rateShift
+        return "\(formatted) / \(unit)"
     }
 
     static func duration(_ duration: TimeInterval) -> String {

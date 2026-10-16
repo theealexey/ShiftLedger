@@ -39,6 +39,9 @@ struct OverviewViewControllerTests {
                     .intersection(rail.bounds).width
                 if period.period == content.selectedPeriod {
                     #expect(item.accessibilityTraits.contains(.selected))
+                    #expect(item.backgroundColor == .clear)
+                    #expect(item.layer.cornerRadius == 0)
+                    #expect(item.bounds.height >= 44)
                     #expect(abs(item.convert(item.bounds, to: rail).midX - rail.bounds.midX) < layoutEpsilon)
                     #expect(visibleTitleWidth + layoutEpsilon >= title.bounds.width)
                 } else {
@@ -139,9 +142,10 @@ struct OverviewViewControllerTests {
             let element: UIView = try requireView(identifier: identifier, in: root)
             #expect(isEffectivelyHidden(element))
         }
-        let hero: UIView = try requireView(identifier: "overview.expectedGross.hero", in: root)
-        let stack = try #require(hero.superview as? UIStackView)
-        #expect(abs(hero.frame.minY - stack.bounds.minY) < 0.5)
+        let receipt: UIView = try requireView(identifier: "overview.receipt.paper", in: root)
+        let perShiftPeriod: UILabel = try requireView(identifier: "overview.receipt.perShiftPeriod", in: root)
+        #expect(isEffectivelyHidden(perShiftPeriod) == false)
+        #expect(perShiftPeriod.convert(perShiftPeriod.bounds, to: receipt).minY >= 0)
         #expect(shiftCardIdentifiers(in: root) == [latest.id, older.id])
         #expect(visibleFrontCardIdentifiers(in: root) == [latest.id])
         let count: UILabel = try requireView(identifier: "overview.shiftCount.value", in: root)
@@ -161,7 +165,8 @@ struct OverviewViewControllerTests {
         root.layoutIfNeeded()
         #expect(container.isHidden)
         #expect(container.accessibilityElementsHidden)
-        #expect(abs(hero.frame.minY - stack.bounds.minY) < 0.5)
+        #expect(isEffectivelyHidden(perShiftPeriod) == false)
+        #expect(perShiftPeriod.convert(perShiftPeriod.bounds, to: receipt).minY >= 0)
     }
 
     @Test("Hero currency context and the single Shift heading are explicit")
@@ -174,7 +179,7 @@ struct OverviewViewControllerTests {
         #expect(context.text == OverviewStrings.expectedGrossContext(currencyCode: "EUR"))
         #expect(amount.text == OverviewFormatting.heroAmount(160, currencyCode: "EUR", locale: displayLocale))
         #expect(heading.isAccessibilityElement)
-        #expect(heading.accessibilityLabel == "\(OverviewStrings.shiftSectionPrefix) 1")
+        #expect(heading.accessibilityLabel == "\(OverviewStrings.allShiftHistory) 1")
         #expect(heading.arrangedSubviews.count == 2)
     }
 
@@ -194,7 +199,107 @@ struct OverviewViewControllerTests {
         #expect(label.font.pointSize == ShiftLedgerTypography.expectedGrossDisplay.pointSize)
     }
 
-    @Test("Expected Gross uses the light surface while preserving the dark surface")
+    @Test("Receipt reconciles extra precision for the selected period, not global history")
+    func receiptExplainsSelectedPeriodPrecision() throws {
+        let rate = try #require(Decimal(string: "1.004"))
+        let job = try Job(
+            id: testWorkTypeID,
+            currencyCode: "EUR",
+            timeZoneIdentifier: "Europe/Stockholm",
+            basePayBasis: .fixedPerShift,
+            payCalculationCycle: .scheduled(.calendarMonthly),
+            payRates: [try PayRate(amount: rate, effectiveFrom: nil)],
+            createdAt: Date(timeIntervalSinceReferenceDate: 0)
+        )
+        let september = try (1...12).map { try makeShift(id: UInt8($0), month: 9, day: $0) }
+        let august = try makeShift(id: 99, month: 8, day: 31)
+        let subject = try makeSubject(job: job, shifts: september + [august])
+        subject.viewController.loadViewIfNeeded()
+        let root = try requireRootView(subject.viewController)
+        let hero: UILabel = try requireView(identifier: "overview.expectedGross.amount", in: root)
+        let explanation: UILabel = try requireView(identifier: "overview.receipt.precision", in: root)
+        let twelveAmount = try #require(Decimal(string: "12.048"))
+        let exactTwelve = try #require(OverviewFormatting.exactCurrency(
+            twelveAmount, currencyCode: "EUR", locale: displayLocale
+        ))
+        let exactOne = try #require(OverviewFormatting.exactCurrency(
+            rate, currencyCode: "EUR", locale: displayLocale
+        ))
+        #expect(exactTwelve.contains("12.048"))
+        #expect(exactOne.contains("1.004"))
+        #expect(hero.text == "12.05")
+        #expect(explanation.text == OverviewStrings.roundedForDisplay)
+        let exactField: UILabel = try requireView(identifier: "overview.receipt.precision.exact", in: root)
+        let displayedField: UILabel = try requireView(identifier: "overview.receipt.precision.displayed", in: root)
+        #expect(exactField.text == exactTwelve)
+        #expect(displayedField.text == OverviewFormatting.currency(twelveAmount, currencyCode: "EUR", locale: displayLocale))
+        #expect(shiftCardIdentifiers(in: root).count == 13)
+        let septemberCard: UIView = try requireView(
+            identifier: "overview.shift.\(september[0].id.uuidString)", in: root
+        )
+        #expect(septemberCard.accessibilityLabel?.contains(exactOne) == true)
+
+        let previous: UIButton = try requireView(identifier: "overview.period.previous", in: root)
+        previous.sendActions(for: .touchUpInside)
+        #expect(hero.text == "1.00")
+        #expect(isEffectivelyHidden(explanation)) // One rounded row already reconciles with the displayed total.
+        #expect(shiftCardIdentifiers(in: root).count == 13)
+        previous.sendActions(for: .touchUpInside)
+        #expect(hero.text == "0.00")
+        #expect(isEffectivelyHidden(explanation))
+        #expect(shiftCardIdentifiers(in: root).count == 13)
+    }
+
+    @Test("Exact receipt currency preserves cents and mixed-rate contributions in English and Russian",
+          arguments: ["en_US", "ru_RU"])
+    func receiptExactCurrencyAndMixedRates(_ localeIdentifier: String) throws {
+        let locale = Locale(identifier: localeIdentifier)
+        let firstRate = try #require(Decimal(string: "1.004"))
+        let secondRate = try #require(Decimal(string: "2.006"))
+        let expectedTotal = try #require(Decimal(string: "3.010"))
+        #expect(OverviewFormatting.exactCurrency(20, currencyCode: "EUR", locale: locale)
+            == OverviewFormatting.currency(20, currencyCode: "EUR", locale: locale))
+        let expectedFirst = localeIdentifier == "ru_RU" ? "1,004 €" : "€1.004"
+        let expectedSecond = localeIdentifier == "ru_RU" ? "2,006 €" : "€2.006"
+        #expect(OverviewFormatting.exactCurrency(firstRate, currencyCode: "EUR", locale: locale) == expectedFirst)
+        #expect(OverviewFormatting.exactCurrency(secondRate, currencyCode: "EUR", locale: locale) == expectedSecond)
+        for basis in [BasePayBasis.hourly, .fixedPerShift] {
+            let job = try Job(
+                id: testWorkTypeID, currencyCode: "EUR", timeZoneIdentifier: "Europe/Stockholm",
+                basePayBasis: basis, payCalculationCycle: .scheduled(.calendarMonthly),
+                payRates: [
+                    PayRate(amount: firstRate, effectiveFrom: nil),
+                    PayRate(amount: secondRate, effectiveFrom: LocalDate(year: 2026, month: 9, day: 10))
+                ],
+                createdAt: Date(timeIntervalSinceReferenceDate: 0)
+            )
+            let shifts = try [(8, 31), (9, 1), (9, 15)].enumerated().map { index, day in
+                let start = try date(year: 2026, month: day.0, day: day.1, hour: 8)
+                return try Shift(
+                    id: UUID(uuid: (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, UInt8(index))),
+                    jobID: job.id, workTypeID: testWorkTypeID,
+                    start: start, end: start.addingTimeInterval(3600)
+                )
+            }
+            let period = try PayPeriod(
+                start: LocalDate(year: 2026, month: 9, day: 1),
+                endExclusive: LocalDate(year: 2026, month: 10, day: 1)
+            )
+            let breakdown = try job.expectedGrossBreakdown(for: .scheduled(period), from: shifts)
+            #expect(breakdown.expectedGross == expectedTotal)
+            #expect(breakdown.shiftBreakdowns.map(\.shift.id) == Array(shifts.dropFirst()).map(\.id))
+            let cards = try OverviewShiftCardMapper(
+                currencyCode: "EUR", timeZoneIdentifier: job.timeZoneIdentifier, displayLocale: locale
+            ).map(breakdown.shiftBreakdowns, selectedShiftID: nil, expandedShiftID: nil)
+            #expect(cards.map(\.exactExpectedAmount) == [expectedSecond, expectedFirst])
+            #expect(cards[0].appliedRate.hasPrefix(expectedSecond))
+            #expect(cards[1].appliedRate.hasPrefix(expectedFirst))
+            #expect(cards.map(\.appliedRateAmount) == [expectedSecond, expectedFirst])
+            #expect(OverviewFormatting.displayedCurrencyValue(firstRate, currencyCode: "EUR", locale: locale) == 1)
+        }
+    }
+
+    @Test("The continuous receipt paper adapts to light and dark appearance")
     func expectedGrossSurfaceAdaptsToAppearance() throws {
         let subject = try makeSubject(
             job: makeJob(cycle: .scheduled(.calendarMonthly)),
@@ -206,17 +311,225 @@ struct OverviewViewControllerTests {
         defer { window.isHidden = true }
         window.layoutIfNeeded()
 
-        let hero: UIView = try requireView(
-            identifier: "overview.expectedGross.hero",
+        let paper: OverviewReceiptPaperView = try requireView(
+            identifier: "overview.receipt.paper",
             in: try requireRootView(subject.viewController)
         )
-        #expect(isEffectivelyHidden(hero) == false)
-        let background = try #require(hero.backgroundColor)
+        #expect(isEffectivelyHidden(paper) == false)
         let light = UITraitCollection(userInterfaceStyle: .light)
         let dark = UITraitCollection(userInterfaceStyle: .dark)
-        #expect(background.resolvedColor(with: light) == ShiftLedgerColors.surfacePrimary.resolvedColor(with: light))
-        #expect(background.resolvedColor(with: light) != ShiftLedgerColors.backgroundPrimary.resolvedColor(with: light))
-        #expect(background.resolvedColor(with: dark) == ShiftLedgerColors.backgroundSecondary.resolvedColor(with: dark))
+        #expect(OverviewReceiptPaperView.surface.resolvedColor(with: light)
+            != OverviewReceiptPaperView.surface.resolvedColor(with: dark))
+        let path = OverviewReceiptPaperView.paperPath(in: paper.bounds)
+        #expect(!path.isEmpty)
+        #expect(path.bounds.width == paper.bounds.width)
+    }
+
+    @Test("Torn contours are deterministic, distinct and independent of receipt height")
+    func receiptTearContoursAreStableAndIrregular() throws {
+        func points(_ height: CGFloat, width: CGFloat = 362) -> [CGPoint] {
+            var result: [CGPoint] = []
+            OverviewReceiptPaperView.paperPath(in: CGRect(x: 0, y: 0, width: width, height: height))
+                .cgPath.applyWithBlock { element in
+                    if element.pointee.type == .moveToPoint || element.pointee.type == .addLineToPoint {
+                        result.append(element.pointee.points[0])
+                    }
+                }
+            return result
+        }
+        let original = points(540)
+        #expect(original == points(540))
+        let top = original.filter { $0.y < 10 }
+        let bottom = original.filter { $0.y > 530 }.reversed().map { CGPoint(x: $0.x, y: 540 - $0.y) }
+        #expect(top != bottom)
+        #expect(Set(top.map(\.y)).count >= 4)
+        let intervals = zip(top.dropFirst(), top).map { $0.x - $1.x }
+        #expect(Set(intervals).count > 8)
+        #expect(top.allSatisfy { (0...8).contains($0.y) })
+        #expect(top == points(900).filter { $0.y < 10 })
+        #expect(bottom == points(900).filter { $0.y > 890 }.reversed().map { CGPoint(x: $0.x, y: 900 - $0.y) })
+        #expect(points(540, width: 335) != original)
+    }
+
+    @Test("Receipt metadata stacks label and full value at accessibility sizes")
+    func receiptMetadataUsesVerticalAccessibilityLayout() throws {
+        let host = UIViewController()
+        host.traitOverrides.preferredContentSizeCategory = .accessibilityExtraExtraLarge
+        let field = OverviewReceiptFieldView()
+        field.translatesAutoresizingMaskIntoConstraints = false
+        host.view.addSubview(field)
+        NSLayoutConstraint.activate([
+            field.leadingAnchor.constraint(equalTo: host.view.leadingAnchor, constant: 40),
+            field.trailingAnchor.constraint(equalTo: host.view.trailingAnchor, constant: -40),
+            field.topAnchor.constraint(equalTo: host.view.topAnchor, constant: 80)
+        ])
+        field.update(label: OverviewStrings.exactContribution, value: "€1.004", identifier: "exact")
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 375, height: 667))
+        window.rootViewController = host
+        window.isHidden = false
+        defer { window.isHidden = true }
+        window.layoutIfNeeded()
+        #expect(field.traitCollection.preferredContentSizeCategory == .accessibilityExtraExtraLarge)
+        #expect(field.axis == .vertical)
+        #expect(field.value.text == "€1.004")
+        #expect(field.label.frame.maxY <= field.value.frame.minY)
+        #expect(field.value.frame.height >= field.value.sizeThatFits(
+            CGSize(width: field.value.frame.width, height: .greatestFiniteMagnitude)).height - 0.5)
+        host.traitOverrides.preferredContentSizeCategory = .large
+        window.layoutIfNeeded()
+        #expect(field.axis == .horizontal)
+        #expect(field.label.bounds.height <= field.label.font.lineHeight + 1)
+        #expect(field.value.bounds.height <= field.value.font.lineHeight + 1)
+    }
+
+    @Test("Receipt rate separates its exact amount from pay basis at accessibility sizes",
+          arguments: ["en_US", "ru_RU"])
+    func receiptRateReflowsWithoutSplittingUnit(_ localeIdentifier: String) throws {
+        let exactRate = try #require(Decimal(string: "1.004"))
+        let amount = try #require(OverviewFormatting.exactCurrency(
+            exactRate, currencyCode: "EUR", locale: Locale(identifier: localeIdentifier)))
+        let fullRate = amount + " / " + PaycheckResultStrings.rateShift
+        let host = UIViewController()
+        host.traitOverrides.preferredContentSizeCategory = .large
+        let field = OverviewReceiptFieldView()
+        field.translatesAutoresizingMaskIntoConstraints = false
+        host.view.addSubview(field)
+        NSLayoutConstraint.activate([
+            field.leadingAnchor.constraint(equalTo: host.view.leadingAnchor, constant: 56),
+            field.trailingAnchor.constraint(equalTo: host.view.trailingAnchor, constant: -56),
+            field.topAnchor.constraint(equalTo: host.view.topAnchor, constant: 80)
+        ])
+        field.update(label: PaycheckResultStrings.rate, value: fullRate, identifier: "rate",
+                     accessibilitySizeValue: amount)
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 375, height: 667))
+        window.rootViewController = host
+        window.isHidden = false
+        defer { window.isHidden = true }
+        window.layoutIfNeeded()
+        #expect(field.value.text == fullRate)
+        host.traitOverrides.preferredContentSizeCategory = .accessibilityExtraExtraLarge
+        window.layoutIfNeeded()
+        #expect(field.axis == .vertical)
+        #expect(field.value.text == amount)
+        #expect(field.accessibilityLabel == "\(PaycheckResultStrings.rate), \(fullRate)")
+        #expect(field.label.frame.maxY <= field.value.frame.minY)
+        #expect(field.value.frame.height <= field.value.font.lineHeight + 1)
+        host.traitOverrides.preferredContentSizeCategory = .large
+        window.layoutIfNeeded()
+        #expect(field.value.text == fullRate)
+    }
+
+    @Test("Receipt keeps a whole time range when the secondary fields need vertical reflow",
+          arguments: [CGFloat(375), CGFloat(402)], [8, 11])
+    func receiptTimeRangeReflowsAsAWhole(_ width: CGFloat, _ hour: Int) throws {
+        let job = try makeJob(cycle: .scheduled(.calendarMonthly))
+        let start = try date(year: 2026, month: 9, day: 10, hour: hour)
+        let shift = try Shift(id: UUID(), jobID: job.id, workTypeID: testWorkTypeID,
+                              start: start, end: start.addingTimeInterval(3600))
+        let subject = try makeSubject(job: job, shifts: [shift])
+        subject.viewController.traitOverrides.preferredContentSizeCategory = .large
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: width, height: 874))
+        window.rootViewController = subject.viewController
+        window.isHidden = false
+        defer { window.isHidden = true }
+        window.layoutIfNeeded()
+        let root = try requireRootView(subject.viewController)
+        let time: UILabel = try requireView(identifier: "overview.shift.\(shift.id.uuidString).time", in: root)
+        let duration: UILabel = try requireView(identifier: "overview.shift.\(shift.id.uuidString).duration", in: root)
+        #expect(time.bounds.height <= time.font.lineHeight + 1)
+        #expect(time.bounds.width + 0.5 >= (time.text ?? "").size(withAttributes: [.font: time.font as Any]).width)
+        let durationFrame = duration.convert(duration.bounds, to: time)
+        #expect(durationFrame.minY >= time.bounds.maxY - 0.5
+                || durationFrame.minX >= time.bounds.maxX - 0.5)
+    }
+
+    @Test("Accessibility history heading wraps words without a detached separator",
+          arguments: [CGFloat(375), CGFloat(402)])
+    func receiptHistoryHeadingKeepsItsCountBelow(_ width: CGFloat) throws {
+        let subject = try makeSubject(job: makeJob(cycle: .scheduled(.calendarMonthly)),
+                                      shifts: [makeShift(id: 1, month: 9, day: 10)])
+        subject.viewController.traitOverrides.preferredContentSizeCategory = .accessibilityExtraExtraLarge
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: width, height: 874))
+        window.rootViewController = subject.viewController
+        window.isHidden = false
+        defer { window.isHidden = true }
+        window.layoutIfNeeded()
+        let root = try requireRootView(subject.viewController)
+        let heading: UILabel = try requireView(identifier: "overview.shiftCount.label", in: root)
+        let count: UILabel = try requireView(identifier: "overview.shiftCount.value", in: root)
+        #expect(heading.text == OverviewStrings.allShiftHistory)
+        #expect(heading.text?.hasSuffix("·") == false)
+        #expect(heading.bounds.width <= width - 80 + 0.5)
+        #expect(heading.lineBreakMode == .byWordWrapping)
+        #expect(heading.bounds.height + 0.5 >= heading.sizeThatFits(
+            CGSize(width: heading.bounds.width, height: .greatestFiniteMagnitude)).height)
+        #expect(heading.convert(heading.bounds, to: root).maxY <= count.convert(count.bounds, to: root).minY)
+    }
+
+    @Test("Receipt edge is one resizing silhouette with actions below the paper")
+    func receiptEdgeResizesWithoutAccumulatingLayers() throws {
+        let paper = OverviewReceiptPaperView(frame: CGRect(x: 0, y: 0, width: 362, height: 540))
+        paper.layoutIfNeeded()
+        let shape = try #require(paper.layer.sublayers?.first as? CAShapeLayer)
+        #expect(paper.layer.sublayers?.count == 1)
+        #expect(shape.path?.boundingBoxOfPath.width == 362)
+        #expect((shape.path?.boundingBoxOfPath.height ?? 0) >= 528)
+        paper.frame.size = CGSize(width: 335, height: 860)
+        paper.layoutIfNeeded()
+        #expect(paper.layer.sublayers?.count == 1)
+        #expect(shape.path?.boundingBoxOfPath.width == 335)
+        #expect((shape.path?.boundingBoxOfPath.height ?? 0) >= 848)
+        #expect(shape.animationKeys()?.isEmpty != false)
+        #expect(paper.isAccessibilityElement == false)
+
+        let subject = try makeSubject(
+            job: makeJob(cycle: .scheduled(.calendarMonthly)),
+            shifts: [makeShift(id: 1, month: 9, day: 10)]
+        )
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+        window.rootViewController = subject.viewController
+        window.isHidden = false
+        defer { window.isHidden = true }
+        window.layoutIfNeeded()
+        let root = try requireRootView(subject.viewController)
+        let receipt: UIView = try requireView(identifier: "overview.receipt.paper", in: root)
+        let check: UIButton = try requireView(identifier: "overview.checkPaycheck", in: root)
+        let add: UIButton = try requireView(identifier: "overview.addShift", in: root)
+        let receiptFrame = receipt.convert(receipt.bounds, to: root)
+        let checkFrame = check.convert(check.bounds, to: root)
+        let addFrame = add.convert(add.bounds, to: root)
+        #expect(receiptFrame.maxY <= checkFrame.minY)
+        #expect(checkFrame.maxY <= addFrame.minY)
+    }
+
+    @Test("Receipt keeps its paper, columns and native actions inside wide and narrow viewports",
+          arguments: [CGFloat(402), CGFloat(375)])
+    func receiptMarginsMatchViewport(_ width: CGFloat) throws {
+        let shift = try makeShift(id: 1, month: 9, day: 10)
+        let subject = try makeSubject(job: makeJob(cycle: .scheduled(.calendarMonthly)), shifts: [shift])
+        subject.viewController.traitOverrides.preferredContentSizeCategory = .large
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: width, height: width == 375 ? 667 : 874))
+        window.rootViewController = subject.viewController
+        window.isHidden = false
+        defer { window.isHidden = true }
+        window.layoutIfNeeded()
+        let root = try requireRootView(subject.viewController)
+        let paper: UIView = try requireView(identifier: "overview.receipt.paper", in: root)
+        let row: UIView = try requireView(identifier: "overview.shift.\(shift.id.uuidString)", in: root)
+        let paperFrame = paper.convert(paper.bounds, to: root)
+        let rowFrame = row.convert(row.bounds, to: root)
+        #expect(abs(paperFrame.minX - 20) < 0.5)
+        #expect(abs(paperFrame.width - (width - 40)) < 0.5)
+        #expect(abs(rowFrame.minX - 40) < 0.5)
+        #expect(abs(rowFrame.width - (width - 80)) < 0.5)
+        #expect(rowFrame.height >= 92)
+        for identifier in ["overview.checkPaycheck", "overview.addShift"] {
+            let button: UIButton = try requireView(identifier: identifier, in: root)
+            let frame = button.convert(button.bounds, to: root)
+            #expect(abs(frame.minX - 20) < 0.5)
+            #expect(abs(frame.width - (width - 40)) < 0.5)
+            #expect(frame.height >= 50)
+        }
     }
 
     @Test("Tapping a scheduled rail item updates payroll while retaining global count and cards")
@@ -285,7 +598,7 @@ struct OverviewViewControllerTests {
         #expect(visibleFrontCardIdentifiers(in: root) == [older.id])
         #expect(try requireContent(subject.viewModel.state).selectedPeriod == initial.selectedPeriod)
         #expect(try requireContent(subject.viewModel.state).expectedBreakdown == initial.expectedBreakdown)
-        let amount: UILabel = try requireView(identifier: "overview.shift.\(older.id.uuidString).frontExpected", in: root)
+        let amount: UILabel = try requireView(identifier: "overview.shift.\(older.id.uuidString).expected", in: root)
         #expect(amount.text == OverviewFormatting.currency(
             Decimal(80), currencyCode: job.currencyCode, locale: displayLocale
         ))
@@ -355,13 +668,18 @@ struct OverviewViewControllerTests {
         subject.viewController.loadViewIfNeeded()
 
         #expect(shiftCardIdentifiers(in: try requireRootView(subject.viewController)) == [newer.id, older.id])
+        let newestRow: UIControl = try requireView(
+            identifier: "overview.shift.\(newer.id.uuidString)",
+            in: try requireRootView(subject.viewController)
+        )
+        newestRow.sendActions(for: .touchUpInside)
 
         let frontDate: UILabel = try requireView(
-            identifier: "overview.shift.\(newer.id.uuidString).frontDate",
+            identifier: "overview.shift.\(newer.id.uuidString).date",
             in: try requireRootView(subject.viewController)
         )
         let amount: UILabel = try requireView(
-            identifier: "overview.shift.\(newer.id.uuidString).frontExpected",
+            identifier: "overview.shift.\(newer.id.uuidString).expected",
             in: try requireRootView(subject.viewController)
         )
         let duration: UILabel = try requireView(
@@ -398,12 +716,13 @@ struct OverviewViewControllerTests {
         ))
         #expect(endpointsStart.text == expectedEndpoints.startTime)
         #expect(endpointsEnd.text == expectedEndpoints.endTime)
+        #expect(isEffectivelyHidden(endpoints) == false)
         #expect(endpoints.isAccessibilityElement == false)
         #expect(descendant(identifier: "overview.shift.\(newer.id.uuidString).dateBadge", in: try requireRootView(subject.viewController)) == nil)
     }
 
-    @Test("A covered Shift exposes its date, time, and expected contribution in the dedicated header")
-    func coveredShiftHeaderContainsIdentityWithoutDuration() throws {
+    @Test("Each collapsed ledger row exposes its own date, time, amount and duration")
+    func collapsedLedgerRowsPreserveShiftIdentity() throws {
         let job = try makeJob(cycle: .scheduled(.calendarMonthly))
         let older = try makeShift(id: 1, month: 9, day: 10)
         let newer = try makeShift(id: 2, month: 9, day: 20)
@@ -416,10 +735,6 @@ struct OverviewViewControllerTests {
         subject.viewController.loadViewIfNeeded()
         window.layoutIfNeeded()
 
-        let header: UIView = try requireView(
-            identifier: "overview.shift.\(older.id.uuidString).header",
-            in: try requireRootView(subject.viewController)
-        )
         let card: UIView = try requireView(
             identifier: "overview.shift.\(older.id.uuidString)",
             in: try requireRootView(subject.viewController)
@@ -445,37 +760,37 @@ struct OverviewViewControllerTests {
             in: try requireRootView(subject.viewController)
         )
 
-        let headerFrame = header.convert(header.bounds, to: card)
-        #expect(headerFrame.maxY <= 72.5)
-        #expect(time.isDescendant(of: header))
-        #expect(amount.isDescendant(of: header))
-        #expect(date.isDescendant(of: header))
+        #expect(card.bounds.height >= 92)
         #expect(date.text == OverviewFormatting.frontShiftDate(
             older,
             timeZoneIdentifier: job.timeZoneIdentifier,
             locale: displayLocale
         ))
-        #expect(duration.isDescendant(of: header) == false)
-        #expect(rate.isDescendant(of: header) == false)
-        #expect(descendant(identifier: "overview.shift.\(older.id.uuidString).dateBadge", in: try requireRootView(subject.viewController)) == nil)
-        let coveredEndpoints = descendant(
+        #expect(time.text == OverviewFormatting.compactShiftTimeRange(
+            older,
+            timeZoneIdentifier: job.timeZoneIdentifier,
+            locale: displayLocale
+        ))
+        #expect(amount.text == OverviewFormatting.currency(
+            160, currencyCode: job.currencyCode, locale: displayLocale
+        ))
+        #expect(duration.text == OverviewStrings.paidDuration(OverviewFormatting.duration(older.paidDuration)))
+        #expect(isEffectivelyHidden(rate))
+        let endpoints: UIView = try requireView(
             identifier: "overview.shift.\(older.id.uuidString).endpoints",
             in: try requireRootView(subject.viewController)
         )
-        #expect(coveredEndpoints == nil)
-        #expect(date.numberOfLines == 1)
-        for label in [time, amount] {
+        #expect(isEffectivelyHidden(endpoints))
+        for label in [date, time, amount, duration] {
             #expect(label.numberOfLines == 0)
-        }
-        for label in [date, time, amount] {
             #expect(label.bounds.height + 0.5 >= label.sizeThatFits(
                 CGSize(width: label.bounds.width, height: CGFloat.greatestFiniteMagnitude)
             ).height)
         }
     }
 
-    @Test("Covered and front Shift headers share the 20-point card grid")
-    func shiftHeadersUseCanonicalHorizontalInset() throws {
+    @Test("Ledger rows use a consistent 16-point content grid without overlap")
+    func ledgerRowsUseCanonicalHorizontalInset() throws {
         let older = try makeShift(id: 1, month: 9, day: 10)
         let newer = try makeShift(id: 2, month: 9, day: 20)
         let subject = try makeSubject(
@@ -494,20 +809,21 @@ struct OverviewViewControllerTests {
         let coveredDate: UILabel = try requireView(identifier: "overview.shift.\(older.id.uuidString).date", in: root)
         let coveredAmount: UILabel = try requireView(identifier: "overview.shift.\(older.id.uuidString).expected", in: root)
         let front: UIView = try requireView(identifier: "overview.shift.\(newer.id.uuidString)", in: root)
-        let frontDate: UILabel = try requireView(identifier: "overview.shift.\(newer.id.uuidString).frontDate", in: root)
-        let frontAmount: UILabel = try requireView(identifier: "overview.shift.\(newer.id.uuidString).frontExpected", in: root)
+        let frontDate: UILabel = try requireView(identifier: "overview.shift.\(newer.id.uuidString).date", in: root)
+        let frontAmount: UILabel = try requireView(identifier: "overview.shift.\(newer.id.uuidString).expected", in: root)
 
         for (card, date, amount) in [(covered, coveredDate, coveredAmount), (front, frontDate, frontAmount)] {
             let dateFrame = date.convert(date.bounds, to: card)
             let amountFrame = amount.convert(amount.bounds, to: card)
-            #expect(abs(dateFrame.minX - 20) <= 0.5)
-            #expect(abs((card.bounds.maxX - amountFrame.maxX) - 20) <= 0.5)
+            #expect(abs(dateFrame.minX - 16) <= 0.5)
+            #expect(abs((card.bounds.maxX - amountFrame.maxX) - 16) <= 0.5)
             #expect(dateFrame.maxX <= amountFrame.minX)
             #expect(dateFrame.minX >= card.bounds.minX)
             #expect(dateFrame.maxX <= card.bounds.maxX)
             #expect(amountFrame.minX >= card.bounds.minX)
             #expect(amountFrame.maxX <= card.bounds.maxX)
         }
+        #expect(front.convert(front.bounds, to: root).maxY <= covered.convert(covered.bounds, to: root).minY)
     }
 
     @Test("Visible Shift contribution labels share a trailing column")
@@ -548,8 +864,8 @@ struct OverviewViewControllerTests {
             ),
             (
                 requireView(identifier: "overview.shift.\(ids[2].uuidString)", in: view),
-                requireView(identifier: "overview.shift.\(ids[2].uuidString).frontDate", in: view),
-                requireView(identifier: "overview.shift.\(ids[2].uuidString).frontExpected", in: view),
+                requireView(identifier: "overview.shift.\(ids[2].uuidString).date", in: view),
+                requireView(identifier: "overview.shift.\(ids[2].uuidString).expected", in: view),
                 amounts[2]
             )
         ]
@@ -566,7 +882,7 @@ struct OverviewViewControllerTests {
             let dateFrame = date.convert(date.bounds, to: card)
             #expect(label.text == amount)
             #expect(label.textAlignment == .right)
-            #expect(abs((card.bounds.maxX - amountFrame.maxX) - 20) <= 0.5)
+            #expect(abs((card.bounds.maxX - amountFrame.maxX) - 16) <= 0.5)
             #expect(amountFrame.minX >= card.bounds.minX)
             #expect(amountFrame.maxX <= card.bounds.maxX)
             #expect(dateFrame.maxX <= amountFrame.minX)
@@ -579,38 +895,35 @@ struct OverviewViewControllerTests {
         }
     }
 
-    @Test("Only the fully visible front Shift renders the endpoints")
-    func onlyFrontShiftRendersEndpoints() throws {
+    @Test("Every ledger row has independent details revealed only when expanded")
+    func onlyExpandedLedgerRowShowsEndpoints() throws {
         let job = try makeJob(cycle: .scheduled(.calendarMonthly))
         let older = try makeShift(id: 1, month: 9, day: 10)
         let newer = try makeShift(id: 2, month: 9, day: 20)
         let subject = try makeSubject(job: job, shifts: [older, newer])
         subject.viewController.loadViewIfNeeded()
 
-        let frontEndpoints: UIView = try requireView(
+        let newerEndpoints: UIView = try requireView(
             identifier: "overview.shift.\(newer.id.uuidString).endpoints",
             in: try requireRootView(subject.viewController)
         )
-        let coveredEndpoints = descendant(
+        let olderEndpoints: UIView = try requireView(
             identifier: "overview.shift.\(older.id.uuidString).endpoints",
             in: try requireRootView(subject.viewController)
         )
-        let frontHeader: UIView = try requireView(
-            identifier: "overview.shift.\(newer.id.uuidString).frontContent",
+        #expect(isEffectivelyHidden(newerEndpoints))
+        #expect(isEffectivelyHidden(olderEndpoints))
+        let olderRow: UIControl = try requireView(
+            identifier: "overview.shift.\(older.id.uuidString)",
             in: try requireRootView(subject.viewController)
         )
-        let coveredHeader: UIView = try requireView(
-            identifier: "overview.shift.\(older.id.uuidString).header",
-            in: try requireRootView(subject.viewController)
-        )
-
-        #expect(isEffectivelyHidden(frontEndpoints) == false)
-        #expect(coveredEndpoints == nil)
-        #expect(isEffectivelyHidden(frontHeader) == false)
-        #expect(isEffectivelyHidden(coveredHeader) == false)
+        olderRow.sendActions(for: .touchUpInside)
+        olderRow.sendActions(for: .touchUpInside)
+        #expect(isEffectivelyHidden(olderEndpoints) == false)
+        #expect(isEffectivelyHidden(newerEndpoints))
     }
 
-    @Test("Front ticket has two readable endpoints and preserves textual break information",
+    @Test("Expanded ledger record has two readable endpoints and preserves break information",
           arguments: [false, true])
     func frontShiftEndpointsAdaptToContentSize(_ accessibilitySize: Bool) throws {
         let job = try makeJob(cycle: .scheduled(.calendarMonthly))
@@ -636,17 +949,19 @@ struct OverviewViewControllerTests {
         window.layoutIfNeeded()
 
         let prefix = "overview.shift.\(shift.id.uuidString)"
+        let card: UIControl = try requireView(identifier: prefix, in: try requireRootView(subject.viewController))
+        card.sendActions(for: .touchUpInside)
+        card.sendActions(for: .touchUpInside)
+        window.layoutIfNeeded()
         let endpoints: UIView = try requireView(identifier: "\(prefix).endpoints", in: try requireRootView(subject.viewController))
         let startTime: UILabel = try requireView(identifier: "\(prefix).endpoints.start", in: endpoints)
         let endTime: UILabel = try requireView(identifier: "\(prefix).endpoints.end", in: endpoints)
         let startDate: UILabel = try requireView(identifier: "\(prefix).endpoints.startDate", in: endpoints)
         let endDate: UILabel = try requireView(identifier: "\(prefix).endpoints.endDate", in: endpoints)
         let duration: UILabel = try requireView(identifier: "\(prefix).duration", in: try requireRootView(subject.viewController))
-        let unpaidBreak: UILabel = try requireView(identifier: "\(prefix).break", in: try requireRootView(subject.viewController))
-        let card: UIControl = try requireView(identifier: prefix, in: try requireRootView(subject.viewController))
+        let unpaidBreak: UILabel = try requireView(identifier: "\(prefix).detail.break", in: try requireRootView(subject.viewController))
 
         #expect(descendant(identifier: "\(prefix).timeline", in: card) == nil)
-        #expect(endpoints.accessibilityElementsHidden)
         #expect(endpoints.isAccessibilityElement == false)
         #expect(isEffectivelyHidden(startDate))
         #expect(isEffectivelyHidden(endDate))
@@ -675,7 +990,7 @@ struct OverviewViewControllerTests {
         #expect(endTime.isAccessibilityElement == false)
     }
 
-    @Test("Front Shift endpoints preserves the formatted local start and end times")
+    @Test("Expanded ledger endpoints preserve local start and end times")
     func frontShiftEndpointsPreservesLocalDateTimeContext() throws {
         let job = try makeJob(cycle: .scheduled(.calendarMonthly))
         let start = try date(year: 2026, month: 9, day: 10, hour: 22)
@@ -688,6 +1003,12 @@ struct OverviewViewControllerTests {
         )
         let subject = try makeSubject(job: job, shifts: [overnight])
         subject.viewController.loadViewIfNeeded()
+        let card: UIControl = try requireView(
+            identifier: "overview.shift.\(overnight.id.uuidString)",
+            in: try requireRootView(subject.viewController)
+        )
+        card.sendActions(for: .touchUpInside)
+        card.sendActions(for: .touchUpInside)
 
         let startTime: UILabel = try requireView(
             identifier: "overview.shift.\(overnight.id.uuidString).endpoints.start",
@@ -716,10 +1037,6 @@ struct OverviewViewControllerTests {
         #expect(endDate.text == expectedEndpoints.endDate)
         #expect(isEffectivelyHidden(startDate) == false)
         #expect(isEffectivelyHidden(endDate) == false)
-        let card: UIControl = try requireView(
-            identifier: "overview.shift.\(overnight.id.uuidString)",
-            in: try requireRootView(subject.viewController)
-        )
         let fullDate = try #require(OverviewFormatting.shiftDate(
             overnight,
             timeZoneIdentifier: job.timeZoneIdentifier,
@@ -734,8 +1051,8 @@ struct OverviewViewControllerTests {
         #expect(card.accessibilityLabel?.contains(fullTimeRange) == true)
     }
 
-    @Test("Large front-card contribution grows without a fixed-height clip")
-    func largeFrontCardContributionCanGrowVertically() throws {
+    @Test("Large ledger contribution grows without clipping or colliding with its date")
+    func largeLedgerContributionCanGrowVertically() throws {
         let id = UUID(uuid: (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1))
         let view = OverviewView(frame: .zero)
         let host = UIViewController()
@@ -753,13 +1070,13 @@ struct OverviewViewControllerTests {
         )
         window.layoutIfNeeded()
 
-        let amount: UILabel = try requireView(identifier: "overview.shift.\(id.uuidString).frontExpected", in: view)
-        let date: UILabel = try requireView(identifier: "overview.shift.\(id.uuidString).frontDate", in: view)
+        let amount: UILabel = try requireView(identifier: "overview.shift.\(id.uuidString).expected", in: view)
+        let date: UILabel = try requireView(identifier: "overview.shift.\(id.uuidString).date", in: view)
         #expect(amount.numberOfLines == 0)
         #expect(amount.bounds.height + 0.5 >= amount.sizeThatFits(
             CGSize(width: amount.bounds.width, height: CGFloat.greatestFiniteMagnitude)
         ).height)
-        #expect(amount.frame.intersects(date.frame) == false)
+        #expect(amount.convert(amount.bounds, to: view).minY >= date.convert(date.bounds, to: view).maxY)
     }
 
     @Test("Per-shift card selection drives payroll while retaining every persisted card")
@@ -826,18 +1143,31 @@ struct OverviewViewControllerTests {
         let subject = try makeSubject(job: job, shifts: [withoutBreak, withBreak])
 
         subject.viewController.loadViewIfNeeded()
+        let row: UIControl = try requireView(
+            identifier: "overview.shift.\(withBreak.id.uuidString)",
+            in: try requireRootView(subject.viewController)
+        )
+        row.sendActions(for: .touchUpInside)
+        row.sendActions(for: .touchUpInside)
 
         let breakLabel: UILabel = try requireView(
-            identifier: "overview.shift.\(withBreak.id.uuidString).break",
+            identifier: "overview.shift.\(withBreak.id.uuidString).detail.break",
             in: try requireRootView(subject.viewController)
         )
         let absentBreakLabel: UILabel = try requireView(
-            identifier: "overview.shift.\(withoutBreak.id.uuidString).break",
+            identifier: "overview.shift.\(withoutBreak.id.uuidString).detail.break",
             in: try requireRootView(subject.viewController)
         )
         #expect(breakLabel.isHidden == false)
         #expect(breakLabel.text?.contains(OverviewFormatting.duration(30 * 60)) == true)
-        #expect(absentBreakLabel.isHidden)
+        let withoutBreakRow: UIControl = try requireView(
+            identifier: "overview.shift.\(withoutBreak.id.uuidString)",
+            in: try requireRootView(subject.viewController)
+        )
+        withoutBreakRow.sendActions(for: .touchUpInside)
+        withoutBreakRow.sendActions(for: .touchUpInside)
+        #expect(withoutBreakRow.accessibilityValue == OverviewStrings.expanded)
+        #expect(isEffectivelyHidden(absentBreakLabel))
     }
 
     @Test("Post-save selected Shift card keeps its persisted identity and accessibility selection")
@@ -857,8 +1187,8 @@ struct OverviewViewControllerTests {
         #expect(hasFixedHeight(card) == false)
     }
 
-    @Test("Tapping a Shift makes that persisted Shift the only full deck front")
-    func shiftCardTapControlsSingleExpandedDetailAndDeckFront() throws {
+    @Test("Tapping a ledger row selects and expands only that persisted Shift")
+    func ledgerRowTapControlsSingleExpandedDetail() throws {
         let job = try makeJob(cycle: .scheduled(.calendarMonthly))
         let older = try makeShift(id: 1, month: 9, day: 10)
         let middle = try makeShift(id: 2, month: 9, day: 15)
@@ -866,11 +1196,11 @@ struct OverviewViewControllerTests {
         let subject = try makeSubject(job: job, shifts: [older, middle, newer])
         subject.viewController.loadViewIfNeeded()
 
-        let newerFront: UIView = try requireView(
-            identifier: "overview.shift.\(newer.id.uuidString).frontContent",
+        let newerRow: UIControl = try requireView(
+            identifier: "overview.shift.\(newer.id.uuidString)",
             in: try requireRootView(subject.viewController)
         )
-        #expect(isEffectivelyHidden(newerFront) == false)
+        #expect(isEffectivelyHidden(newerRow) == false)
         #expect(visibleFrontCardIdentifiers(in: try requireRootView(subject.viewController)) == [newer.id])
 
         let middleCard: UIControl = try requireView(
@@ -879,20 +1209,12 @@ struct OverviewViewControllerTests {
         )
         middleCard.sendActions(for: .touchUpInside)
 
-        let middleFront: UIView = try requireView(
-            identifier: "overview.shift.\(middle.id.uuidString).frontContent",
-            in: try requireRootView(subject.viewController)
-        )
-        let newerCovered: UIView = try requireView(
-            identifier: "overview.shift.\(newer.id.uuidString).header",
-            in: try requireRootView(subject.viewController)
-        )
         let middleDetail: UIView = try requireView(
             identifier: "overview.shift.\(middle.id.uuidString).detail.paidTime",
             in: try requireRootView(subject.viewController)
         )
-        #expect(isEffectivelyHidden(middleFront) == false)
-        #expect(isEffectivelyHidden(newerCovered) == false)
+        #expect(isEffectivelyHidden(middleCard) == false)
+        #expect(isEffectivelyHidden(newerRow) == false)
         #expect(isEffectivelyHidden(middleDetail))
         #expect(middleCard.accessibilityHint == OverviewStrings.expandShift)
         middleCard.sendActions(for: .touchUpInside)
@@ -905,15 +1227,11 @@ struct OverviewViewControllerTests {
         )
         olderCard.sendActions(for: .touchUpInside)
 
-        let olderFront: UIView = try requireView(
-            identifier: "overview.shift.\(older.id.uuidString).frontContent",
-            in: try requireRootView(subject.viewController)
-        )
         let newerCard: UIControl = try requireView(
             identifier: "overview.shift.\(newer.id.uuidString)",
             in: try requireRootView(subject.viewController)
         )
-        #expect(isEffectivelyHidden(olderFront) == false)
+        #expect(isEffectivelyHidden(olderCard) == false)
         #expect(visibleFrontCardIdentifiers(in: try requireRootView(subject.viewController)) == [older.id])
         #expect(olderCard.accessibilityTraits.contains(.selected))
         #expect(newerCard.accessibilityTraits.contains(.selected) == false)
@@ -941,6 +1259,7 @@ struct OverviewViewControllerTests {
         let job = try makeJob(cycle: .scheduled(.calendarMonthly))
         let shift = try makeShift(id: 1, month: 9, day: 20)
         let subject = try makeSubject(job: job, shifts: [shift])
+        subject.viewController.traitOverrides.preferredContentSizeCategory = .large
         let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
         window.rootViewController = subject.viewController
         window.isHidden = false
@@ -978,13 +1297,13 @@ struct OverviewViewControllerTests {
         #expect(card.accessibilityCustomActions?.map(\.name) == [OverviewStrings.editShift])
 
         let frontDate: UILabel = try requireView(
-            identifier: "overview.shift.\(shift.id.uuidString).frontDate",
+            identifier: "overview.shift.\(shift.id.uuidString).date",
             in: try requireRootView(subject.viewController)
         )
         let headerFrame = frontDate.convert(frontDate.bounds, to: card)
         let editFrame = editButton.convert(editButton.bounds, to: card)
-        #expect(abs(headerFrame.minY - 20) <= 0.5)
-        #expect(abs((card.bounds.maxY - editFrame.maxY) - 8) <= 0.5)
+        #expect(abs(headerFrame.minY - 16) <= 0.5)
+        #expect(abs((card.bounds.maxY - editFrame.maxY) - 16) <= 0.5)
         #expect(headerFrame.minY >= card.bounds.minY)
         #expect(editFrame.maxY <= card.bounds.maxY)
 
@@ -1009,6 +1328,16 @@ struct OverviewViewControllerTests {
         let ordinaryPoint = CGPoint(x: card.bounds.midX, y: 12)
         #expect(card.hitTest(ordinaryPoint, with: nil) === card)
 
+        #expect(editButton.configuration?.image != nil)
+        subject.viewController.traitOverrides.preferredContentSizeCategory = .accessibilityExtraExtraLarge
+        window.layoutIfNeeded()
+        #expect(editButton.configuration?.image == nil)
+        #expect(editButton.configuration?.title == OverviewStrings.editShift)
+        #expect(editButton.bounds.height >= 44)
+        subject.viewController.traitOverrides.preferredContentSizeCategory = .large
+        window.layoutIfNeeded()
+        #expect(editButton.configuration?.image != nil)
+
         card.sendActions(for: .touchUpInside)
         #expect(editButton.isHidden)
         #expect(card.accessibilityTraits.contains(.selected))
@@ -1017,8 +1346,8 @@ struct OverviewViewControllerTests {
         #expect(card.accessibilityCustomActions?.isEmpty != false)
     }
 
-    @Test("Covered Shift strips resolve hit testing to their own card before making it front")
-    func coveredShiftStripsReceiveTouches() throws {
+    @Test("Each ledger record receives taps throughout its own nonoverlapping row")
+    func ledgerRowsReceiveTouches() throws {
         let job = try makeJob(cycle: .scheduled(.calendarMonthly))
         let oldest = try makeShift(id: 1, month: 9, day: 10)
         let middle = try makeShift(id: 2, month: 9, day: 15)
@@ -1060,8 +1389,8 @@ struct OverviewViewControllerTests {
         #expect(visibleFrontCardIdentifiers(in: try requireRootView(subject.viewController)) == [oldest.id])
     }
 
-    @Test("Normal Shift history is a static deck while accessibility size remains a vertical accordion")
-    func shiftStackAdaptsForAccessibilityContentSize() throws {
+    @Test("Ledger rows remain separate at normal and accessibility content sizes")
+    func ledgerRowsAdaptForAccessibilityContentSize() throws {
         let job = try makeJob(cycle: .scheduled(.calendarMonthly))
         let shifts = try [
             makeShift(id: 1, month: 9, day: 10),
@@ -1082,15 +1411,16 @@ struct OverviewViewControllerTests {
             try requireView(identifier: "overview.shift.\($0.id.uuidString)", in: try requireRootView(subject.viewController))
         }
         let deck: UIView = try requireView(identifier: "overview.shiftStack", in: try requireRootView(subject.viewController))
-        expectBackgroundDeck(cards, in: deck, window: window)
+        expectLedgerRowsInOrder(cards, in: deck)
 
         subject.viewController.traitOverrides.preferredContentSizeCategory = .accessibilityExtraExtraExtraLarge
         window.layoutIfNeeded()
         try requireRootView(subject.viewController).layoutIfNeeded()
         expectAccessibleDocumentOrder(cards, in: window)
+        expectLedgerRowsInOrder(cards, in: deck)
     }
 
-    @Test("Card accessibility reveals follow reorder, expansion and ancestor scrolling", arguments: [false, true])
+    @Test("Receipt rows keep accessible identities and touch regions through expansion and scrolling", arguments: [false, true])
     func shiftAccessibilityRegionsFollowVisibleHierarchy(accessibleList: Bool) throws {
         let shifts = try [
             makeShift(id: 1, month: 9, day: 10),
@@ -1113,50 +1443,45 @@ struct OverviewViewControllerTests {
             try requireView(identifier: "overview.shift.\($0.id.uuidString)", in: root)
         }
 
-        func expectVisibleRegions() {
-            let ordered = cards.sorted { $0.frame.minY < $1.frame.minY }
-            for (index, card) in ordered.enumerated() {
-                var region = card.frame
-                if !accessibleList, index + 1 < ordered.count {
-                    region.size.height = min(region.maxY, ordered[index + 1].frame.minY) - region.minY
-                }
-                let expected = UIAccessibility.convertToScreenCoordinates(region, in: deck)
-                let actual = card.accessibilityFrame
-                #expect(abs(actual.minX - expected.minX) < 0.5)
-                #expect(abs(actual.minY - expected.minY) < 0.5)
-                #expect(abs(actual.width - expected.width) < 0.5)
-                #expect(abs(actual.height - expected.height) < 0.5)
-                #expect(actual.contains(card.accessibilityActivationPoint))
+        func expectAccessibleRows() {
+            #expect((deck.accessibilityElements ?? []).count == cards.count)
+            for (index, card) in cards.enumerated() {
+                #expect(card.isAccessibilityElement)
+                #expect(card.accessibilityIdentifier == "overview.shift.\(shifts[index].id.uuidString)")
+                #expect(card.accessibilityLabel?.contains(OverviewStrings.exactContribution) == false)
+                #expect(card.accessibilityLabel?.contains(PaycheckResultStrings.shiftExpected) == true)
+                #expect(card.bounds.width > 0)
+                #expect(card.bounds.height >= 92)
+                #expect(card.accessibilityTraits.contains(.button))
             }
+            let ordered = cards.sorted { $0.frame.minY < $1.frame.minY }
+            expectAccessibleDocumentOrder(ordered, in: window)
         }
 
-        expectVisibleRegions()
-        // Select another card, then expand and collapse it, preserving the visible-region policy.
+        expectAccessibleRows()
+        // Select another row, then expand and collapse it, retaining identity and order.
         for _ in 0..<3 {
             cards[1].sendActions(for: .touchUpInside)
             window.layoutIfNeeded()
-            expectVisibleRegions()
+            expectAccessibleRows()
         }
 
-        let before = cards.map(\.accessibilityFrame)
-        let pointsBefore = cards.map(\.accessibilityActivationPoint)
+        let before = cards.map { $0.convert($0.bounds, to: window) }
         let offsetBefore = scroll.contentOffset
         scroll.setContentOffset(CGPoint(x: offsetBefore.x, y: offsetBefore.y + 40), animated: false)
-        // Query immediately, without a deck layout pass or explicit accessibility refresh.
         let delta = scroll.contentOffset.y - offsetBefore.y
         #expect(delta != 0)
         for (index, card) in cards.enumerated() {
-            #expect(abs(card.accessibilityFrame.minY - (before[index].minY - delta)) < 0.5)
-            #expect(abs(card.accessibilityActivationPoint.y - (pointsBefore[index].y - delta)) < 0.5)
+            #expect(abs(card.convert(card.bounds, to: window).minY - (before[index].minY - delta)) < 0.5)
         }
-        expectVisibleRegions()
+        expectAccessibleRows()
 
         root.transform = CGAffineTransform(translationX: 13, y: 17)
-        expectVisibleRegions()
+        expectAccessibleRows()
     }
 
-    @Test("Accessibility Shift dates fill card headers without character wrapping")
-    func accessibilityShiftHeadersUseFullWidth() throws {
+    @Test("Accessibility ledger rows place date and amount vertically without clipping")
+    func accessibilityLedgerHeadingsUseFullWidth() throws {
         let older = try makeShift(id: 1, month: 9, day: 10)
         let newer = try makeShift(id: 2, month: 9, day: 20)
         let subject = try makeSubject(
@@ -1178,19 +1503,20 @@ struct OverviewViewControllerTests {
             identifier: "overview.shift.\(older.id.uuidString).date", in: root
         )
         let frontDate: UILabel = try requireView(
-            identifier: "overview.shift.\(newer.id.uuidString).frontDate", in: root
+            identifier: "overview.shift.\(newer.id.uuidString).date", in: root
         )
         let coveredAmount: UILabel = try requireView(
             identifier: "overview.shift.\(older.id.uuidString).expected", in: root
         )
         let frontAmount: UILabel = try requireView(
-            identifier: "overview.shift.\(newer.id.uuidString).frontExpected", in: root
+            identifier: "overview.shift.\(newer.id.uuidString).expected", in: root
         )
         for (date, amount) in [(coveredDate, coveredAmount), (frontDate, frontAmount)] {
-            #expect(date.numberOfLines == 1)
+            #expect(date.numberOfLines == 0)
             #expect(date.bounds.width > 0)
-            #expect(date.bounds.width + 0.5 >= date.intrinsicContentSize.width)
-            #expect(date.bounds.width >= amount.bounds.width - 1)
+            #expect(date.bounds.height + 0.5 >= date.sizeThatFits(
+                CGSize(width: date.bounds.width, height: CGFloat.greatestFiniteMagnitude)
+            ).height)
             let dateFrame = date.convert(date.bounds, to: window)
             let amountFrame = amount.convert(amount.bounds, to: window)
             #expect(dateFrame.maxY <= amountFrame.minY)
@@ -1249,8 +1575,8 @@ struct OverviewViewControllerTests {
         #expect(receivedShift == shift)
     }
 
-    @Test("One Shift stays full while two and three Shifts layer background tops above a lower front card")
-    func shiftStackUsesStaticDeckGeometryForEachHistorySize() throws {
+    @Test("One, two and three ledger records have full-width nonoverlapping rows")
+    func ledgerUsesContentDrivenRowsForEachHistorySize() throws {
         for count in 1...3 {
             let ids = (1...count).map {
                 UUID(uuid: (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, UInt8($0)))
@@ -1272,18 +1598,58 @@ struct OverviewViewControllerTests {
                 try requireView(identifier: "overview.shift.\($0.uuidString)", in: view)
             }
 
-            if count == 1 {
-                let cardFrame = cards[0].convert(cards[0].bounds, to: deck)
-                #expect(abs(cardFrame.minY - deck.bounds.minY) < 0.5)
-                #expect(abs(cardFrame.maxY - deck.bounds.maxY) < 0.5)
-            } else {
-                expectBackgroundDeck(cards, in: deck, window: window)
-            }
+            expectLedgerRowsInOrder(cards, in: deck)
+            #expect(cards.allSatisfy { $0.bounds.height >= 92 })
         }
     }
 
-    @Test("Selected or missing selection determines the visual front without changing canonical card order")
-    func shiftStackUsesSelectedCardOrNewestFallbackAsVisualFront() throws {
+    @Test("Twelve ledger records scroll without overlap and keep both actions reachable")
+    func twelveLedgerRowsScrollWithReachableActions() throws {
+        let ids = (1...12).map {
+            UUID(uuid: (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, UInt8($0)))
+        }
+        let view = OverviewView(frame: .zero)
+        let host = UIViewController()
+        host.view = view
+        host.traitOverrides.preferredContentSizeCategory = .large
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+        window.rootViewController = host
+        window.isHidden = false
+        defer { window.isHidden = true }
+
+        renderPresentationCards(ids: ids, selectedID: nil, in: view)
+        window.layoutIfNeeded()
+        let ledger: UIView = try requireView(identifier: "overview.shiftStack", in: view)
+        let rows: [UIView] = try ids.map {
+            try requireView(identifier: "overview.shift.\($0.uuidString)", in: view)
+        }
+        expectLedgerRowsInOrder(rows, in: ledger)
+        #expect(shiftCardIdentifiers(in: view) == ids)
+
+        let scroll: UIScrollView = try requireView(identifier: "overview.pageScroll", in: view)
+        let check: UIButton = try requireView(identifier: "overview.checkPaycheck", in: view)
+        let add: UIButton = try requireView(identifier: "overview.addShift", in: view)
+        #expect(scroll.contentSize.height > scroll.bounds.height)
+        #expect(isEffectivelyHidden(check) == false)
+        #expect(check.bounds.height >= 50)
+        scroll.setContentOffset(CGPoint(x: 0, y: max(0, scroll.contentSize.height - scroll.bounds.height)), animated: false)
+        window.layoutIfNeeded()
+        let lastFrame = rows[11].convert(rows[11].bounds, to: window)
+        let addFrame = add.convert(add.bounds, to: window)
+        #expect(lastFrame.maxY <= addFrame.minY)
+        #expect(addFrame.maxY <= window.bounds.maxY)
+        #expect(add.bounds.height >= 50)
+
+        renderPresentationCards(ids: ids, selectedID: ids[7], isExpanded: true, in: view)
+        window.layoutIfNeeded()
+        let edit: UIButton = try requireView(identifier: "overview.shift.\(ids[7].uuidString).edit", in: view)
+        #expect(isEffectivelyHidden(edit) == false)
+        #expect(edit.bounds.height >= 44)
+        expectLedgerRowsInOrder(rows, in: ledger)
+    }
+
+    @Test("Selection highlights one ledger row without changing reverse-chronological order")
+    func ledgerSelectionPreservesChronologicalOrder() throws {
         let ids = (1...4).map {
             UUID(uuid: (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, UInt8($0)))
         }
@@ -1303,16 +1669,19 @@ struct OverviewViewControllerTests {
         }
         let deck: UIView = try requireView(identifier: "overview.shiftStack", in: view)
         #expect(visibleFrontCardIdentifiers(in: view) == [ids[0]])
-        expectBackgroundDeck([cards[0], cards[1], cards[2], cards[3]], in: deck, window: window)
+        expectLedgerRowsInOrder(cards, in: deck)
 
         renderPresentationCards(ids: ids, selectedID: ids[2], in: view)
         window.layoutIfNeeded()
         #expect(visibleFrontCardIdentifiers(in: view) == [ids[2]])
-        expectBackgroundDeck([cards[2], cards[0], cards[1], cards[3]], in: deck, window: window)
+        expectLedgerRowsInOrder(cards, in: deck)
+        #expect(cards[2].accessibilityTraits.contains(.selected))
+        #expect(cards[0].accessibilityTraits.contains(.selected) == false)
 
         renderPresentationCards(ids: ids, selectedID: UUID(), in: view)
         window.layoutIfNeeded()
         #expect(visibleFrontCardIdentifiers(in: view) == [ids[0]])
+        expectLedgerRowsInOrder(cards, in: deck)
     }
 
     @Test("All six Wada Shift surfaces have exact identical Light and Dark sRGB fills")
@@ -1366,11 +1735,9 @@ struct OverviewViewControllerTests {
         }
     }
 
-    @Test("Pistachio Shift card uses opaque foreground for text, endpoints, and Edit")
-    func pistachioCardTextIsOpaque() throws {
-        let id = try #require((1...255).map { value in
-            UUID(uuid: (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, UInt8(value)))
-        }.first { ShiftLedgerColors.shiftSurfaceRoles(for: [$0]) == [.pistachioGreen] })
+    @Test("Selected ledger row uses neutral surface and semantic text colors")
+    func selectedLedgerRowUsesSemanticColors() throws {
+        let id = UUID(uuid: (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1))
         let view = OverviewView(frame: .zero)
         let host = UIViewController()
         host.view = view
@@ -1383,11 +1750,15 @@ struct OverviewViewControllerTests {
 
         let prefix = "overview.shift.\(id.uuidString)"
         let card: UIView = try requireView(identifier: prefix, in: view)
-        let foreground = try colorComponents(ShiftLedgerColors.shiftForeground(for: .pistachioGreen), traits: window.traitCollection)
+        let foreground = try colorComponents(ShiftLedgerColors.textPrimary, traits: window.traitCollection)
+        let surface = try colorComponents(OverviewReceiptPaperView.selectedSurface, traits: window.traitCollection)
+        let cardSurface = try colorComponents(try #require(card.backgroundColor), traits: window.traitCollection)
+        #expect(abs(cardSurface.red - surface.red) < 0.000001)
+        #expect(abs(cardSurface.green - surface.green) < 0.000001)
+        #expect(abs(cardSurface.blue - surface.blue) < 0.000001)
         for identifier in [
-            "\(prefix).frontDate",
-            "\(prefix).frontExpected",
-            "\(prefix).duration",
+            "\(prefix).date",
+            "\(prefix).expected",
             "\(prefix).detail.rate",
             "\(prefix).endpoints.start"
         ] {
@@ -1404,9 +1775,10 @@ struct OverviewViewControllerTests {
             try #require(edit.configuration?.baseForegroundColor),
             traits: window.traitCollection
         )
-        #expect(abs(editColor.red - foreground.red) < 0.000001)
-        #expect(abs(editColor.green - foreground.green) < 0.000001)
-        #expect(abs(editColor.blue - foreground.blue) < 0.000001)
+        let accent = try colorComponents(ShiftLedgerColors.accentPrimary, traits: window.traitCollection)
+        #expect(abs(editColor.red - accent.red) < 0.000001)
+        #expect(abs(editColor.green - accent.green) < 0.000001)
+        #expect(abs(editColor.blue - accent.blue) < 0.000001)
         #expect(abs(editColor.alpha - 1) < 0.000001)
     }
 
@@ -1472,7 +1844,7 @@ struct OverviewViewControllerTests {
             in: root
         )
         #expect(isEffectivelyHidden(label))
-        #expect(label.text == OverviewStrings.shiftHistoryEmpty)
+        #expect(label.text == OverviewStrings.noSavedShifts)
         #expect(shiftCardIdentifiers(in: root) == [shift.id])
         let count: UILabel = try requireView(identifier: "overview.shiftCount.value", in: root)
         #expect(count.text == "1")
@@ -1667,8 +2039,12 @@ struct OverviewViewControllerTests {
     func perShiftNoDataRendersEmptyState() throws {
         let job = try makeJob(cycle: .perShift)
         let subject = try makeSubject(job: job, shifts: [])
-
-        subject.viewController.loadViewIfNeeded()
+        subject.viewController.traitOverrides.preferredContentSizeCategory = .large
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 375, height: 667))
+        window.rootViewController = subject.viewController
+        window.isHidden = false
+        defer { window.isHidden = true }
+        window.layoutIfNeeded()
 
         let container: UIView = try requireView(
             identifier: "overview.empty.container",
@@ -1685,6 +2061,14 @@ struct OverviewViewControllerTests {
         #expect(isEffectivelyHidden(container) == false)
         #expect(title.text == OverviewStrings.emptyTitle)
         #expect(isEffectivelyHidden(addButton) == false)
+        let root = try requireRootView(subject.viewController)
+        let paper: OverviewReceiptPaperView = try requireView(identifier: "overview.receipt.paper", in: root)
+        let gross: UIView = try requireView(identifier: "overview.expectedGross.hero", in: root)
+        #expect(isEffectivelyHidden(paper) == false)
+        #expect(paper.bounds.height > 12)
+        #expect(paper.layer.sublayers?.compactMap { $0 as? CAShapeLayer }.count == 1)
+        #expect(isEffectivelyHidden(gross)) // No fictional payroll amount without a PerShift selection.
+        #expect(paper.convert(paper.bounds, to: root).maxY < addButton.convert(addButton.bounds, to: root).minY)
     }
 
     @Test("Per-shift empty state gives Add Shift primary emphasis")
@@ -2035,12 +2419,12 @@ struct OverviewViewControllerTests {
     }
 
     private func visibleFrontCardIdentifiers(in view: UIView) -> [UUID] {
-        shiftCardIdentifiers(in: view).filter { id in
-            guard let front = descendant(identifier: "overview.shift.\(id.uuidString).frontContent", in: view) else {
-                return false
-            }
-            return isEffectivelyHidden(front) == false
+        let ids = shiftCardIdentifiers(in: view)
+        let selected = ids.first { id in
+            descendant(identifier: "overview.shift.\(id.uuidString)", in: view)?
+                .accessibilityTraits.contains(.selected) == true
         }
+        return [selected ?? ids.first].compactMap { $0 }
     }
 
     private func visibleSlicePoints(for card: UIView, in deck: UIView) -> [CGPoint] {
@@ -2056,32 +2440,32 @@ struct OverviewViewControllerTests {
         }
     }
 
-    private func expectBackgroundDeck(_ cards: [UIView], in deck: UIView, window: UIWindow) {
-        let zIndices = cards.compactMap { deck.subviews.firstIndex(of: $0) }
-        #expect(zIndices.count == cards.count)
-
-        let frontFrame = cards[0].convert(cards[0].bounds, to: deck)
-        #expect(abs(frontFrame.maxY - deck.bounds.maxY) < 0.5)
-
-        for (frontward, backgroundward) in zip(cards, cards.dropFirst()) {
-            let frontwardFrame = frontward.convert(frontward.bounds, to: deck)
-            let backgroundFrame = backgroundward.convert(backgroundward.bounds, to: deck)
-            #expect(backgroundFrame.minY < frontwardFrame.minY)
-            #expect(backgroundFrame.maxY > frontwardFrame.minY)
-            let exposedTopHeight = frontwardFrame.minY - backgroundFrame.minY
-            #expect((56...80).contains(Int(exposedTopHeight.rounded())))
+    private func expectLedgerRowsInOrder(_ cards: [UIView], in ledger: UIView) {
+        guard let first = cards.first else { return }
+        let firstFrame = first.convert(first.bounds, to: ledger)
+        #expect(abs(firstFrame.minY - ledger.bounds.minY) < 0.5)
+        for card in cards {
+            let frame = card.convert(card.bounds, to: ledger)
+            #expect(abs(frame.minX - ledger.bounds.minX) < 0.5)
+            #expect(abs(frame.maxX - ledger.bounds.maxX) < 0.5)
+            // Coordinate conversion subtracts large origins and can lose subpixel precision.
+            #expect(card.bounds.height >= 92)
         }
-
-        for (front, background) in zip(zIndices, zIndices.dropFirst()) {
-            #expect(front > background)
+        for (current, next) in zip(cards, cards.dropFirst()) {
+            let currentFrame = current.convert(current.bounds, to: ledger)
+            let nextFrame = next.convert(next.bounds, to: ledger)
+            #expect(abs(currentFrame.maxY - nextFrame.minY) < 0.5)
         }
+        let last = cards[cards.count - 1]
+        let lastFrame = last.convert(last.bounds, to: ledger)
+        #expect(abs(lastFrame.maxY - ledger.bounds.maxY) < 0.5)
     }
 
     private func expectAccessibleDocumentOrder(_ cards: [UIView], in window: UIWindow) {
         for (first, second) in zip(cards, cards.dropFirst()) {
             let firstFrame = first.convert(first.bounds, to: window)
             let secondFrame = second.convert(second.bounds, to: window)
-            #expect(firstFrame.maxY <= secondFrame.minY)
+            #expect(firstFrame.maxY <= secondFrame.minY + 0.5)
         }
     }
 
@@ -2105,13 +2489,15 @@ struct OverviewViewControllerTests {
                     endDate: nil
                 ),
                 expectedAmount: expectedAmounts.indices.contains(index) ? expectedAmounts[index] : expectedAmount,
+                exactExpectedAmount: nil,
                 paidDuration: "8h",
                 unpaidBreak: nil,
                 unpaidBreakTimeRange: nil,
                 appliedRate: "€20 / h",
+                appliedRateAmount: "€20",
                 payBasis: "Hourly",
                 isSelected: id == selectedID,
-                isExpanded: isExpanded,
+                isExpanded: isExpanded && id == selectedID,
                 accessibilityLabel: "Shift"
             )
         }

@@ -6,15 +6,15 @@ final class OverviewPeriodRailItem: UIControl {
     init(item: OverviewView.PeriodItem) {
         period = item.period
         super.init(frame: .zero)
-        backgroundColor = item.isSelected ? ShiftLedgerColors.backgroundSecondary : .clear
-        layer.cornerCurve = .continuous
-        layer.cornerRadius = 14
+        backgroundColor = .clear
         accessibilityLabel = item.title
         accessibilityTraits = item.isSelected ? [.button, .selected] : .button
 
         let titleLabel = UILabel()
         titleLabel.text = item.title
-        titleLabel.font = item.isSelected ? ShiftLedgerTypography.headline : ShiftLedgerTypography.callout
+        titleLabel.font = UIFontMetrics(forTextStyle: .callout).scaledFont(
+            for: .monospacedSystemFont(ofSize: 16, weight: item.isSelected ? .semibold : .regular)
+        )
         titleLabel.textColor = item.isSelected ? ShiftLedgerColors.textPrimary : ShiftLedgerColors.textSecondary
         titleLabel.numberOfLines = 1
         titleLabel.accessibilityIdentifier = "overview.period.item.title"

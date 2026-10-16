@@ -61,6 +61,24 @@ struct OverviewShiftCardMapper {
                 currencyCode: currencyCode,
                 locale: displayLocale
             )
+            guard let exactAmount = OverviewFormatting.exactCurrency(
+                shiftBreakdown.basePay,
+                currencyCode: currencyCode,
+                locale: displayLocale
+            ) else {
+                throw MappingError.invalidFormatting
+            }
+            let exactExpectedAmount = exactAmount == expectedAmount ? nil : exactAmount
+            guard let appliedRateAmount = OverviewFormatting.exactCurrency(
+                shiftBreakdown.appliedPayRate.amount,
+                currencyCode: currencyCode,
+                locale: displayLocale
+            ), let appliedRate = OverviewFormatting.rate(
+                amount: shiftBreakdown.appliedPayRate.amount,
+                basis: shiftBreakdown.basePayBasis,
+                currencyCode: currencyCode,
+                locale: displayLocale
+            ) else { throw MappingError.invalidFormatting }
             let paidDuration = OverviewFormatting.duration(shiftBreakdown.paidDuration)
             let unpaidBreak = shift.unpaidBreak.map {
                 OverviewFormatting.duration($0.end.timeIntervalSince($0.start))
@@ -81,8 +99,8 @@ struct OverviewShiftCardMapper {
             }
             let accessibilityLabel = [
                 accessibilityDate,
-                accessibilityTimeRange,
                 "\(PaycheckResultStrings.shiftExpected): \(expectedAmount)",
+                accessibilityTimeRange,
                 "\(PaycheckResultStrings.paidTime): \(paidDuration)",
                 unpaidBreak.map { "\(AddShiftStrings.unpaidBreak): \($0)" }
             ]
@@ -95,15 +113,12 @@ struct OverviewShiftCardMapper {
                 timeRange: compactTimeRange,
                 endpoints: endpoints,
                 expectedAmount: expectedAmount,
+                exactExpectedAmount: exactExpectedAmount,
                 paidDuration: paidDuration,
                 unpaidBreak: unpaidBreak,
                 unpaidBreakTimeRange: unpaidBreakTimeRange,
-                appliedRate: OverviewFormatting.rate(
-                    amount: shiftBreakdown.appliedPayRate.amount,
-                    basis: shiftBreakdown.basePayBasis,
-                    currencyCode: currencyCode,
-                    locale: displayLocale
-                ),
+                appliedRate: appliedRate,
+                appliedRateAmount: appliedRateAmount,
                 payBasis: payBasis,
                 isSelected: shift.id == selectedShiftID,
                 isExpanded: shift.id == expandedShiftID,

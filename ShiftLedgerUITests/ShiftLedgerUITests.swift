@@ -229,6 +229,381 @@ final class ShiftLedgerUITests: XCTestCase {
     // MARK: - SL-507
 
     @MainActor
+    func testReceiptPerShiftSelectionKeepsPayrollContext() throws {
+        let app = makeApplication(resetStore: true)
+        app.launch()
+        defer { app.terminate() }
+        try completeFixedPerShiftOnboarding(in: app, scheduledPayroll: false)
+        _ = try requireElement(app.staticTexts["overview.receipt.brand"], message: "Empty PerShift must retain receipt paper")
+        _ = try requireElement(app.staticTexts["overview.empty.title"], message: "Empty PerShift must explain how to begin")
+        XCTAssertFalse(app.buttons["overview.checkPaycheck"].exists)
+        attachScreenshot(named: "SL511-final-empty-per-shift-receipt", from: app)
+        try addShift(
+            start: ShiftTime(hour: 8, minute: 0, meridiem: "AM"),
+            end: ShiftTime(hour: 9, minute: 0, meridiem: "AM"), in: app
+        )
+        let olderID = try firstShiftCardIdentifier(in: app)
+        let period = try requireElement(
+            app.staticTexts["overview.receipt.perShiftPeriod"],
+            message: "PerShift receipt must describe its selected Shift"
+        )
+        let olderPeriod = period.label
+        try addShift(
+            start: ShiftTime(hour: 10, minute: 0, meridiem: "AM"),
+            end: ShiftTime(hour: 11, minute: 0, meridiem: "AM"), in: app
+        )
+        try assertShiftCount(2, expectedHeroAmount: "1.00", in: app)
+        XCTAssertEqual(normalizedWhitespace(app.staticTexts["overview.expectedGross.amount"].label),
+                       "Expected gross · EUR, 1.00")
+        let identities = Set(shiftCards(in: app).map(\.identifier))
+        XCTAssertEqual(identities.count, 2)
+        XCTAssertTrue(identities.contains(olderID))
+        let newIdentities = identities.subtracting([olderID])
+        XCTAssertEqual(newIdentities.count, 1)
+        let newerID = try XCTUnwrap(newIdentities.first)
+        XCTAssertTrue(app.buttons[newerID].isSelected)
+        XCTAssertNotEqual(period.label, olderPeriod)
+        XCTAssertFalse(app.scrollViews["overview.period.rail"].isHittable)
+        _ = try scrollToHittable(
+            requerying: { app.staticTexts["overview.receipt.brand"] },
+            in: app, direction: .towardTop, message: "PerShift receipt heading must be reachable"
+        )
+        attachScreenshot(named: "SL511-receipt-per-shift-two-records", from: app)
+        let historical = try scrollToHittable(
+            requerying: { app.buttons[olderID] },
+            in: app, direction: .towardBottom, message: "Older PerShift record must remain selectable"
+        )
+        historical.tap()
+        let selected = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "selected == YES"), object: app.buttons[olderID]
+        )
+        let selectedPeriod = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "label == %@", olderPeriod), object: period
+        )
+        XCTAssertEqual(XCTWaiter().wait(for: [selected, selectedPeriod], timeout: 5), .completed)
+        XCTAssertEqual(normalizedWhitespace(app.staticTexts["overview.expectedGross.amount"].label),
+                       "Expected gross · EUR, 1.00")
+        app.buttons[olderID].tap()
+        let expanded = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "value == %@", "Expanded"), object: app.buttons[olderID]
+        )
+        XCTAssertEqual(XCTWaiter().wait(for: [expanded], timeout: 5), .completed)
+        XCTAssertTrue(app.buttons[olderID].label.contains("Rate: €1.004 / shift"))
+        XCTAssertTrue(app.buttons[olderID].label.contains("Exact contribution: €1.004"))
+        XCTAssertEqual(app.buttons[olderID].label.components(separatedBy: "Paid time:").count, 2)
+        XCTAssertEqual(Set(shiftCards(in: app).map(\.identifier)), identities)
+        attachScreenshot(named: "SL511-receipt-per-shift-historical-expanded", from: app)
+        let expandedHeight = app.buttons[olderID].frame.height
+        app.buttons[olderID].tap()
+        let collapsed = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "selected == YES AND value == %@", "Collapsed"),
+            object: app.buttons[olderID]
+        )
+        XCTAssertEqual(XCTWaiter().wait(for: [collapsed], timeout: 5), .completed)
+        XCTAssertLessThan(app.buttons[olderID].frame.height, expandedHeight)
+        XCTAssertEqual(period.label, olderPeriod)
+        XCTAssertEqual(Set(shiftCards(in: app).map(\.identifier)), identities)
+        _ = try scrollToHittable(
+            requerying: { app.staticTexts["overview.receipt.brand"] },
+            in: app, direction: .towardTop, message: "Collapsed receipt must resize and remain scrollable"
+        )
+        attachScreenshot(named: "SL511-receipt-per-shift-historical-collapsed", from: app)
+        let identitiesEvidence = XCTAttachment(string:
+            "Older: \(olderID), \(olderPeriod)\nNewer: \(newerID)\nExpected gross for either selected Shift: EUR 1.00; exact contribution 1.004")
+        identitiesEvidence.name = "SL511-PerShift-persisted-identities"
+        identitiesEvidence.lifetime = .keepAlways
+        add(identitiesEvidence)
+    }
+
+    @MainActor
+    func testReceiptAccessibilityHistoryAndActionsRemainReachable() throws {
+        var app = makeApplication(resetStore: true)
+        app.launch()
+        defer { app.terminate() }
+        try completeFixedPerShiftOnboarding(in: app)
+        try addShift(
+            start: ShiftTime(hour: 8, minute: 0, meridiem: "AM"),
+            end: ShiftTime(hour: 9, minute: 0, meridiem: "AM"),
+            in: app
+        )
+        let persistedID = try firstShiftCardIdentifier(in: app)
+        app.terminate()
+        app = makeApplication()
+        app.launchArguments += [
+            "-UIPreferredContentSizeCategoryName",
+            "UICTContentSizeCategoryAccessibilityXXL"
+        ]
+        app.launch()
+        try assertShiftCount(1, expectedHeroAmount: "1.00", in: app)
+        _ = try scrollToHittable(
+            requerying: { app.staticTexts["overview.receipt.brand"] },
+            in: app, direction: .towardTop,
+            message: "Accessibility receipt heading must remain readable"
+        )
+        attachScreenshot(named: "SL511-receipt-accessibility-xxl-top", from: app)
+        let row = try scrollToHittable(
+            requerying: { app.buttons[persistedID] },
+            in: app, direction: .towardBottom,
+            message: "Accessibility receipt history must remain reachable"
+        )
+        row.tap()
+        let selected = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "selected == YES"),
+            object: app.buttons[persistedID]
+        )
+        XCTAssertEqual(XCTWaiter().wait(for: [selected], timeout: 5), .completed)
+        app.buttons[persistedID].tap()
+        let expanded = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "selected == YES AND value == %@", "Expanded"),
+            object: app.buttons[persistedID]
+        )
+        XCTAssertEqual(XCTWaiter().wait(for: [expanded], timeout: 5), .completed)
+        _ = try scrollToHittable(
+            requerying: { app.buttons[persistedID] },
+            in: app, direction: .towardBottom,
+            message: "Expanded accessibility receipt record must stay reachable"
+        )
+        XCTAssertTrue(app.buttons[persistedID].label.contains("Rate: €1.004 / shift"))
+        XCTAssertTrue(app.buttons[persistedID].label.contains("Exact contribution: €1.004"))
+        XCTAssertEqual(app.buttons[persistedID].label.components(separatedBy: "Paid time:").count, 2)
+        attachScreenshot(named: "SL511-receipt-accessibility-xxl-history", from: app)
+        for identifier in ["overview.checkPaycheck", "overview.addShift"] {
+            let button = try scrollToHittable(
+                requerying: { app.buttons[identifier] },
+                in: app, direction: .towardBottom,
+                message: "Receipt action \(identifier) must remain reachable at Accessibility XXL"
+            )
+            XCTAssertGreaterThanOrEqual(button.frame.height, 44)
+        }
+        XCTAssertEqual(shiftCards(in: app).map(\.identifier), [persistedID])
+        attachScreenshot(named: "SL511-receipt-accessibility-xxl-actions", from: app)
+
+        // Same persisted record, no reset: inspect the longer Russian receipt labels too.
+        app.terminate()
+        app = makeApplication()
+        app.launchArguments = app.launchArguments.map { argument in
+            switch argument {
+            case "(en)": "(ru)"
+            case "en_US": "ru_RU"
+            default: argument
+            }
+        }
+        app.launch()
+        _ = try scrollToHittable(
+            requerying: { app.staticTexts["overview.receipt.brand"] },
+            in: app, direction: .towardTop, message: "Russian receipt heading must be reachable"
+        )
+        attachScreenshot(named: "SL511-refinement-russian-top", from: app)
+        let russianRow = try scrollToHittable(
+            requerying: { app.buttons[persistedID] }, in: app, direction: .towardBottom,
+            message: "Same persisted Shift must remain selectable in Russian"
+        )
+        if !russianRow.isSelected {
+            russianRow.tap()
+            let selectedRussian = XCTNSPredicateExpectation(
+                predicate: NSPredicate(format: "selected == YES"), object: app.buttons[persistedID])
+            XCTAssertEqual(XCTWaiter().wait(for: [selectedRussian], timeout: 5), .completed)
+        }
+        app.buttons[persistedID].tap()
+        let expandedRussian = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "value == %@", "Развернута"), object: app.buttons[persistedID])
+        XCTAssertEqual(XCTWaiter().wait(for: [expandedRussian], timeout: 5), .completed)
+        XCTAssertTrue(normalizedWhitespace(app.buttons[persistedID].label).contains("Точный вклад: 1,004 €"))
+        attachScreenshot(named: "SL511-refinement-russian-expanded", from: app)
+
+        app.terminate()
+        app.launchArguments += [
+            "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXL"
+        ]
+        app.launch()
+        _ = try scrollToHittable(
+            requerying: { app.staticTexts["overview.receipt.brand"] }, in: app,
+            direction: .towardTop, message: "Russian XXL receipt heading must be reachable"
+        )
+        attachScreenshot(named: "SL511-final-russian-xxl-top", from: app)
+        let russianAccessibilityRow = try scrollToHittable(
+            requerying: { app.buttons[persistedID] }, in: app, direction: .towardBottom,
+            message: "Russian XXL persisted Shift must remain selectable"
+        )
+        russianAccessibilityRow.tap()
+        let russianAccessibilitySelected = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "selected == YES"), object: app.buttons[persistedID])
+        XCTAssertEqual(XCTWaiter().wait(for: [russianAccessibilitySelected], timeout: 5), .completed)
+        app.buttons[persistedID].tap()
+        let russianAccessibilityExpanded = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "value == %@", "Развернута"), object: app.buttons[persistedID])
+        XCTAssertEqual(XCTWaiter().wait(for: [russianAccessibilityExpanded], timeout: 5), .completed)
+        XCTAssertTrue(normalizedWhitespace(app.buttons[persistedID].label).contains("Точный вклад: 1,004 €"))
+        attachScreenshot(named: "SL511-final-russian-xxl-details", from: app)
+        _ = try scrollToHittable(
+            requerying: { app.buttons["overview.addShift"] }, in: app, direction: .towardBottom,
+            message: "Russian XXL actions must remain reachable"
+        )
+        attachScreenshot(named: "SL511-final-russian-xxl-actions", from: app)
+    }
+
+    @MainActor
+    func testLedgerTwelvePersistedShiftsRemainScrollable() throws {
+        let app = makeApplication(resetStore: true)
+        app.launch()
+        defer { app.terminate() }
+        try completeFixedPerShiftOnboarding(in: app)
+        try assertShiftCount(0, expectedHeroAmount: "0.00", in: app)
+        XCTAssertEqual(normalizedWhitespace(app.staticTexts["overview.expectedGross.amount"].label),
+                       "Expected gross · EUR, 0.00")
+        attachScreenshot(named: "SL511-final-empty-scheduled-receipt", from: app)
+
+        var identifiersByStartTime: [String] = []
+        for hour in 0..<12 {
+            let startHour = hour == 0 ? 12 : hour
+            let endHour = hour + 1
+            try addShift(
+                start: ShiftTime(hour: startHour, minute: 0, meridiem: "AM"),
+                end: ShiftTime(hour: endHour, minute: 0, meridiem: endHour == 12 ? "PM" : "AM"),
+                in: app
+            )
+            let currentIdentifiers = Set(shiftCards(in: app).map(\.identifier))
+            let newlyPersisted = currentIdentifiers.subtracting(identifiersByStartTime)
+            XCTAssertEqual(newlyPersisted.count, 1)
+            identifiersByStartTime.append(try XCTUnwrap(newlyPersisted.first))
+        }
+
+        let cards = shiftCards(in: app)
+        XCTAssertEqual(cards.count, 12)
+        let identifiers = cards.map(\.identifier)
+        XCTAssertEqual(Set(identifiers).count, 12)
+        XCTAssertEqual(identifiers, Array(identifiersByStartTime.reversed()))
+        let hero = try requireElement(
+            app.staticTexts["overview.expectedGross.amount"],
+            message: "Twelve one-euro-and-fraction Shifts must have a period Expected Gross"
+        )
+        XCTAssertEqual(normalizedWhitespace(hero.label), "Expected gross · EUR, 12.05")
+        let precision = try requireElement(
+            app.staticTexts["overview.receipt.precision"],
+            message: "Receipt must explain the exact period amount behind rounded Shift lines"
+        )
+        XCTAssertEqual(precision.label, "Amounts rounded for display")
+        XCTAssertEqual(normalizedWhitespace(app.otherElements["overview.receipt.precision.exactField"].label), "Exact total, €12.048")
+        XCTAssertEqual(normalizedWhitespace(app.otherElements["overview.receipt.precision.displayedField"].label), "Displayed, €12.05")
+        _ = try scrollToHittable(
+            requerying: { app.staticTexts["overview.receipt.brand"] },
+            in: app,
+            direction: .towardTop,
+            message: "Receipt heading and precision explanation must be reachable"
+        )
+        attachScreenshot(named: "SL511-receipt-12-shifts-precision", from: app)
+
+        let bottomRecordID = try XCTUnwrap(identifiers.last)
+        let bottomRecord = try scrollToHittable(
+            requerying: { app.buttons[bottomRecordID] },
+            in: app,
+            direction: .towardBottom,
+            message: "Last of twelve persisted ledger records must be reachable"
+        )
+        bottomRecord.tap()
+        let selected = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "selected == YES"),
+            object: app.buttons[bottomRecordID]
+        )
+        XCTAssertEqual(XCTWaiter().wait(for: [selected], timeout: 5), .completed)
+        let selectedRecord = try scrollToHittable(
+            requerying: { app.buttons[bottomRecordID] },
+            in: app,
+            direction: .towardBottom,
+            message: "Selected record must remain tappable for expansion"
+        )
+        selectedRecord.tap()
+        let expanded = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "value == %@", "Expanded"),
+            object: app.buttons[bottomRecordID]
+        )
+        XCTAssertEqual(XCTWaiter().wait(for: [expanded], timeout: 5), .completed)
+        attachScreenshot(named: "SL511-receipt-12-shifts-expanded", from: app)
+
+        _ = try scrollToHittable(
+            requerying: { app.buttons["overview.addShift"] },
+            in: app,
+            direction: .towardBottom,
+            message: "Add Shift must remain reachable below twelve records"
+        )
+        attachScreenshot(named: "SL511-receipt-12-shifts-bottom", from: app)
+        _ = try scrollToHittable(
+            requerying: { app.buttons["overview.checkPaycheck"] },
+            in: app,
+            direction: .towardBottom,
+            message: "Check Paycheck must remain reachable below the receipt"
+        )
+        XCTAssertEqual(Set(shiftCards(in: app).map(\.identifier)), Set(identifiers))
+
+        let expandedRecord = try scrollToHittable(
+            requerying: { app.buttons[bottomRecordID] },
+            in: app,
+            direction: .towardBottom,
+            message: "Expanded last record must remain reachable for Edit"
+        )
+        XCTAssertEqual(expandedRecord.value as? String, "Expanded")
+        // The row is one accessibility element with a custom Edit action. XCTest
+        // does not expose its nested UIButton, so tap the visible button's
+        // center using the row's bottom inset and the button's 44-point height.
+        expandedRecord.coordinate(withNormalizedOffset: CGVector(dx: 0, dy: 1))
+            .withOffset(CGVector(dx: 64, dy: -38))
+            .tap()
+        _ = try requireElement(
+            app.scrollViews["editShift.screen"],
+            message: "Expanded ledger Edit action must open the persisted Shift"
+        )
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = .autoupdatingCurrent
+        let oldestStart = calendar.startOfDay(for: Date())
+        let dateFormatter = DateFormatter()
+        dateFormatter.locale = Locale(identifier: "en_US_POSIX")
+        dateFormatter.calendar = calendar
+        dateFormatter.timeZone = calendar.timeZone
+        dateFormatter.dateFormat = "MMMM d, yyyy 'at' h:mm a"
+        for (identifier, date) in [
+            ("editShift.start", oldestStart),
+            ("editShift.end", oldestStart.addingTimeInterval(3600))
+        ] {
+            let endpoint = try requireElement(app.buttons[identifier], message: "Edit must expose the oldest Shift's endpoint")
+            XCTAssertEqual(normalizedWhitespace(try XCTUnwrap(endpoint.value as? String)),
+                           normalizedWhitespace(dateFormatter.string(from: date)))
+        }
+        attachScreenshot(named: "SL511-final-edit-oldest-shift", from: app)
+        let back = app.navigationBars.buttons.element(boundBy: 0)
+        _ = try requireHittable(back, message: "Edit Back must remain usable")
+        back.tap()
+        try assertOverviewExists(in: app)
+        XCTAssertEqual(Set(shiftCards(in: app).map(\.identifier)), Set(identifiers))
+        XCTAssertTrue(app.buttons[bottomRecordID].isSelected)
+        XCTAssertEqual(app.buttons[bottomRecordID].value as? String, "Expanded")
+
+        app.terminate()
+        let accessibilityApp = makeApplication()
+        accessibilityApp.launchArguments += [
+            "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXL"
+        ]
+        accessibilityApp.launch()
+        defer { accessibilityApp.terminate() }
+        try assertShiftCount(12, expectedHeroAmount: "12.05", in: accessibilityApp)
+        XCTAssertEqual(normalizedWhitespace(accessibilityApp.staticTexts["overview.expectedGross.amount"].label), "Expected gross · EUR, 12.05")
+        XCTAssertEqual(Set(shiftCards(in: accessibilityApp).map(\.identifier)), Set(identifiers))
+        _ = try scrollToHittable(
+            requerying: { accessibilityApp.staticTexts["overview.receipt.brand"] },
+            in: accessibilityApp, direction: .towardTop,
+            message: "Twelve-Shift receipt heading must remain reachable at Accessibility XXL"
+        )
+        attachScreenshot(named: "SL511-refinement-12-xxl-top", from: accessibilityApp)
+        _ = try scrollToHittable(
+            requerying: { accessibilityApp.staticTexts["overview.receipt.precision"] },
+            in: accessibilityApp, direction: .towardBottom,
+            message: "Precision fields and rounding note must remain reachable at Accessibility XXL"
+        )
+        XCTAssertEqual(normalizedWhitespace(accessibilityApp.otherElements["overview.receipt.precision.exactField"].label), "Exact total, €12.048")
+        XCTAssertEqual(normalizedWhitespace(accessibilityApp.otherElements["overview.receipt.precision.displayedField"].label), "Displayed, €12.05")
+        attachScreenshot(named: "SL511-refinement-12-xxl-precision", from: accessibilityApp)
+    }
+
+    @MainActor
     func testScheduledPayrollKeepsGlobalShiftHistoryAcrossMonths() throws {
         var app = makeApplication(resetStore: true)
         app.launch()
@@ -502,7 +877,9 @@ final class ShiftLedgerUITests: XCTestCase {
         var selectedDay = try readDay(near: today)
         let initialFrame = picker.pickerWheels.element(boundBy: 0).frame
         try requireCondition(initialFrame.height > 0, message: "Date wheel needs a visible frame: \(initialFrame)")
-        let rowOffset = 24 / initialFrame.height
+        // A 24-point offset did not advance this wheel on the tested iOS 26 runtime.
+        // Tap farther into the adjacent row, then measure its calendar direction.
+        let rowOffset = 36 / initialFrame.height
         func changedDay(from oldValue: String) throws -> Date? {
             let changed = XCTNSPredicateExpectation(
                 predicate: NSPredicate(format: "value != %@", oldValue),
@@ -522,6 +899,7 @@ final class ShiftLedgerUITests: XCTestCase {
         // A row tap establishes the exact one-day direction. Larger drag gestures are
         // calibrated from their observed result instead of assuming a fixed day count.
         var rowTapDelta: Int?
+        var increasingRowDirection: CGFloat?
         if selectedDay != targetDay {
             let wheel = picker.pickerWheels.element(boundBy: 0)
             for screenDirection: CGFloat in [1, -1] {
@@ -532,9 +910,14 @@ final class ShiftLedgerUITests: XCTestCase {
                     continue
                 }
                 let rowDelta = calendar.dateComponents([.day], from: selectedDay, to: nextDay).day ?? 0
+                if rowDelta == 0 {
+                    observations.append("Calendar day unchanged after row calibration \(screenDirection)")
+                    continue
+                }
                 try requireCondition(abs(rowDelta) == 1,
                                      message: "Cannot calibrate a single calendar day. Frame \(initialFrame); values \(observations); requested \(date); \(picker.debugDescription)")
                 rowTapDelta = rowDelta
+                increasingRowDirection = screenDirection * CGFloat(rowDelta)
                 selectedDay = nextDay
                 break
             }
@@ -580,8 +963,8 @@ final class ShiftLedgerUITests: XCTestCase {
             let remaining = calendar.dateComponents([.day], from: selectedDay, to: targetDay).day ?? 0
             let wheel = picker.pickerWheels.element(boundBy: 0)
             let oldValue = try XCTUnwrap(wheel.value as? String)
-            _ = try XCTUnwrap(rowTapDelta)
-            let rowDirection: CGFloat = remaining > 0 ? 1 : -1
+            let increasingDirection = try XCTUnwrap(increasingRowDirection)
+            let rowDirection: CGFloat = (remaining > 0 ? 1 : -1) * increasingDirection
             wheel.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5 + rowDirection * rowOffset)).tap()
             let nextDay = try waitForDayChange(from: oldValue)
             let movement = calendar.dateComponents([.day], from: selectedDay, to: nextDay).day ?? 0
@@ -711,7 +1094,8 @@ final class ShiftLedgerUITests: XCTestCase {
 
     @MainActor
     private func completeFixedPerShiftOnboarding(
-        in app: XCUIApplication
+        in app: XCUIApplication,
+        scheduledPayroll: Bool = true
     ) throws {
         attachScreenshot(named: "00-onboarding-initial", from: app)
 
@@ -836,16 +1220,17 @@ final class ShiftLedgerUITests: XCTestCase {
 
         firstContinue.tap()
 
+        let cycleTitle = scheduledPayroll ? "Calendar month" : "One shift"
         let calendarMonth = try requireElement(
-            app.buttons["Calendar month"],
-            message: "Calendar month option must exist"
+            app.buttons[cycleTitle],
+            message: "\(cycleTitle) option must exist"
         )
 
         let reachableCalendarMonth = try scrollToHittable(
             calendarMonth,
             in: app,
             direction: .towardBottom,
-            message: "Calendar month option must be reachable"
+            message: "\(cycleTitle) option must be reachable"
         )
 
         reachableCalendarMonth.tap()
@@ -1286,7 +1671,7 @@ final class ShiftLedgerUITests: XCTestCase {
             message: "Overview Shift count must exist"
         )
 
-        let expectedLabel = "Shifts · \(expected)"
+        let expectedLabel = "All saved shifts \(expected)"
 
         try requireCondition(
             normalizedWhitespace(count.label) == expectedLabel,

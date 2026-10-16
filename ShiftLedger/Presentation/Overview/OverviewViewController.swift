@@ -1,6 +1,10 @@
 import UIKit
 
 final class OverviewViewController: UIViewController {
+    private enum PresentationError: Error {
+        case currencyFormatting
+    }
+
     var onAddShift: (() -> Void)?
     var onManageWorkTypes: (() -> Void)?
     var onArchivedJobs: (() -> Void)?
@@ -142,12 +146,14 @@ final class OverviewViewController: UIViewController {
             }
 
             let cards: [OverviewView.ShiftCard]
+            let precisionText: OverviewView.PrecisionExplanation?
             do {
                 cards = try shiftCardMapper.map(
                     content.shiftHistoryBreakdowns,
                     selectedShiftID: content.selectedShiftID,
                     expandedShiftID: content.expandedShiftID
                 )
+                precisionText = try precisionExplanation(for: breakdown)
             } catch {
                 renderFailure(.calculation)
                 return
@@ -160,6 +166,7 @@ final class OverviewViewController: UIViewController {
                     locale: displayLocale
                 ),
                 expectedGrossContext: OverviewStrings.expectedGrossContext(currencyCode: currencyCode),
+                precisionExplanation: precisionText,
                 period: periodText,
                 periodItems: railItems(from: content.railPeriods, selectedPeriod: period),
                 showPeriodNavigation: content.showPeriodNavigation,
@@ -192,6 +199,30 @@ final class OverviewViewController: UIViewController {
                 message: OverviewStrings.calculationErrorMessage
             )
         }
+    }
+
+    private func precisionExplanation(for breakdown: ExpectedGrossBreakdown) throws -> OverviewView.PrecisionExplanation? {
+        // Reconcile only the display representations of the selected-period breakdown.
+        // The exact gross and individual contributions remain supplied by Domain.
+        let displayedRows = try breakdown.shiftBreakdowns.reduce(Decimal.zero) { sum, item in
+            guard let displayed = OverviewFormatting.displayedCurrencyValue(
+                item.basePay, currencyCode: currencyCode, locale: displayLocale
+            ) else { throw PresentationError.currencyFormatting }
+            return sum + displayed
+        }
+        guard let displayedGross = OverviewFormatting.displayedCurrencyValue(
+            breakdown.expectedGross, currencyCode: currencyCode, locale: displayLocale
+        ) else { throw PresentationError.currencyFormatting }
+        guard displayedRows != displayedGross else { return nil }
+        guard let exactTotal = OverviewFormatting.exactCurrency(
+                breakdown.expectedGross, currencyCode: currencyCode, locale: displayLocale
+              ) else { throw PresentationError.currencyFormatting }
+        return OverviewView.PrecisionExplanation(
+            exactTotal: exactTotal,
+            displayedTotal: OverviewFormatting.currency(
+                breakdown.expectedGross, currencyCode: currencyCode, locale: displayLocale
+            )
+        )
     }
 
     private func formattedPeriod(

@@ -9,6 +9,19 @@ enum OverviewStrings {
     static var shiftSectionPrefix: String {
         String(localized: "overview.shiftSection.prefix", table: "Localizable")
     }
+    static var allShiftHistory: String {
+        String(localized: "overview.ledgerHistory.title", table: "Localizable")
+    }
+    static var noSavedShifts: String {
+        String(localized: "overview.ledgerHistory.empty", table: "Localizable")
+    }
+    static var receiptBrand: String { String(localized: "overview.receipt.brand", table: "Localizable") }
+    static var receiptSubtitle: String { String(localized: "overview.receipt.subtitle", table: "Localizable") }
+    static var historyScope: String { String(localized: "overview.receipt.historyScope", table: "Localizable") }
+    static var exactContribution: String { String(localized: "overview.receipt.exactContribution", table: "Localizable") }
+    static var exactTotal: String { String(localized: "overview.receipt.exactTotal", table: "Localizable") }
+    static var displayedTotal: String { String(localized: "overview.receipt.displayedTotal", table: "Localizable") }
+    static var roundedForDisplay: String { String(localized: "overview.receipt.roundedForDisplay", table: "Localizable") }
 
     static func expectedGrossContext(currencyCode: String) -> String {
         String(format: String(localized: "overview.expectedGross.context", table: "Localizable"), currencyCode)

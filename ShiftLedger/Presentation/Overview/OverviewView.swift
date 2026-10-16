@@ -1,13 +1,10 @@
 import UIKit
 
 final class OverviewView: UIView, UIScrollViewDelegate {
-    private static let expectedGrossSurface = UIColor { traits in
-        let color = traits.userInterfaceStyle == .dark
-            ? ShiftLedgerColors.backgroundSecondary
-            : ShiftLedgerColors.surfacePrimary
-        return color.resolvedColor(with: traits)
+    struct PrecisionExplanation: Equatable {
+        let exactTotal: String
+        let displayedTotal: String
     }
-
     struct PeriodItem: Equatable {
         let period: PayCalculationPeriod
         let title: String
@@ -20,10 +17,12 @@ final class OverviewView: UIView, UIScrollViewDelegate {
         let timeRange: String
         let endpoints: OverviewFormatting.ShiftEndpoints
         let expectedAmount: String
+        let exactExpectedAmount: String?
         let paidDuration: String
         let unpaidBreak: String?
         let unpaidBreakTimeRange: String?
         let appliedRate: String
+        let appliedRateAmount: String
         let payBasis: String
         let isSelected: Bool
         let isExpanded: Bool
@@ -42,6 +41,21 @@ final class OverviewView: UIView, UIScrollViewDelegate {
     private let scrollView = UIScrollView()
     private let contentView = UIView()
     private let mainStack = UIStackView()
+    private let receiptPaper = OverviewReceiptPaperView()
+    private let receiptStack = UIStackView()
+    private let receiptHeader = UIStackView()
+    private let brandLabel = UILabel()
+    private let subtitleLabel = UILabel()
+    private let headerRule = OverviewReceiptRuleView()
+    private let periodRule = OverviewReceiptRuleView()
+    private let grossRule = OverviewReceiptRuleView()
+    private let bottomRule = OverviewReceiptRuleView()
+    private let perShiftPeriodLabel = UILabel()
+    private let precisionLabel = UILabel()
+    private let precisionStack = UIStackView()
+    private let exactTotalField = OverviewReceiptFieldView()
+    private let displayedTotalField = OverviewReceiptFieldView()
+    private let historyScopeLabel = UILabel()
 
     private let periodRailContainer = UIStackView()
     private var showsPeriodNavigation = false
@@ -64,7 +78,7 @@ final class OverviewView: UIView, UIScrollViewDelegate {
     private let shiftCountValueLabel = UILabel()
 
     private let shiftHistoryStack = UIStackView()
-    private let shiftStack = OverviewShiftStackView()
+    private let shiftStack = OverviewShiftLedgerView()
     private let shiftHistoryEmptyLabel = UILabel()
 
     private let checkPaycheckButton = UIButton(type: .system)
@@ -102,6 +116,7 @@ final class OverviewView: UIView, UIScrollViewDelegate {
     func renderContent(
         expectedGross: String,
         expectedGrossContext: String,
+        precisionExplanation: PrecisionExplanation? = nil,
         period: String,
         periodItems: [PeriodItem],
         showPeriodNavigation: Bool,
@@ -116,11 +131,23 @@ final class OverviewView: UIView, UIScrollViewDelegate {
         expectedGrossAmountLabel.text = expectedGross
         expectedGrossAmountLabel.accessibilityLabel = "\(expectedGrossContext), \(expectedGross)"
         expectedGrossLabel.text = expectedGrossContext
+        precisionLabel.text = OverviewStrings.roundedForDisplay
+        precisionStack.isHidden = precisionExplanation == nil
+        if let precisionExplanation {
+            exactTotalField.update(label: OverviewStrings.exactTotal, value: precisionExplanation.exactTotal,
+                                   identifier: "overview.receipt.precision.exact")
+            displayedTotalField.update(label: OverviewStrings.displayedTotal, value: precisionExplanation.displayedTotal,
+                                       identifier: "overview.receipt.precision.displayed")
+        }
+        contentCard.accessibilityElements = precisionExplanation == nil
+            ? [expectedGrossLabel, expectedGrossAmountLabel]
+            : [expectedGrossLabel, expectedGrossAmountLabel, exactTotalField, displayedTotalField, precisionLabel]
         periodLabel.text = period
         periodLabel.accessibilityLabel = period
+        perShiftPeriodLabel.text = period
         renderPeriodRail(periodItems)
         shiftCountValueLabel.text = String(shiftCount)
-        shiftCountStack.accessibilityLabel = "\(OverviewStrings.shiftSectionPrefix) \(shiftCount)"
+        shiftCountStack.accessibilityLabel = "\(OverviewStrings.allShiftHistory) \(shiftCount)"
         previousButton.isEnabled = canNavigatePrevious
         nextButton.isEnabled = canNavigateNext
         checkPaycheckButton.isEnabled = canCheckPaycheck
@@ -169,7 +196,7 @@ final class OverviewView: UIView, UIScrollViewDelegate {
     }
 
     func focusShiftCard(with id: UUID) {
-        guard let card = shiftStack.cardView(with: id) else {
+        guard let card = shiftStack.rowView(with: id) else {
             return
         }
 
@@ -227,13 +254,40 @@ final class OverviewView: UIView, UIScrollViewDelegate {
         scrollView.accessibilityIdentifier = "overview.pageScroll"
 
         mainStack.axis = .vertical
-        mainStack.spacing = 24
+        mainStack.spacing = 12
 
-        contentCard.backgroundColor = Self.expectedGrossSurface
-        contentCard.layer.cornerCurve = .continuous
-        contentCard.layer.cornerRadius = 28
+        receiptPaper.accessibilityIdentifier = "overview.receipt.paper"
+        receiptStack.axis = .vertical
+        receiptStack.spacing = 16
+        receiptHeader.axis = .vertical
+        receiptHeader.alignment = .center
+        receiptHeader.spacing = 4
+        brandLabel.text = OverviewStrings.receiptBrand
+        subtitleLabel.text = OverviewStrings.receiptSubtitle
+        for (label, size, weight) in [
+            (brandLabel, CGFloat(15), UIFont.Weight.semibold),
+            (subtitleLabel, CGFloat(13), UIFont.Weight.medium)
+        ] {
+            configureLabel(label, font: UIFontMetrics(forTextStyle: .caption1).scaledFont(
+                for: .monospacedSystemFont(ofSize: size, weight: weight)
+            ), color: ShiftLedgerColors.textPrimary)
+            label.textAlignment = .center
+            label.isAccessibilityElement = true
+        }
+        brandLabel.accessibilityIdentifier = "overview.receipt.brand"
+        subtitleLabel.accessibilityIdentifier = "overview.receipt.subtitle"
+        perShiftPeriodLabel.accessibilityIdentifier = "overview.receipt.perShiftPeriod"
+        configureLabel(perShiftPeriodLabel, font: ShiftLedgerTypography.headline, color: ShiftLedgerColors.textPrimary)
+        perShiftPeriodLabel.textAlignment = .center
+        for rule in [headerRule, periodRule, grossRule, bottomRule] {
+            rule.heightAnchor.constraint(equalToConstant: 1).isActive = true
+        }
+        headerRule.accessibilityIdentifier = "overview.receipt.rule.header"
+        bottomRule.accessibilityIdentifier = "overview.receipt.rule.bottom"
+
+        contentCard.backgroundColor = .clear
         contentCard.accessibilityIdentifier = "overview.expectedGross.hero"
-        configureCard(emptyCard)
+        emptyCard.backgroundColor = .clear
         configureCard(errorCard)
 
         contentStack.axis = .vertical
@@ -241,7 +295,9 @@ final class OverviewView: UIView, UIScrollViewDelegate {
         expectedGrossLabel.text = OverviewStrings.expectedGross
         configureLabel(
             expectedGrossLabel,
-            font: ShiftLedgerTypography.callout,
+            font: UIFontMetrics(forTextStyle: .callout).scaledFont(
+                for: .monospacedSystemFont(ofSize: 14, weight: .medium)
+            ),
             color: ShiftLedgerColors.textSecondary
         )
         expectedGrossLabel.accessibilityIdentifier = "overview.expectedGross.label"
@@ -252,6 +308,17 @@ final class OverviewView: UIView, UIScrollViewDelegate {
             color: ShiftLedgerColors.textPrimary
         )
         expectedGrossAmountLabel.accessibilityIdentifier = "overview.expectedGross.amount"
+        configureLabel(precisionLabel, font: UIFontMetrics(forTextStyle: .footnote).scaledFont(
+            for: .monospacedSystemFont(ofSize: 12, weight: .regular)
+        ), color: ShiftLedgerColors.textSecondary)
+        precisionLabel.accessibilityIdentifier = "overview.receipt.precision"
+        precisionStack.axis = .vertical
+        precisionStack.spacing = 8
+        [exactTotalField, displayedTotalField, precisionLabel].forEach(precisionStack.addArrangedSubview)
+        exactTotalField.isAccessibilityElement = true
+        displayedTotalField.isAccessibilityElement = true
+        exactTotalField.accessibilityIdentifier = "overview.receipt.precision.exactField"
+        displayedTotalField.accessibilityIdentifier = "overview.receipt.precision.displayedField"
 
         navigationStack.axis = .horizontal
         navigationStack.alignment = .center
@@ -287,18 +354,20 @@ final class OverviewView: UIView, UIScrollViewDelegate {
 
         shiftCountStack.axis = .horizontal
         shiftCountStack.alignment = .firstBaseline
+        shiftCountStack.distribution = .equalSpacing
         shiftCountStack.spacing = 4
         shiftCountStack.isAccessibilityElement = true
         shiftCountStack.accessibilityTraits = .header
         shiftCountStack.accessibilityIdentifier = "overview.shiftHistory.title"
-        shiftCountLabel.text = OverviewStrings.shiftSectionPrefix
+        shiftCountLabel.text = OverviewStrings.allShiftHistory
         configureLabel(
             shiftCountLabel,
             font: ShiftLedgerTypography.headline,
             color: ShiftLedgerColors.textPrimary
         )
         shiftCountLabel.accessibilityIdentifier = "overview.shiftCount.label"
-        shiftCountLabel.setContentHuggingPriority(.required, for: .horizontal)
+        shiftCountLabel.lineBreakMode = .byWordWrapping
+        shiftCountLabel.setContentHuggingPriority(.defaultHigh, for: .horizontal)
         configureLabel(
             shiftCountValueLabel,
             font: ShiftLedgerTypography.headline,
@@ -306,12 +375,17 @@ final class OverviewView: UIView, UIScrollViewDelegate {
         )
         shiftCountValueLabel.textAlignment = .left
         shiftCountValueLabel.accessibilityIdentifier = "overview.shiftCount.value"
+        historyScopeLabel.text = OverviewStrings.historyScope
+        configureLabel(historyScopeLabel, font: UIFontMetrics(forTextStyle: .footnote).scaledFont(
+            for: .monospacedSystemFont(ofSize: 12, weight: .regular)
+        ), color: ShiftLedgerColors.textSecondary)
+        historyScopeLabel.accessibilityIdentifier = "overview.receipt.historyScope"
 
         shiftHistoryStack.axis = .vertical
         shiftHistoryStack.spacing = 12
 
         shiftStack.accessibilityIdentifier = "overview.shiftStack"
-        shiftHistoryEmptyLabel.text = OverviewStrings.shiftHistoryEmpty
+        shiftHistoryEmptyLabel.text = OverviewStrings.noSavedShifts
         configureLabel(
             shiftHistoryEmptyLabel,
             font: ShiftLedgerTypography.body,
@@ -362,6 +436,9 @@ final class OverviewView: UIView, UIScrollViewDelegate {
             scrollView,
             contentView,
             mainStack,
+            receiptPaper,
+            receiptStack,
+            receiptHeader,
             periodRailContainer,
             periodRailViewport,
             periodRailScrollView,
@@ -378,8 +455,13 @@ final class OverviewView: UIView, UIScrollViewDelegate {
         addSubview(scrollView)
         scrollView.addSubview(contentView)
         contentView.addSubview(mainStack)
-        [periodRailContainer, contentCard, shiftHistoryStack, checkPaycheckButton, emptyCard, errorCard, addShiftButton]
+        [receiptPaper, checkPaycheckButton, addShiftButton, errorCard]
             .forEach(mainStack.addArrangedSubview)
+        receiptPaper.addSubview(receiptStack)
+        [receiptHeader, headerRule, emptyCard, periodRailContainer, perShiftPeriodLabel, periodRule,
+         contentCard, grossRule, shiftHistoryStack, bottomRule]
+            .forEach(receiptStack.addArrangedSubview)
+        [brandLabel, subtitleLabel].forEach(receiptHeader.addArrangedSubview)
 
         periodRailContainer.addArrangedSubview(periodLabel)
         periodRailContainer.addArrangedSubview(navigationStack)
@@ -390,11 +472,11 @@ final class OverviewView: UIView, UIScrollViewDelegate {
         periodRailScrollView.addSubview(periodRailStack)
 
         contentCard.addSubview(contentStack)
-        [expectedGrossLabel, expectedGrossAmountLabel]
+        [expectedGrossLabel, expectedGrossAmountLabel, precisionStack]
             .forEach(contentStack.addArrangedSubview)
         [shiftCountLabel, shiftCountValueLabel].forEach(shiftCountStack.addArrangedSubview)
 
-        [shiftCountStack, shiftStack, shiftHistoryEmptyLabel]
+        [shiftCountStack, historyScopeLabel, shiftStack, shiftHistoryEmptyLabel]
             .forEach(shiftHistoryStack.addArrangedSubview)
 
         emptyCard.addSubview(emptyStack)
@@ -405,9 +487,9 @@ final class OverviewView: UIView, UIScrollViewDelegate {
 
         contentCard.accessibilityElements = [expectedGrossLabel, expectedGrossAmountLabel]
 
-        mainStack.setCustomSpacing(16, after: periodRailContainer)
-        mainStack.setCustomSpacing(24, after: contentCard)
-        mainStack.setCustomSpacing(12, after: checkPaycheckButton)
+        mainStack.setCustomSpacing(22, after: receiptPaper)
+        receiptStack.setCustomSpacing(20, after: periodRule)
+        receiptStack.setCustomSpacing(20, after: grossRule)
     }
 
     private func configureLayout() {
@@ -428,10 +510,15 @@ final class OverviewView: UIView, UIScrollViewDelegate {
             mainStack.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -20),
             mainStack.bottomAnchor.constraint(equalTo: contentView.bottomAnchor),
 
-            contentStack.topAnchor.constraint(equalTo: contentCard.topAnchor, constant: 24),
-            contentStack.leadingAnchor.constraint(equalTo: contentCard.leadingAnchor, constant: 24),
-            contentStack.trailingAnchor.constraint(equalTo: contentCard.trailingAnchor, constant: -24),
-            contentStack.bottomAnchor.constraint(equalTo: contentCard.bottomAnchor, constant: -24),
+            receiptStack.topAnchor.constraint(equalTo: receiptPaper.topAnchor, constant: 28),
+            receiptStack.leadingAnchor.constraint(equalTo: receiptPaper.leadingAnchor, constant: 20),
+            receiptStack.trailingAnchor.constraint(equalTo: receiptPaper.trailingAnchor, constant: -20),
+            receiptStack.bottomAnchor.constraint(equalTo: receiptPaper.bottomAnchor, constant: -28),
+
+            contentStack.topAnchor.constraint(equalTo: contentCard.topAnchor),
+            contentStack.leadingAnchor.constraint(equalTo: contentCard.leadingAnchor),
+            contentStack.trailingAnchor.constraint(equalTo: contentCard.trailingAnchor),
+            contentStack.bottomAnchor.constraint(equalTo: contentCard.bottomAnchor),
 
             periodRailScrollView.topAnchor.constraint(equalTo: periodRailViewport.topAnchor),
             periodRailScrollView.bottomAnchor.constraint(equalTo: periodRailViewport.bottomAnchor),
@@ -444,10 +531,10 @@ final class OverviewView: UIView, UIScrollViewDelegate {
             periodRailStack.topAnchor.constraint(equalTo: periodRailScrollView.contentLayoutGuide.topAnchor),
             periodRailStack.bottomAnchor.constraint(equalTo: periodRailScrollView.contentLayoutGuide.bottomAnchor),
 
-            emptyStack.topAnchor.constraint(equalTo: emptyCard.topAnchor, constant: 20),
-            emptyStack.leadingAnchor.constraint(equalTo: emptyCard.leadingAnchor, constant: 20),
-            emptyStack.trailingAnchor.constraint(equalTo: emptyCard.trailingAnchor, constant: -20),
-            emptyStack.bottomAnchor.constraint(equalTo: emptyCard.bottomAnchor, constant: -20),
+            emptyStack.topAnchor.constraint(equalTo: emptyCard.topAnchor),
+            emptyStack.leadingAnchor.constraint(equalTo: emptyCard.leadingAnchor),
+            emptyStack.trailingAnchor.constraint(equalTo: emptyCard.trailingAnchor),
+            emptyStack.bottomAnchor.constraint(equalTo: emptyCard.bottomAnchor),
 
             errorStack.topAnchor.constraint(equalTo: errorCard.topAnchor, constant: 20),
             errorStack.leadingAnchor.constraint(equalTo: errorCard.leadingAnchor, constant: 20),
@@ -547,7 +634,11 @@ final class OverviewView: UIView, UIScrollViewDelegate {
         empty: Bool,
         error: Bool
     ) {
+        receiptPaper.isHidden = !content && !empty
+        periodRule.isHidden = !content
+        grossRule.isHidden = !content
         periodRailContainer.isHidden = !content || !showsPeriodNavigation
+        perShiftPeriodLabel.isHidden = !content || showsPeriodNavigation
         contentCard.isHidden = !content
         shiftHistoryStack.isHidden = !shiftHistory
         checkPaycheckButton.isHidden = !checkPaycheck
@@ -627,11 +718,12 @@ final class OverviewView: UIView, UIScrollViewDelegate {
 
     private func updatePeriodRailForContentSizeCategory() {
         let usesAccessibilityLayout = traitCollection.preferredContentSizeCategory.isAccessibilityCategory
+        shiftCountStack.axis = usesAccessibilityLayout ? .vertical : .horizontal
+        shiftCountStack.alignment = usesAccessibilityLayout ? .fill : .firstBaseline
         periodRailScrollView.isHidden = usesAccessibilityLayout
         periodRailViewport.isHidden = usesAccessibilityLayout
         periodLabel.isHidden = !usesAccessibilityLayout
         navigationStack.distribution = usesAccessibilityLayout ? .equalSpacing : .fill
-        shiftStack.usesAccessibleListLayout = usesAccessibilityLayout
         needsPeriodCentering = true
         setNeedsLayout()
     }

@@ -1108,6 +1108,69 @@
         "ru" : { "stringUnit" : { "state" : "translated", "value" : "Смены ·" } }
       }
     },
+    "overview.ledgerHistory.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "All saved shifts" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Все сохранённые смены" } }
+      }
+    },
+    "overview.ledgerHistory.empty" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "No saved shifts yet." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Пока нет сохранённых смен." } }
+      }
+    },
+    "overview.receipt.brand" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "SHIFTLEDGER" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "SHIFTLEDGER" } }
+      }
+    },
+    "overview.receipt.subtitle" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "PAYROLL OVERVIEW" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "РАСЧЁТ ЗАРПЛАТЫ" } }
+      }
+    },
+    "overview.receipt.historyScope" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "All saved shifts, regardless of pay period" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Все сохранённые смены, независимо от периода" } }
+      }
+    },
+    "overview.receipt.exactContribution" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Exact contribution" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Точный вклад" } }
+      }
+    },
+    "overview.receipt.exactTotal" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Exact total" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Точный итог" } }
+      }
+    },
+    "overview.receipt.displayedTotal" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Displayed" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Показано" } }
+      }
+    },
+    "overview.receipt.roundedForDisplay" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Amounts rounded for display" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Суммы округлены для показа" } }
+      }
+    },
     "overview.shiftsInPeriod" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1196,7 +1259,7 @@
       "extractionState" : "manual",
       "localizations" : {
         "en" : { "stringUnit" : { "state" : "translated", "value" : "Edit shift" } },
-        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Редактировать смену" } }
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Изменить смену" } }
       }
     },
     "overview.previousPeriod" : {
