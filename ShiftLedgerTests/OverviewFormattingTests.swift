@@ -3,6 +3,55 @@ import Testing
 @testable import ShiftLedger
 
 struct OverviewFormattingTests {
+    @Test("Displayed currency uses Decimal ties-to-even at each currency's precision",
+          arguments: [
+            ("EUR", "0", "0"), ("EUR", "1.004", "1"),
+            ("EUR", "1.005", "1"), ("EUR", "1.015", "1.02"),
+            ("EUR", "-1.005", "-1"), ("EUR", "-1.015", "-1.02"),
+            ("EUR", "0.004", "0"), ("EUR", "-0.004", "0"),
+            ("EUR", "9.995", "10"),
+            ("EUR", "123456789012345678901234.565", "123456789012345678901234.56"),
+            ("EUR", "-123456789012345678901234.565", "-123456789012345678901234.56"),
+            ("EUR", "99999999999999999999999999999999999999", "99999999999999999999999999999999999999"),
+            ("USD", "2.345", "2.34"),
+            ("JPY", "0", "0"), ("JPY", "1.5", "2"), ("JPY", "2.5", "2"),
+            ("JPY", "-1.5", "-2"), ("JPY", "0.4", "0"),
+            ("JPY", "123456789012345678901234.5", "123456789012345678901234"),
+            ("KWD", "0", "0"), ("KWD", "1.0004", "1"),
+            ("KWD", "1.0005", "1"), ("KWD", "1.0015", "1.002"),
+            ("KWD", "-1.0015", "-1.002"), ("KWD", "0.0004", "0"),
+            ("KWD", "12.048", "12.048"),
+            ("KWD", "123456789012345678901234.5645", "123456789012345678901234.564")
+          ], ["en_US", "ru_RU", "de_CH"])
+    func displayedCurrencyMatchesVisibleAmount(_ sample: (String, String, String), _ localeID: String) throws {
+        let (code, source, expectedValue) = sample
+        let amount = try decimal(source)
+        let original = amount
+        let expected = try decimal(expectedValue)
+        let locale = Locale(identifier: localeID)
+        #expect(OverviewFormatting.displayedCurrencyValue(amount, currencyCode: code, locale: locale) == expected)
+        let visible = OverviewFormatting.currency(amount, currencyCode: code, locale: locale)
+        // Preserve the previously accepted currency output, including negative displayed zero.
+        #expect(visible == amount.formatted(.currency(code: code).locale(locale)))
+        if amount >= .zero || expected != .zero {
+            #expect(visible == expected.formatted(.currency(code: code).locale(locale)))
+        }
+        #expect(amount == original)
+    }
+
+    @Test("Negative sub-cent amounts retain their displayed sign without inventing a numeric amount")
+    func negativeDisplayedZero() throws {
+        let amount = try decimal("-0.004")
+        #expect(OverviewFormatting.currency(amount, currencyCode: "EUR", locale: Locale(identifier: "en_US")) == "-€0.00")
+        #expect(OverviewFormatting.displayedCurrencyValue(amount, currencyCode: "EUR", locale: locale) == .zero)
+    }
+
+    @Test("Unresolvable currency configuration and NaN fail numeric reconciliation explicitly")
+    func unavailableDisplayedCurrency() {
+        #expect(OverviewFormatting.displayedCurrencyValue(1, currencyCode: "INVALID", locale: locale) == nil)
+        #expect(OverviewFormatting.displayedCurrencyValue(.nan, currencyCode: "EUR", locale: locale) == nil)
+    }
+
     @Test("Hero formats numeric currency precision without currency text", arguments: ["SEK", "JPY", "KWD"])
     func heroUsesCurrencyPrecision(_ code: String) {
         let value = Decimal(2400)

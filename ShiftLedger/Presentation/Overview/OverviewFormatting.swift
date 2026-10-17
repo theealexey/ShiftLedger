@@ -75,7 +75,15 @@ enum OverviewFormatting {
         currencyCode: String,
         locale: Locale
     ) -> String {
-        amount.formatted(.currency(code: currencyCode).locale(locale))
+        guard let digits = currencyFractionDigits(currencyCode: currencyCode, locale: locale) else {
+            return amount.description
+        }
+        return amount.formatted(
+            .currency(code: currencyCode)
+                .precision(.fractionLength(digits))
+                .rounded(rule: .toNearestOrEven)
+                .locale(locale)
+        )
     }
 
     static func exactCurrency(
@@ -93,15 +101,30 @@ enum OverviewFormatting {
         return formatter.string(from: NSDecimalNumber(decimal: amount))
     }
 
-    /// Parses our displayed currency, not a payroll input. Decimal parsing avoids binary arithmetic.
+    /// The numeric value represented by `currency`, without parsing localized text.
+    /// Both paths use the currency's fraction digits and ties-to-even rounding.
     static func displayedCurrencyValue(_ amount: Decimal, currencyCode: String, locale: Locale) -> Decimal? {
+        guard !amount.isNaN,
+              let digits = currencyFractionDigits(currencyCode: currencyCode, locale: locale) else {
+            return nil
+        }
+        var source = amount
+        var rounded = Decimal.zero
+        NSDecimalRound(&rounded, &source, digits, .bankers)
+        return rounded.isNaN ? nil : rounded
+    }
+
+    private static func currencyFractionDigits(currencyCode: String, locale: Locale) -> Int? {
+        guard Locale.Currency(currencyCode).isISOCurrency else { return nil }
         let formatter = NumberFormatter()
         formatter.locale = locale
         formatter.numberStyle = .currency
         formatter.currencyCode = currencyCode
-        formatter.generatesDecimalNumbers = true
-        return (formatter.number(from: currency(amount, currencyCode: currencyCode, locale: locale))
-                as? NSDecimalNumber)?.decimalValue
+        let digits = formatter.maximumFractionDigits
+        guard (0...38).contains(digits), formatter.minimumFractionDigits == digits,
+              formatter.roundingMode == .halfEven,
+              formatter.roundingIncrement?.decimalValue == .zero else { return nil }
+        return digits
     }
 
     static func scheduledPeriod(

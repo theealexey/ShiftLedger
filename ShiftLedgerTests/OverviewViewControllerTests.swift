@@ -299,6 +299,104 @@ struct OverviewViewControllerTests {
         }
     }
 
+    @Test("Tiny nonzero selected payroll remains explainable while a genuinely empty period has no note",
+          arguments: ["0.004", "0.000000000000000001"], ["en_US", "ru_RU"])
+    func receiptExplainsNonzeroDisplayedAsZero(_ amount: String, _ localeID: String) throws {
+        let rate = try #require(Decimal(string: amount))
+        let locale = Locale(identifier: localeID)
+        let job = try Job(
+            id: testWorkTypeID, currencyCode: "EUR", timeZoneIdentifier: "Europe/Stockholm",
+            basePayBasis: .fixedPerShift, payCalculationCycle: .scheduled(.calendarMonthly),
+            payRates: [PayRate(amount: rate, effectiveFrom: nil)],
+            createdAt: Date(timeIntervalSinceReferenceDate: 0)
+        )
+        let shift = try makeShift(id: 1, month: 9, day: 10)
+        let now = try date(year: 2026, month: 9, day: 18, hour: 12)
+        let viewModel = OverviewViewModel(job: job, loadShifts: { [shift] }, currentDate: { now })
+        let controller = OverviewViewController(viewModel: viewModel, currencyCode: "EUR",
+                                              timeZoneIdentifier: job.timeZoneIdentifier, displayLocale: locale)
+        controller.traitOverrides.preferredContentSizeCategory = .large
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 402, height: 874))
+        window.rootViewController = controller
+        window.isHidden = false
+        defer { window.isHidden = true }
+        window.layoutIfNeeded()
+        let root = try requireRootView(controller)
+        let hero: UILabel = try requireView(identifier: "overview.expectedGross.amount", in: root)
+        let exact: UILabel = try requireView(identifier: "overview.receipt.precision.exact", in: root)
+        let note: UILabel = try requireView(identifier: "overview.receipt.precision", in: root)
+        #expect(hero.text == OverviewFormatting.heroAmount(rate, currencyCode: "EUR", locale: locale))
+        #expect(!isEffectivelyHidden(note))
+        #expect(exact.text == OverviewFormatting.exactCurrency(rate, currencyCode: "EUR", locale: locale))
+        #expect(exact.text != OverviewFormatting.currency(.zero, currencyCode: "EUR", locale: locale))
+        #expect(try requireContent(viewModel.state).expectedBreakdown?.expectedGross == rate)
+        #expect(shiftCardIdentifiers(in: root) == [shift.id])
+        let previous: UIButton = try requireView(identifier: "overview.period.previous", in: root)
+        previous.sendActions(for: .touchUpInside)
+        window.layoutIfNeeded()
+        #expect(hero.text == OverviewFormatting.heroAmount(.zero, currencyCode: "EUR", locale: locale))
+        #expect(isEffectivelyHidden(note))
+        #expect(shiftCardIdentifiers(in: root) == [shift.id])
+        let check: UIButton = try requireView(identifier: "overview.checkPaycheck", in: root)
+        #expect(check.isEnabled)
+        var requestedPeriod: PayCalculationPeriod?
+        controller.onCheckPaycheck = { requestedPeriod = $0 }
+        check.sendActions(for: .touchUpInside)
+        #expect(requestedPeriod == (try requireContent(viewModel.state)).selectedPeriod)
+    }
+
+    @Test("Optional precision failure keeps valid payroll, history and paycheck navigation",
+          arguments: [1, 3])
+    func unavailablePrecisionDoesNotHideContent(_ failingCall: Int) throws {
+        let rate = try #require(Decimal(string: "1.004"))
+        let job = try Job(
+            id: testWorkTypeID, currencyCode: "EUR", timeZoneIdentifier: "Europe/Stockholm",
+            basePayBasis: .fixedPerShift, payCalculationCycle: .scheduled(.calendarMonthly),
+            payRates: [PayRate(amount: rate, effectiveFrom: nil)],
+            createdAt: Date(timeIntervalSinceReferenceDate: 0)
+        )
+        let shifts = try [makeShift(id: 1, month: 8, day: 31), makeShift(id: 2, month: 9, day: 1),
+                          makeShift(id: 3, month: 9, day: 2)]
+        let now = try date(year: 2026, month: 9, day: 18, hour: 12)
+        let viewModel = OverviewViewModel(job: job, loadShifts: { shifts }, currentDate: { now })
+        var calls = 0
+        let controller = OverviewViewController(
+            viewModel: viewModel, currencyCode: "EUR", timeZoneIdentifier: job.timeZoneIdentifier,
+            displayLocale: displayLocale,
+            displayedCurrencyValue: { amount, code, locale in
+                calls += 1
+                return calls == failingCall ? nil : OverviewFormatting.displayedCurrencyValue(amount, currencyCode: code, locale: locale)
+            }
+        )
+        controller.traitOverrides.preferredContentSizeCategory = .large
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 402, height: 874))
+        window.rootViewController = controller
+        window.isHidden = false
+        defer { window.isHidden = true }
+        window.layoutIfNeeded()
+        let root = try requireRootView(controller)
+        let hero: UILabel = try requireView(identifier: "overview.expectedGross.amount", in: root)
+        let note: UILabel = try requireView(identifier: "overview.receipt.precision", in: root)
+        let error: UILabel = try requireView(identifier: "overview.error.title", in: root)
+        let count: UILabel = try requireView(identifier: "overview.shiftCount.value", in: root)
+        #expect(hero.text == "2.01")
+        #expect(!isEffectivelyHidden(hero))
+        #expect(isEffectivelyHidden(note))
+        #expect(isEffectivelyHidden(error))
+        #expect(count.text == "3")
+        #expect(shiftCardIdentifiers(in: root) == shifts.reversed().map(\.id))
+        let check: UIButton = try requireView(identifier: "overview.checkPaycheck", in: root)
+        #expect(check.isEnabled)
+        var requestedPeriod: PayCalculationPeriod?
+        controller.onCheckPaycheck = { requestedPeriod = $0 }
+        check.sendActions(for: .touchUpInside)
+        #expect(requestedPeriod == (try requireContent(viewModel.state)).selectedPeriod)
+        let previous: UIButton = try requireView(identifier: "overview.period.previous", in: root)
+        previous.sendActions(for: .touchUpInside)
+        #expect(hero.text == "1.00")
+        #expect(shiftCardIdentifiers(in: root) == shifts.reversed().map(\.id))
+    }
+
     @Test("The continuous receipt paper adapts to light and dark appearance")
     func expectedGrossSurfaceAdaptsToAppearance() throws {
         let subject = try makeSubject(
