@@ -140,8 +140,8 @@ final class OverviewView: UIView, UIScrollViewDelegate {
                                        identifier: "overview.receipt.precision.displayed")
         }
         contentCard.accessibilityElements = precisionExplanation == nil
-            ? [expectedGrossLabel, expectedGrossAmountLabel]
-            : [expectedGrossLabel, expectedGrossAmountLabel, exactTotalField, displayedTotalField, precisionLabel]
+            ? [expectedGrossAmountLabel]
+            : [expectedGrossAmountLabel, exactTotalField, displayedTotalField, precisionLabel]
         periodLabel.text = period
         periodLabel.accessibilityLabel = period
         perShiftPeriodLabel.text = period
@@ -301,6 +301,7 @@ final class OverviewView: UIView, UIScrollViewDelegate {
             color: ShiftLedgerColors.textSecondary
         )
         expectedGrossLabel.accessibilityIdentifier = "overview.expectedGross.label"
+        expectedGrossLabel.isAccessibilityElement = false
 
         configureLabel(
             expectedGrossAmountLabel,
@@ -308,6 +309,7 @@ final class OverviewView: UIView, UIScrollViewDelegate {
             color: ShiftLedgerColors.textPrimary
         )
         expectedGrossAmountLabel.accessibilityIdentifier = "overview.expectedGross.amount"
+        expectedGrossAmountLabel.isAccessibilityElement = true
         configureLabel(precisionLabel, font: UIFontMetrics(forTextStyle: .footnote).scaledFont(
             for: .monospacedSystemFont(ofSize: 12, weight: .regular)
         ), color: ShiftLedgerColors.textSecondary)

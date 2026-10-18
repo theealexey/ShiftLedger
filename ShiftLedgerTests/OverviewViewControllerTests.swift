@@ -169,15 +169,28 @@ struct OverviewViewControllerTests {
         #expect(perShiftPeriod.convert(perShiftPeriod.bounds, to: receipt).minY >= 0)
     }
 
-    @Test("Hero currency context and the single Shift heading are explicit")
-    func heroAndShiftHeadingHaveOneHierarchy() throws {
+    @Test("Hero exposes one combined gross accessibility element and the single Shift heading")
+    func heroGrossAccessibilityAndShiftHeadingHaveOneHierarchy() throws {
         let subject = try makeSubject(job: makeJob(cycle: .scheduled(.calendarMonthly)), shifts: [makeShift(id: 1, month: 9, day: 10)])
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+        window.rootViewController = subject.viewController
+        window.isHidden = false
+        defer { window.isHidden = true }
         subject.viewController.loadViewIfNeeded()
-        let context: UILabel = try requireView(identifier: "overview.expectedGross.label", in: try requireRootView(subject.viewController))
-        let amount: UILabel = try requireView(identifier: "overview.expectedGross.amount", in: try requireRootView(subject.viewController))
-        let heading: UIStackView = try requireView(identifier: "overview.shiftHistory.title", in: try requireRootView(subject.viewController))
+        window.layoutIfNeeded()
+        let root = try requireRootView(subject.viewController)
+        let context: UILabel = try requireView(identifier: "overview.expectedGross.label", in: root)
+        let amount: UILabel = try requireView(identifier: "overview.expectedGross.amount", in: root)
+        let gross: UIView = try requireView(identifier: "overview.expectedGross.hero", in: root)
+        let heading: UIStackView = try requireView(identifier: "overview.shiftHistory.title", in: root)
         #expect(context.text == OverviewStrings.expectedGrossContext(currencyCode: "EUR"))
         #expect(amount.text == OverviewFormatting.heroAmount(160, currencyCode: "EUR", locale: displayLocale))
+        #expect(context.isAccessibilityElement == false)
+        #expect(amount.isAccessibilityElement)
+        #expect(amount.accessibilityLabel == "\(context.text ?? ""), \(amount.text ?? "")")
+        let grossElements = try #require(gross.accessibilityElements as? [UIView])
+        #expect(grossElements.count == 1)
+        #expect(grossElements[0] === amount)
         #expect(heading.isAccessibilityElement)
         #expect(heading.accessibilityLabel == "\(OverviewStrings.allShiftHistory) 1")
         #expect(heading.arrangedSubviews.count == 2)
@@ -214,7 +227,12 @@ struct OverviewViewControllerTests {
         let september = try (1...12).map { try makeShift(id: UInt8($0), month: 9, day: $0) }
         let august = try makeShift(id: 99, month: 8, day: 31)
         let subject = try makeSubject(job: job, shifts: september + [august])
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+        window.rootViewController = subject.viewController
+        window.isHidden = false
+        defer { window.isHidden = true }
         subject.viewController.loadViewIfNeeded()
+        window.layoutIfNeeded()
         let root = try requireRootView(subject.viewController)
         let hero: UILabel = try requireView(identifier: "overview.expectedGross.amount", in: root)
         let explanation: UILabel = try requireView(identifier: "overview.receipt.precision", in: root)
@@ -231,8 +249,17 @@ struct OverviewViewControllerTests {
         #expect(explanation.text == OverviewStrings.roundedForDisplay)
         let exactField: UILabel = try requireView(identifier: "overview.receipt.precision.exact", in: root)
         let displayedField: UILabel = try requireView(identifier: "overview.receipt.precision.displayed", in: root)
+        let gross: UIView = try requireView(identifier: "overview.expectedGross.hero", in: root)
+        let exactTotal: UIView = try requireView(identifier: "overview.receipt.precision.exactField", in: root)
+        let displayedTotal: UIView = try requireView(identifier: "overview.receipt.precision.displayedField", in: root)
         #expect(exactField.text == exactTwelve)
         #expect(displayedField.text == OverviewFormatting.currency(twelveAmount, currencyCode: "EUR", locale: displayLocale))
+        let populatedGrossElements = try #require(gross.accessibilityElements as? [UIView])
+        #expect(populatedGrossElements.count == 4)
+        #expect(populatedGrossElements[0] === hero)
+        #expect(populatedGrossElements[1] === exactTotal)
+        #expect(populatedGrossElements[2] === displayedTotal)
+        #expect(populatedGrossElements[3] === explanation)
         #expect(shiftCardIdentifiers(in: root).count == 13)
         let septemberCard: UIView = try requireView(
             identifier: "overview.shift.\(september[0].id.uuidString)", in: root
@@ -243,10 +270,27 @@ struct OverviewViewControllerTests {
         previous.sendActions(for: .touchUpInside)
         #expect(hero.text == "1.00")
         #expect(isEffectivelyHidden(explanation)) // One rounded row already reconciles with the displayed total.
+        let historicalGrossElements = try #require(gross.accessibilityElements as? [UIView])
+        #expect(historicalGrossElements.count == 1)
+        #expect(historicalGrossElements[0] === hero)
         #expect(shiftCardIdentifiers(in: root).count == 13)
         previous.sendActions(for: .touchUpInside)
         #expect(hero.text == "0.00")
         #expect(isEffectivelyHidden(explanation))
+        let emptyGrossElements = try #require(gross.accessibilityElements as? [UIView])
+        #expect(emptyGrossElements.count == 1)
+        #expect(emptyGrossElements[0] === hero)
+        #expect(shiftCardIdentifiers(in: root).count == 13)
+        let next: UIButton = try requireView(identifier: "overview.period.next", in: root)
+        next.sendActions(for: .touchUpInside)
+        next.sendActions(for: .touchUpInside)
+        #expect(hero.text == "12.05")
+        let restoredGrossElements = try #require(gross.accessibilityElements as? [UIView])
+        #expect(restoredGrossElements.count == 4)
+        #expect(restoredGrossElements[0] === hero)
+        #expect(restoredGrossElements[1] === exactTotal)
+        #expect(restoredGrossElements[2] === displayedTotal)
+        #expect(restoredGrossElements[3] === explanation)
         #expect(shiftCardIdentifiers(in: root).count == 13)
     }
 
