@@ -59,41 +59,28 @@ final class OverviewReceiptPaperView: UIView {
     static func paperPath(in rect: CGRect) -> UIBezierPath {
         let path = UIBezierPath()
         guard rect.width > 0, rect.height > 12 else { return path }
-        // Independent local sequences: width controls the contour, never content height or time.
-        let top = tearContour(width: rect.width, seed: 0x5217)
-        let bottom = tearContour(width: rect.width, seed: 0xA39B)
-        path.move(to: CGPoint(x: rect.minX, y: rect.minY + 4))
-        for point in top {
-            path.addLine(to: CGPoint(x: rect.minX + point.x, y: rect.minY + point.y))
+        // Whole semicircular cutouts, with equal straight shoulders at both corners.
+        let count = max(1, Int(rect.width / 10))
+        let pitch = rect.width / CGFloat(count)
+        let radius = min(2.5, pitch / 4)
+        path.move(to: CGPoint(x: rect.minX, y: rect.minY))
+        for index in 0..<count {
+            let centerX = rect.minX + (CGFloat(index) + 0.5) * pitch
+            path.addLine(to: CGPoint(x: centerX - radius, y: rect.minY))
+            path.addArc(withCenter: CGPoint(x: centerX, y: rect.minY), radius: radius,
+                        startAngle: .pi, endAngle: 0, clockwise: false)
         }
-        for point in bottom.reversed() {
-            path.addLine(to: CGPoint(x: rect.minX + point.x, y: rect.maxY - point.y))
+        path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
+        path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
+        for index in (0..<count).reversed() {
+            let centerX = rect.minX + (CGFloat(index) + 0.5) * pitch
+            path.addLine(to: CGPoint(x: centerX + radius, y: rect.maxY))
+            path.addArc(withCenter: CGPoint(x: centerX, y: rect.maxY), radius: radius,
+                        startAngle: 0, endAngle: .pi, clockwise: false)
         }
+        path.addLine(to: CGPoint(x: rect.minX, y: rect.maxY))
         path.close()
         return path
-    }
-
-    private static func tearContour(width: CGFloat, seed: UInt64) -> [CGPoint] {
-        var state = seed
-        func next() -> UInt64 {
-            state = state &* 6364136223846793005 &+ 1442695040888963407
-            return state >> 32
-        }
-        var points = [CGPoint(x: 0, y: 4)]
-        var x: CGFloat = 0
-        while x < width {
-            let interval = CGFloat(5 + next() % 8)
-            let shallow = next() % 7 == 0
-            let depth = shallow ? CGFloat(1) : CGFloat(2 + next() % 5)
-            let shoulder = CGFloat(2 + next() % 4) / 10
-            let previousDepth = points.last?.y ?? 4
-            // Occasionally retain the previous level, producing a short almost-flat tear.
-            points.append(CGPoint(x: min(width, x + interval * shoulder),
-                                  y: shallow ? previousDepth : depth))
-            x = min(width, x + interval)
-            points.append(CGPoint(x: x, y: CGFloat(1 + next() % 3)))
-        }
-        return points
     }
 }
 

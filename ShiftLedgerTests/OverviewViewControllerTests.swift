@@ -467,30 +467,67 @@ struct OverviewViewControllerTests {
         #expect(path.bounds.width == paper.bounds.width)
     }
 
-    @Test("Torn contours are deterministic, distinct and independent of receipt height")
-    func receiptTearContoursAreStableAndIrregular() throws {
-        func points(_ height: CGFloat, width: CGFloat = 362) -> [CGPoint] {
-            var result: [CGPoint] = []
-            OverviewReceiptPaperView.paperPath(in: CGRect(x: 0, y: 0, width: width, height: height))
+    @Test("Receipt has regular bounded semicircular cutouts on both edges independent of height",
+          arguments: [CGFloat(335), CGFloat(362), CGFloat(390)])
+    func receiptPaperHasRegularSemicircularEdges(_ width: CGFloat) throws {
+        func elements(in rect: CGRect) -> [(CGPathElementType, [CGPoint])] {
+            var result: [(CGPathElementType, [CGPoint])] = []
+            OverviewReceiptPaperView.paperPath(in: rect)
                 .cgPath.applyWithBlock { element in
-                    if element.pointee.type == .moveToPoint || element.pointee.type == .addLineToPoint {
-                        result.append(element.pointee.points[0])
+                    let type = element.pointee.type
+                    switch type {
+                    case .moveToPoint, .addLineToPoint:
+                        result.append((type, [element.pointee.points[0]]))
+                    case .addCurveToPoint:
+                        result.append((type, Array(UnsafeBufferPointer(start: element.pointee.points, count: 3))))
+                    case .addQuadCurveToPoint, .closeSubpath:
+                        result.append((type, []))
+                    @unknown default:
+                        Issue.record("Unexpected receipt path element")
                     }
                 }
             return result
         }
-        let original = points(540)
-        #expect(original == points(540))
-        let top = original.filter { $0.y < 10 }
-        let bottom = original.filter { $0.y > 530 }.reversed().map { CGPoint(x: $0.x, y: 540 - $0.y) }
-        #expect(top != bottom)
-        #expect(Set(top.map(\.y)).count >= 4)
-        let intervals = zip(top.dropFirst(), top).map { $0.x - $1.x }
-        #expect(Set(intervals).count > 8)
-        #expect(top.allSatisfy { (0...8).contains($0.y) })
-        #expect(top == points(900).filter { $0.y < 10 })
-        #expect(bottom == points(900).filter { $0.y > 890 }.reversed().map { CGPoint(x: $0.x, y: 900 - $0.y) })
-        #expect(points(540, width: 335) != original)
+        let rect = CGRect(x: 7, y: 11, width: width, height: 540)
+        let path = OverviewReceiptPaperView.paperPath(in: rect)
+        #expect(path.cgPath == OverviewReceiptPaperView.paperPath(in: rect).cgPath)
+        #expect(path.cgPath.boundingBoxOfPath == rect)
+        let original = elements(in: rect)
+        let points = original.flatMap { $0.1 }
+        #expect(points.allSatisfy {
+            (rect.minX - 0.001...rect.maxX + 0.001).contains($0.x)
+                && (rect.minY - 0.001...rect.maxY + 0.001).contains($0.y)
+        })
+        let curves = original.filter { $0.0 == .addCurveToPoint }.map { $0.1 }
+        let top = curves.filter { $0.allSatisfy { $0.y < rect.midY } }
+        let bottom = curves.filter { $0.allSatisfy { $0.y > rect.midY } }
+        try #require(top.count > 4 && top.count == bottom.count)
+        // Each half-circle consists of two quarter-circle curves. Its midpoint
+        // is inside the paper; its endpoint returns to the horizontal baseline.
+        for edge in [top, bottom] {
+            let baseline = edge[0][2].y < rect.midY ? rect.minY : rect.maxY
+            let midpoints = stride(from: 0, to: edge.count, by: 2).map { edge[$0][2] }
+            let depth = abs(midpoints[0].y - baseline)
+            #expect(depth > 0 && depth < 6)
+            #expect(midpoints.allSatisfy { abs(abs($0.y - baseline) - depth) < 0.001 })
+            for index in stride(from: 1, to: edge.count, by: 2) {
+                #expect(abs(edge[index][2].y - baseline) < 0.001)
+                #expect(abs(abs(edge[index][2].x - edge[index - 1][2].x) - depth) < 0.001)
+            }
+            let intervals = zip(midpoints, midpoints.dropFirst()).map { abs($1.x - $0.x) }
+            #expect(intervals.allSatisfy { abs($0 - intervals[0]) < 0.001 })
+        }
+        #expect(points.contains(CGPoint(x: rect.maxX, y: rect.minY)))
+        #expect(points.contains(CGPoint(x: rect.maxX, y: rect.maxY)))
+        #expect(points.contains(CGPoint(x: rect.minX, y: rect.maxY)))
+        let taller = CGRect(x: rect.minX, y: rect.minY, width: width, height: 1800)
+        let tallerPoints = elements(in: taller).flatMap { $0.1 }
+        #expect(points.count == tallerPoints.count)
+        for (shortPoint, tallPoint) in zip(points, tallerPoints) {
+            #expect(abs(shortPoint.x - tallPoint.x) < 0.001)
+            let offset = shortPoint.y < rect.midY ? 0 : taller.height - rect.height
+            #expect(abs(shortPoint.y + offset - tallPoint.y) < 0.001)
+        }
     }
 
     @Test("Receipt metadata stacks label and full value at accessibility sizes")
@@ -610,17 +647,24 @@ struct OverviewViewControllerTests {
 
     @Test("Receipt edge is one resizing silhouette with actions below the paper")
     func receiptEdgeResizesWithoutAccumulatingLayers() throws {
+        func expectPaperBounds(_ shape: CAShapeLayer, in bounds: CGRect) throws {
+            let path = try #require(shape.path)
+            #expect(shape.shadowPath == path)
+            let rendered = path.boundingBoxOfPath
+            #expect(abs(rendered.minX - bounds.minX) < 0.001)
+            #expect(abs(rendered.minY - bounds.minY) < 0.001)
+            #expect(abs(rendered.maxX - bounds.maxX) < 0.001)
+            #expect(abs(rendered.maxY - bounds.maxY) < 0.001)
+        }
         let paper = OverviewReceiptPaperView(frame: CGRect(x: 0, y: 0, width: 362, height: 540))
         paper.layoutIfNeeded()
         let shape = try #require(paper.layer.sublayers?.first as? CAShapeLayer)
         #expect(paper.layer.sublayers?.count == 1)
-        #expect(shape.path?.boundingBoxOfPath.width == 362)
-        #expect((shape.path?.boundingBoxOfPath.height ?? 0) >= 528)
+        try expectPaperBounds(shape, in: paper.bounds)
         paper.frame.size = CGSize(width: 335, height: 860)
         paper.layoutIfNeeded()
         #expect(paper.layer.sublayers?.count == 1)
-        #expect(shape.path?.boundingBoxOfPath.width == 335)
-        #expect((shape.path?.boundingBoxOfPath.height ?? 0) >= 848)
+        try expectPaperBounds(shape, in: paper.bounds)
         #expect(shape.animationKeys()?.isEmpty != false)
         #expect(paper.isAccessibilityElement == false)
 
