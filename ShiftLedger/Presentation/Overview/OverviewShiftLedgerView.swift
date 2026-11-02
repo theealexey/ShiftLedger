@@ -71,6 +71,7 @@ final class OverviewShiftLedgerRowView: UIControl {
     private let unpaidBreak = OverviewReceiptFieldView()
     private let rate = OverviewReceiptFieldView()
     private let editButton = UIButton(type: .system)
+    private let editChevron = UIImageView(image: UIImage(systemName: "chevron.right"))
     private let disclosure = UIImageView(image: UIImage(systemName: "chevron.right"))
     private let divider = OverviewReceiptRuleView()
     private let selectedRule = UIView()
@@ -164,6 +165,7 @@ final class OverviewShiftLedgerRowView: UIControl {
         details.isHidden = !card.isExpanded
         editButton.isHidden = !card.isExpanded
         editButton.accessibilityIdentifier = "\(prefix).edit"
+        editChevron.accessibilityIdentifier = "\(prefix).edit.chevron"
         disclosure.image = UIImage(systemName: card.isExpanded ? "chevron.up" : "chevron.right")
         divider.isHidden = !showsDivider
         updateHeadingAxis()
@@ -203,18 +205,38 @@ final class OverviewShiftLedgerRowView: UIControl {
         details.layoutMargins = UIEdgeInsets(top: 8, left: 12, bottom: 8, right: 0)
         [unpaidBreak, rate].forEach(details.addArrangedSubview)
 
-        var editConfiguration = UIButton.Configuration.plain()
+        var editConfiguration = UIButton.Configuration.tinted()
         editConfiguration.title = OverviewStrings.editShift
         editConfiguration.image = UIImage(systemName: "pencil")
         editConfiguration.imagePadding = 8
         editConfiguration.baseForegroundColor = ShiftLedgerColors.accentPrimary
+        editConfiguration.baseBackgroundColor = ShiftLedgerColors.accentPrimary
+        editConfiguration.background.backgroundColor = ShiftLedgerColors.accentPrimary.withAlphaComponent(0.12)
+        editConfiguration.background.backgroundColorTransformer = nil
+        editConfiguration.cornerStyle = .fixed
+        editConfiguration.background.cornerRadius = 12
+        editConfiguration.contentInsets = NSDirectionalEdgeInsets(top: 12, leading: 16, bottom: 12, trailing: 40)
+        editConfiguration.titleLineBreakMode = .byWordWrapping
         editButton.configuration = editConfiguration
         editButton.contentHorizontalAlignment = .leading
+        editButton.isAccessibilityElement = false
         editButton.titleLabel?.adjustsFontForContentSizeCategory = true
         editButton.titleLabel?.numberOfLines = 0
         editButton.titleLabel?.lineBreakMode = .byWordWrapping
         editButton.addAction(UIAction { [weak self] _ in self?.onEditTapped?() }, for: .touchUpInside)
-        editButton.heightAnchor.constraint(greaterThanOrEqualToConstant: 44).isActive = true
+        editButton.heightAnchor.constraint(greaterThanOrEqualToConstant: 50).isActive = true
+        editChevron.tintColor = ShiftLedgerColors.accentPrimary
+        editChevron.contentMode = .scaleAspectFit
+        editChevron.isUserInteractionEnabled = false
+        editChevron.isAccessibilityElement = false
+        editChevron.translatesAutoresizingMaskIntoConstraints = false
+        editButton.addSubview(editChevron)
+        NSLayoutConstraint.activate([
+            editChevron.trailingAnchor.constraint(equalTo: editButton.trailingAnchor, constant: -16),
+            editChevron.centerYAnchor.constraint(equalTo: editButton.centerYAnchor),
+            editChevron.widthAnchor.constraint(equalToConstant: 12),
+            editChevron.heightAnchor.constraint(equalToConstant: 16)
+        ])
         addAction(UIAction { [weak self] _ in self?.onCardTapped?() }, for: .touchUpInside)
 
         [heading, summary, details, editButton].forEach(content.addArrangedSubview)
@@ -289,10 +311,19 @@ final class OverviewShiftLedgerRowView: UIControl {
     }
 
     private func updateEditButtonForContentSizeCategory() {
+        let accessibilitySize = traitCollection.preferredContentSizeCategory.isAccessibilityCategory
         var configuration = editButton.configuration
-        configuration?.image = traitCollection.preferredContentSizeCategory.isAccessibilityCategory
-            ? nil : UIImage(systemName: "pencil")
+        configuration?.image = accessibilitySize ? nil : UIImage(systemName: "pencil")
+        configuration?.contentInsets.trailing = accessibilitySize ? 16 : 40
+        let headline = UIFont.preferredFont(forTextStyle: .headline, compatibleWith: traitCollection)
+        let font = UIFont.systemFont(ofSize: headline.pointSize, weight: .bold)
+        configuration?.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { attributes in
+            var attributes = attributes
+            attributes.font = font
+            return attributes
+        }
         editButton.configuration = configuration
+        editChevron.isHidden = accessibilitySize
         editButton.titleLabel?.numberOfLines = 0
         editButton.titleLabel?.lineBreakMode = .byWordWrapping
         editButton.titleLabel?.invalidateIntrinsicContentSize()

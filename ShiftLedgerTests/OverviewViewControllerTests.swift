@@ -1536,13 +1536,14 @@ struct OverviewViewControllerTests {
         #expect(visibleFrontCardIdentifiers(in: try requireRootView(subject.viewController)) == [older.id])
     }
 
-    @Test("Expanded Shift exposes one Edit action without changing card tap behavior")
-    func expandedShiftEditActionPreservesCardInteraction() throws {
+    @Test("Expanded Shift exposes one secondary Edit button without changing card tap behavior",
+          arguments: [CGFloat(320), CGFloat(402)], ["en", "ru"])
+    func expandedShiftEditActionPreservesCardInteraction(_ width: CGFloat, _ language: String) throws {
         let job = try makeJob(cycle: .scheduled(.calendarMonthly))
         let shift = try makeShift(id: 1, month: 9, day: 20)
         let subject = try makeSubject(job: job, shifts: [shift])
         subject.viewController.traitOverrides.preferredContentSizeCategory = .large
-        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: width, height: 874))
         window.rootViewController = subject.viewController
         window.isHidden = false
         defer { window.isHidden = true }
@@ -1575,8 +1576,47 @@ struct OverviewViewControllerTests {
         #expect(card.accessibilityValue == OverviewStrings.expanded)
         #expect(editButton.isHidden == false)
         #expect(editButton.configuration?.title == OverviewStrings.editShift)
-        #expect(editButton.bounds.height >= 44)
+        let localizationPath = try #require(Bundle(for: OverviewViewController.self).path(forResource: language, ofType: "lproj"))
+        let localization = try #require(Bundle(path: localizationPath))
+        let title = localization.localizedString(forKey: "overview.editShift", value: nil, table: "Localizable")
+        #expect(title != "overview.editShift")
+        var configuration = try #require(editButton.configuration)
+        configuration.title = title
+        editButton.configuration = configuration
+        window.layoutIfNeeded()
+        #expect(editButton.bounds.height >= 50)
+        #expect(editButton.configuration?.background.cornerRadius == 12)
+        #expect(editButton.isAccessibilityElement == false)
         #expect(card.accessibilityCustomActions?.map(\.name) == [OverviewStrings.editShift])
+        let chevron: UIImageView = try requireView(
+            identifier: "overview.shift.\(shift.id.uuidString).edit.chevron", in: card)
+        #expect(!chevron.isHidden && chevron.image != nil)
+        #expect(!chevron.isAccessibilityElement && !chevron.isUserInteractionEnabled)
+        let titleLabel = try #require(editButton.titleLabel)
+        #expect(titleLabel.font.fontDescriptor.symbolicTraits.contains(.traitBold))
+        #expect(titleLabel.font.pointSize >= 14)
+        let titleFrame = titleLabel.convert(titleLabel.bounds, to: editButton)
+        let chevronFrame = chevron.convert(chevron.bounds, to: editButton)
+        #expect(titleFrame.maxX + 8 <= chevronFrame.minX + 0.5)
+        #expect(chevronFrame.maxX <= editButton.bounds.maxX - 16 + 0.5)
+        #expect(titleLabel.text == title)
+        #expect(titleLabel.bounds.height + 0.5 >= titleLabel.sizeThatFits(
+            CGSize(width: titleLabel.bounds.width, height: .greatestFiniteMagnitude)).height)
+        for style in [UIUserInterfaceStyle.light, .dark] {
+            let traits = UITraitCollection(userInterfaceStyle: style)
+            let accent = try colorComponents(ShiftLedgerColors.accentPrimary, traits: traits)
+            let surface = try colorComponents(try #require(editButton.configuration?.background.backgroundColor), traits: traits)
+            #expect(abs(surface.alpha - 0.12) < 0.000001)
+            #expect(abs(surface.red - accent.red) < 0.000001)
+            #expect(abs(surface.green - accent.green) < 0.000001)
+            #expect(abs(surface.blue - accent.blue) < 0.000001)
+            for color in [editButton.configuration?.baseForegroundColor, editButton.configuration?.baseBackgroundColor, chevron.tintColor] {
+                let actual = try colorComponents(try #require(color), traits: traits)
+                #expect(abs(actual.red - accent.red) < 0.000001)
+                #expect(abs(actual.green - accent.green) < 0.000001)
+                #expect(abs(actual.blue - accent.blue) < 0.000001)
+            }
+        }
 
         let frontDate: UILabel = try requireView(
             identifier: "overview.shift.\(shift.id.uuidString).date",
@@ -1586,41 +1626,73 @@ struct OverviewViewControllerTests {
         let editFrame = editButton.convert(editButton.bounds, to: card)
         #expect(abs(headerFrame.minY - 16) <= 0.5)
         #expect(abs((card.bounds.maxY - editFrame.maxY) - 16) <= 0.5)
+        #expect(abs(editFrame.minX - 16) <= 0.5)
+        #expect(abs((card.bounds.maxX - editFrame.maxX) - 16) <= 0.5)
         #expect(headerFrame.minY >= card.bounds.minY)
         #expect(editFrame.maxY <= card.bounds.maxY)
 
         var receivedShift: Shift?
-        subject.viewController.onEditShift = { receivedShift = $0 }
+        var editInvocationCount = 0
+        subject.viewController.onEditShift = { receivedShift = $0; editInvocationCount += 1 }
         let editAction = try #require(card.accessibilityCustomActions?.first)
         let editActionTarget = try #require(editAction.target as? NSObject)
         _ = editActionTarget.perform(editAction.selector)
         #expect(receivedShift == shift)
+        #expect(editInvocationCount == 1)
         #expect(editButton.isHidden == false)
 
         receivedShift = nil
         editButton.sendActions(for: .touchUpInside)
         #expect(receivedShift == shift)
+        #expect(editInvocationCount == 2)
         #expect(isEffectivelyHidden(editButton) == false)
+        #expect(card.accessibilityValue == OverviewStrings.expanded)
 
         let buttonCenter = editButton.convert(
             CGPoint(x: editButton.bounds.midX, y: editButton.bounds.midY),
             to: card
         )
         #expect(card.hitTest(buttonCenter, with: nil) === editButton)
+        // Exercise the complete surface, including the decorative chevron region.
+        for x in [CGFloat(2), editButton.bounds.midX, editButton.bounds.maxX - 2] {
+            for y in [CGFloat(2), editButton.bounds.midY, editButton.bounds.maxY - 2] {
+                let point = editButton.convert(CGPoint(x: x, y: y), to: card)
+                let target = try #require(card.hitTest(point, with: nil) as? UIControl)
+                #expect(target === editButton)
+                let previousCount = editInvocationCount
+                target.sendActions(for: .touchUpInside)
+                #expect(editInvocationCount == previousCount + 1)
+                #expect(receivedShift == shift)
+                #expect(card.accessibilityValue == OverviewStrings.expanded)
+            }
+        }
         let ordinaryPoint = CGPoint(x: card.bounds.midX, y: 12)
         #expect(card.hitTest(ordinaryPoint, with: nil) === card)
 
         #expect(editButton.configuration?.image != nil)
-        subject.viewController.traitOverrides.preferredContentSizeCategory = .accessibilityExtraExtraLarge
+        let normalHeight = editButton.bounds.height
+        subject.viewController.traitOverrides.preferredContentSizeCategory = .accessibilityExtraExtraExtraLarge
         window.layoutIfNeeded()
         #expect(editButton.configuration?.image == nil)
-        #expect(editButton.configuration?.title == OverviewStrings.editShift)
-        #expect(editButton.bounds.height >= 44)
+        #expect(chevron.isHidden)
+        #expect(editButton.configuration?.title == title)
+        #expect(editButton.bounds.height > normalHeight)
+        #expect(titleLabel.adjustsFontForContentSizeCategory && titleLabel.numberOfLines == 0)
+        #expect(titleLabel.bounds.height + 0.5 >= titleLabel.sizeThatFits(
+            CGSize(width: titleLabel.bounds.width, height: .greatestFiniteMagnitude)).height)
+        let largeTitleFrame = titleLabel.convert(titleLabel.bounds, to: editButton)
+        #expect(largeTitleFrame.maxX <= editButton.bounds.maxX - 16 + 0.5)
+        #expect(largeTitleFrame.maxY <= editButton.bounds.maxY - 12 + 0.5)
+        let rate: UILabel = try requireView(identifier: "overview.shift.\(shift.id.uuidString).detail.rate", in: card)
+        #expect(rate.convert(rate.bounds, to: card).maxY < editButton.convert(editButton.bounds, to: card).minY)
         subject.viewController.traitOverrides.preferredContentSizeCategory = .large
         window.layoutIfNeeded()
         #expect(editButton.configuration?.image != nil)
+        #expect(!chevron.isHidden)
 
-        card.sendActions(for: .touchUpInside)
+        let outsideTarget = try #require(card.hitTest(ordinaryPoint, with: nil) as? UIControl)
+        #expect(outsideTarget === card)
+        outsideTarget.sendActions(for: .touchUpInside)
         #expect(editButton.isHidden)
         #expect(card.accessibilityTraits.contains(.selected))
         #expect(card.accessibilityHint == OverviewStrings.expandShift)
