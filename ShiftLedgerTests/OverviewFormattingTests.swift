@@ -510,6 +510,40 @@ struct OverviewFormattingTests {
         try #require(Decimal(string: value, locale: locale))
     }
 
+    @Test("Break date context follows Job local days, including midnight and year boundaries",
+          arguments: [0, 1, 2], ["en_US", "ru_RU"])
+    func unpaidBreakDateBoundaries(_ scenario: Int, _ localeID: String) throws {
+        let start = try date(year: 2026, month: scenario == 2 ? 12 : 11,
+                             day: scenario == 2 ? 31 : 5, hour: scenario == 2 ? 22 : 23, minute: 30)
+        let end = start.addingTimeInterval(scenario == 0 ? 1800 : scenario == 1 ? 24 * 3600 : 3 * 3600)
+        let unpaidBreak = UnpaidBreak(start: start, end: end)
+        let locale = Locale(identifier: localeID)
+        let zone = try #require(TimeZone(identifier: "Europe/Stockholm"))
+        let text = try #require(OverviewFormatting.unpaidBreakTimeRange(
+            unpaidBreak, timeZoneIdentifier: zone.identifier, locale: locale, includeDate: scenario == 0))
+        let day = DateFormatter()
+        day.locale = locale
+        day.timeZone = zone
+        day.dateStyle = .medium
+        day.timeStyle = .none
+        // UTC November 5 at 23:30 belongs to November 6 in the Job timezone.
+        #expect(text.contains(day.string(from: start)))
+        #expect(text.contains(day.string(from: end)))
+        let expected = DateIntervalFormatter()
+        expected.locale = locale
+        expected.timeZone = zone
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = zone
+        expected.calendar = calendar
+        expected.dateStyle = .medium
+        expected.timeStyle = .short
+        // Foundation may share AM/PM across endpoints; compare the complete interval.
+        #expect(text == expected.string(from: start, to: end))
+        if scenario == 2 {
+            #expect(text.contains("2026") && text.contains("2027"))
+        }
+    }
+
     private func localDate(year: Int, month: Int, day: Int) throws -> LocalDate {
         try LocalDate(year: year, month: month, day: day)
     }

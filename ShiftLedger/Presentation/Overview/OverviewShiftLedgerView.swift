@@ -68,12 +68,8 @@ final class OverviewShiftLedgerRowView: UIControl {
     private let summarySpacer = UIView()
     private let durationSummary = UIStackView()
     private let details = UIStackView()
-    private let endpoints = OverviewShiftEndpointsView()
-    private let paidTime = OverviewReceiptFieldView()
-    private let exactAmount = OverviewReceiptFieldView()
     private let unpaidBreak = OverviewReceiptFieldView()
     private let rate = OverviewReceiptFieldView()
-    private let payBasis = OverviewReceiptFieldView()
     private let editButton = UIButton(type: .system)
     private let disclosure = UIImageView(image: UIImage(systemName: "chevron.right"))
     private let divider = OverviewReceiptRuleView()
@@ -145,16 +141,6 @@ final class OverviewShiftLedgerRowView: UIControl {
         durationLabel.text = OverviewStrings.paidDuration(card.paidDuration)
         durationLabel.accessibilityIdentifier = "\(prefix).duration"
 
-        endpoints.update(
-            endpoints: card.endpoints,
-            foreground: ShiftLedgerColors.textPrimary,
-            identifierPrefix: "\(prefix).endpoints"
-        )
-        paidTime.update(label: PaycheckResultStrings.paidTime, value: card.paidDuration,
-                        identifier: "\(prefix).detail.paidTime")
-        exactAmount.update(label: OverviewStrings.exactContribution, value: card.exactExpectedAmount ?? "",
-                           identifier: "\(prefix).detail.exactContribution")
-        exactAmount.isHidden = card.exactExpectedAmount == nil
         let breakValue = card.unpaidBreak.map { duration in
             let interval = card.unpaidBreakTimeRange.map { "\($0) · " } ?? ""
             return "\(interval)\(duration)"
@@ -162,14 +148,13 @@ final class OverviewShiftLedgerRowView: UIControl {
         unpaidBreak.update(label: AddShiftStrings.unpaidBreak, value: breakValue ?? "",
                            identifier: "\(prefix).detail.break")
         unpaidBreak.isHidden = card.unpaidBreak == nil
-        rate.update(label: PaycheckResultStrings.rate, value: card.appliedRate,
-                    identifier: "\(prefix).detail.rate", accessibilitySizeValue: card.appliedRateAmount)
-        payBasis.update(label: OverviewStrings.payBasis, value: card.payBasis,
-                        identifier: "\(prefix).detail.payBasis")
+        rate.update(label: PaycheckResultStrings.rate,
+                    value: card.appliedRate,
+                    wrappedValue: card.appliedRate.replacingOccurrences(of: " / ", with: "\n/\u{00a0}"),
+                    identifier: "\(prefix).detail.rate")
         if card.isExpanded {
             accessibilityLabel = [card.accessibilityLabel,
-                                  "\(PaycheckResultStrings.rate): \(card.appliedRate)",
-                                  "\(OverviewStrings.payBasis): \(card.payBasis)"]
+                                  "\(PaycheckResultStrings.rate): \(card.appliedRate)"]
                 .joined(separator: ", ")
         }
         if let exact = card.exactExpectedAmount {
@@ -216,7 +201,7 @@ final class OverviewShiftLedgerRowView: UIControl {
         details.spacing = 8
         details.isLayoutMarginsRelativeArrangement = true
         details.layoutMargins = UIEdgeInsets(top: 8, left: 12, bottom: 8, right: 0)
-        [endpoints, paidTime, unpaidBreak, rate, payBasis, exactAmount].forEach(details.addArrangedSubview)
+        [unpaidBreak, rate].forEach(details.addArrangedSubview)
 
         var editConfiguration = UIButton.Configuration.plain()
         editConfiguration.title = OverviewStrings.editShift
@@ -233,8 +218,8 @@ final class OverviewShiftLedgerRowView: UIControl {
         addAction(UIAction { [weak self] _ in self?.onCardTapped?() }, for: .touchUpInside)
 
         [heading, summary, details, editButton].forEach(content.addArrangedSubview)
-        content.setCustomSpacing(16, after: summary)
-        content.setCustomSpacing(16, after: details)
+        content.setCustomSpacing(20, after: summary)
+        content.setCustomSpacing(20, after: details)
 
         selectedRule.backgroundColor = ShiftLedgerColors.textPrimary
         selectedRule.isUserInteractionEnabled = false
@@ -280,6 +265,9 @@ final class OverviewShiftLedgerRowView: UIControl {
     private func updateHeadingAxis() {
         let available = bounds.width - 32
         guard available > 0 else { return }
+        details.layoutMargins = UIEdgeInsets(top: 8,
+            left: traitCollection.preferredContentSizeCategory.isAccessibilityCategory ? 0 : 12,
+            bottom: 8, right: 0)
         let vertical = traitCollection.preferredContentSizeCategory.isAccessibilityCategory
             || dateLabel.intrinsicContentSize.width + amountLabel.intrinsicContentSize.width + 36 > available
         let axis: NSLayoutConstraint.Axis = vertical ? .vertical : .horizontal
@@ -325,7 +313,7 @@ final class OverviewReceiptFieldView: UIStackView {
     let label = UILabel()
     let value = UILabel()
     private var fullValue = ""
-    private var accessibilitySizeValue: String?
+    private var wrappedValue: String?
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -356,10 +344,13 @@ final class OverviewReceiptFieldView: UIStackView {
         super.layoutSubviews()
     }
 
-    func update(label title: String, value text: String, identifier: String, accessibilitySizeValue: String? = nil) {
-        label.text = title
+    func update(label title: String, value text: String, wrappedValue: String? = nil, identifier: String) {
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.hyphenationFactor = 1
+        label.attributedText = NSAttributedString(string: title, attributes: [.paragraphStyle: paragraph])
         fullValue = text
-        self.accessibilitySizeValue = accessibilitySizeValue
+        self.wrappedValue = wrappedValue
+        value.text = text
         value.accessibilityIdentifier = identifier
         label.accessibilityIdentifier = identifier + ".label"
         accessibilityLabel = "\(title), \(text)"
@@ -367,13 +358,16 @@ final class OverviewReceiptFieldView: UIStackView {
     }
 
     private func updateAxis() {
-        // At accessibility sizes the adjacent Pay basis field supplies the rate unit.
-        // Keep the full rate in the accessible summary; never split an amount from a slash.
-        value.text = traitCollection.preferredContentSizeCategory.isAccessibilityCategory
-            ? accessibilitySizeValue ?? fullValue : fullValue
+        // Keep the complete rate unit together on a deliberate second line when needed.
+        // Measure source strings, not intrinsic sizes already affected by wrapping.
+        let labelWidth = ceil((label.text ?? "").size(withAttributes: [.font: label.font as Any]).width)
+        let valueWidth = ceil(fullValue.size(withAttributes: [.font: value.font as Any]).width)
+        let displayedValue = bounds.width > 0 && valueWidth > bounds.width ? wrappedValue ?? fullValue : fullValue
+        if value.text != displayedValue { value.text = displayedValue }
         let vertical = traitCollection.preferredContentSizeCategory.isAccessibilityCategory
-            || (bounds.width > 0 && label.intrinsicContentSize.width + value.intrinsicContentSize.width + 8 > bounds.width)
-        axis = vertical ? .vertical : .horizontal
+            || (bounds.width > 0 && labelWidth + valueWidth + spacing > bounds.width)
+        let targetAxis: NSLayoutConstraint.Axis = vertical ? .vertical : .horizontal
+        if axis != targetAxis { axis = targetAxis }
         alignment = vertical ? .fill : .firstBaseline
         value.textAlignment = vertical ? .left : .right
         value.setContentHuggingPriority(vertical ? .defaultHigh : .required, for: .horizontal)

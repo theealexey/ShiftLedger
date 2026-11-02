@@ -87,7 +87,16 @@ struct OverviewShiftCardMapper {
                 OverviewFormatting.unpaidBreakTimeRange(
                     $0,
                     timeZoneIdentifier: timeZoneIdentifier,
-                    locale: displayLocale
+                    locale: displayLocale,
+                    includeDate: endpoints.startDate != nil
+                )
+            }
+            let unpaidBreakAccessibilityInterval = shift.unpaidBreak.flatMap {
+                OverviewFormatting.unpaidBreakTimeRange(
+                    $0,
+                    timeZoneIdentifier: timeZoneIdentifier,
+                    locale: displayLocale,
+                    includeDate: true
                 )
             }
             let payBasis: String
@@ -102,7 +111,10 @@ struct OverviewShiftCardMapper {
                 "\(PaycheckResultStrings.shiftExpected): \(expectedAmount)",
                 accessibilityTimeRange,
                 "\(PaycheckResultStrings.paidTime): \(paidDuration)",
-                unpaidBreak.map { "\(AddShiftStrings.unpaidBreak): \($0)" }
+                unpaidBreak.map { duration in
+                    ["\(AddShiftStrings.unpaidBreak): \(duration)", unpaidBreakAccessibilityInterval]
+                        .compactMap { $0 }.joined(separator: ", ")
+                }
             ]
             .compactMap { $0 }
             .joined(separator: ", ")

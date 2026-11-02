@@ -300,17 +300,20 @@ enum OverviewFormatting {
     static func unpaidBreakTimeRange(
         _ unpaidBreak: UnpaidBreak,
         timeZoneIdentifier: String,
-        locale: Locale
+        locale: Locale,
+        includeDate: Bool = false
     ) -> String? {
         guard let timeZone = TimeZone(identifier: timeZoneIdentifier) else {
             return nil
         }
 
+        let calendar = configuredCalendar(timeZone: timeZone)
         let formatter = DateIntervalFormatter()
-        formatter.calendar = configuredCalendar(timeZone: timeZone)
+        formatter.calendar = calendar
         formatter.locale = locale
         formatter.timeZone = timeZone
-        formatter.dateStyle = .none
+        formatter.dateStyle = includeDate || !calendar.isDate(unpaidBreak.start, inSameDayAs: unpaidBreak.end)
+            ? .medium : .none
         formatter.timeStyle = .short
         return formatter.string(from: unpaidBreak.start, to: unpaidBreak.end)
     }
