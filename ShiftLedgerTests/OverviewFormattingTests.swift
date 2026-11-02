@@ -383,7 +383,7 @@ struct OverviewFormattingTests {
         #expect(time.contains("Sep") == false)
     }
 
-    @Test("Overnight card header keeps only truthful end-date context")
+    @Test("Overnight time line contains only endpoint times")
     func compactOvernightShiftHeaderContext() throws {
         let shift = try makeShift(
             start: try date(year: 2026, month: 9, day: 15, hour: 22, minute: 43),
@@ -398,11 +398,11 @@ struct OverviewFormattingTests {
 
         #expect(time.contains("22:43"))
         #expect(time.contains("06:43"))
-        #expect(time.contains("16"))
+        #expect(time == "22:43–06:43")
         #expect(time.contains("15") == false)
     }
 
-    @Test("Multi-day card header keeps only truthful end-date context")
+    @Test("Multi-day time line contains only endpoint times")
     func compactMultiDayShiftHeaderContext() throws {
         let shift = try makeShift(
             start: try date(year: 2026, month: 9, day: 15, hour: 12, minute: 56),
@@ -416,8 +416,69 @@ struct OverviewFormattingTests {
         ))
 
         #expect(time.contains("12:56"))
-        #expect(time.contains("17"))
+        #expect(time == "12:56–12:56")
         #expect(time.contains("15") == false)
+    }
+
+    @Test("Date headings distinguish calendar ranges and historical years", arguments: ["ru_RU", "en_US"])
+    func shiftDateRanges(_ identifier: String) throws {
+        let locale = Locale(identifier: identifier)
+        let reference = try date(year: 2026, month: 11, day: 1, hour: 12, minute: 0)
+        let cases = [
+            (2026, 10, 3, 8, "3 октября", "October 3"),
+            (2026, 10, 3, 24, "3—4 октября", "October 3\u{2009}–\u{2009}4"),
+            (2026, 10, 9, 48, "9—11 октября", "October 9\u{2009}–\u{2009}11"),
+            (2026, 9, 30, 24, "30 сентября\u{2009}—\u{2009}1 октября", "September 30\u{2009}–\u{2009}October 1"),
+            (2026, 12, 31, 24, "31 декабря 2026\u{2009}—\u{2009}1 января 2027\u{202F}г.",
+             "December 31, 2026\u{2009}–\u{2009}January 1, 2027"),
+            (2025, 10, 3, 8, "3 октября 2025\u{202F}г.", "October 3, 2025")
+        ]
+        for (year, month, day, hours, russian, english) in cases {
+            let shift = try makeShift(start: date(year: year, month: month, day: day, hour: 9, minute: 0),
+                                      duration: TimeInterval(hours * 3600))
+            let originalStart = shift.start
+            let originalEnd = shift.end
+            let heading = try #require(OverviewFormatting.frontShiftDate(shift, timeZoneIdentifier: "UTC",
+                locale: locale, referenceDate: reference))
+            #expect(heading == (identifier == "ru_RU" ? russian : english))
+            let time = try #require(OverviewFormatting.compactShiftTimeRange(shift, timeZoneIdentifier: "UTC", locale: locale))
+            let endpoints = try #require(OverviewFormatting.shiftEndpoints(shift, timeZoneIdentifier: "UTC", locale: locale))
+            #expect(time == "\(endpoints.startTime)–\(endpoints.endTime)")
+            #expect(shift.start == originalStart && shift.end == originalEnd)
+        }
+    }
+
+    @Test("Repeated DST clock times expose distinct UTC offsets", arguments: ["ru_RU", "en_US"])
+    func shiftRangeAcrossDST(_ identifier: String) throws {
+        let shift = try makeShift(start: date(year: 2026, month: 11, day: 1, hour: 5, minute: 30), duration: 3600)
+        let locale = Locale(identifier: identifier)
+        let reference = shift.start
+        let heading = try #require(OverviewFormatting.frontShiftDate(shift, timeZoneIdentifier: "America/New_York", locale: locale, referenceDate: reference))
+        #expect(heading == (identifier == "ru_RU" ? "1 ноября" : "November 1"))
+        let endpoints = try #require(OverviewFormatting.shiftEndpoints(shift, timeZoneIdentifier: "America/New_York", locale: locale))
+        #expect(endpoints.startTime == endpoints.endTime)
+        #expect(endpoints.startDate == nil)
+        let time = try #require(OverviewFormatting.compactShiftTimeRange(shift,
+            timeZoneIdentifier: "America/New_York", locale: locale))
+        let expected = identifier == "ru_RU" ? "01:30 GMT-04:00–01:30 GMT-05:00"
+            : "1:30\u{202F}AM GMT-04:00–1:30\u{202F}AM GMT-05:00"
+        #expect(time == expected)
+        let distinctClocks = try makeShift(start: date(year: 2026, month: 11, day: 1, hour: 4, minute: 30), duration: 3 * 3600)
+        let ordinary = try #require(OverviewFormatting.shiftEndpoints(distinctClocks,
+            timeZoneIdentifier: "America/New_York", locale: locale))
+        #expect(OverviewFormatting.compactShiftTimeRange(distinctClocks,
+            timeZoneIdentifier: "America/New_York", locale: locale) == "\(ordinary.startTime)–\(ordinary.endTime)")
+    }
+
+    @Test("Cross-day accessibility retains full dates and times at both endpoints", arguments: ["ru_RU", "en_US"])
+    func accessibleShiftRange(_ identifier: String) throws {
+        let shift = try makeShift(start: date(year: 2026, month: 12, day: 31, hour: 22, minute: 0), duration: 8 * 3600)
+        let locale = Locale(identifier: identifier)
+        let result = try #require(OverviewFormatting.shiftTimeRange(shift, timeZoneIdentifier: "UTC", locale: locale))
+        let expected = identifier == "ru_RU"
+            ? "31.12.2026, 22:00\u{2009}—\u{2009}01.01.2027, 06:00"
+            : "12/31/2026, 10:00\u{202F}PM\u{2009}–\u{2009}1/1/2027, 6:00\u{202F}AM"
+        #expect(result == expected)
     }
 
     @Test("Shift card duration uses complete localized components")

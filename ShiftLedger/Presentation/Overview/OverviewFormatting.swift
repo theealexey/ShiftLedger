@@ -189,17 +189,31 @@ enum OverviewFormatting {
     static func frontShiftDate(
         _ shift: Shift,
         timeZoneIdentifier: String,
-        locale: Locale
+        locale: Locale,
+        referenceDate: Date = Date()
     ) -> String? {
         guard let timeZone = TimeZone(identifier: timeZoneIdentifier) else {
             return nil
         }
 
+        let calendar = configuredCalendar(timeZone: timeZone)
+        let referenceYear = calendar.component(.year, from: referenceDate)
+        let needsYear = calendar.component(.year, from: shift.start) != referenceYear
+            || calendar.component(.year, from: shift.end) != referenceYear
+        let template = needsYear ? "yMMMMd" : "MMMMd"
+        if !calendar.isDate(shift.start, inSameDayAs: shift.end) {
+            let interval = DateIntervalFormatter()
+            interval.calendar = calendar
+            interval.locale = locale
+            interval.timeZone = timeZone
+            interval.dateTemplate = template
+            return interval.string(from: shift.start, to: shift.end)
+        }
         let formatter = DateFormatter()
-        formatter.calendar = configuredCalendar(timeZone: timeZone)
+        formatter.calendar = calendar
         formatter.locale = locale
         formatter.timeZone = timeZone
-        formatter.setLocalizedDateFormatFromTemplate("dMMM")
+        formatter.setLocalizedDateFormatFromTemplate(template)
         return formatter.string(from: shift.start)
     }
 
@@ -275,19 +289,12 @@ enum OverviewFormatting {
 
         let startTime = timeFormatter.string(from: shift.start)
         let endTime = timeFormatter.string(from: shift.end)
-        guard calendar.isDate(shift.start, inSameDayAs: shift.end) == false else {
-            return "\(startTime)–\(endTime)"
+        if startTime == endTime,
+           timeZone.secondsFromGMT(for: shift.start) != timeZone.secondsFromGMT(for: shift.end) {
+            timeFormatter.setLocalizedDateFormatFromTemplate("jmOOOO")
+            return "\(timeFormatter.string(from: shift.start))–\(timeFormatter.string(from: shift.end))"
         }
-
-        let endDateFormatter = DateFormatter()
-        endDateFormatter.calendar = calendar
-        endDateFormatter.locale = locale
-        endDateFormatter.timeZone = timeZone
-        let sharesMonth = calendar.component(.month, from: shift.start)
-            == calendar.component(.month, from: shift.end)
-            && calendar.component(.year, from: shift.start) == calendar.component(.year, from: shift.end)
-        endDateFormatter.setLocalizedDateFormatFromTemplate(sharesMonth ? "d" : "MMMd")
-        return "\(startTime) → \(endDateFormatter.string(from: shift.end)), \(endTime)"
+        return "\(startTime)–\(endTime)"
     }
 
     static func unpaidBreakTimeRange(
