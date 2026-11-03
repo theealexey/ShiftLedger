@@ -41,6 +41,18 @@ struct EditShiftViewControllerTests {
     #expect(viewController.navigationItem.rightBarButtonItem?.title == EditShiftStrings.save)
     #expect(viewController.navigationItem.rightBarButtonItem?.accessibilityIdentifier == "editShift.save")
     #expect(viewController.navigationItem.rightBarButtonItem?.isEnabled == true)
+    let saveItem = try #require(viewController.navigationItem.rightBarButtonItem)
+    if #available(iOS 26.0, *) {
+      #expect(saveItem.style == .plain)
+    } else {
+      #expect(saveItem.style == .done)
+    }
+    #expect(saveItem.titleTextAttributes(for: .normal)?[.foregroundColor] == nil)
+    #expect(saveItem.titleTextAttributes(for: .disabled)?[.foregroundColor] == nil)
+    for style in [UIUserInterfaceStyle.light, .dark] {
+      let traits = UITraitCollection(userInterfaceStyle: style)
+      #expect(saveItem.tintColor?.resolvedColor(with: traits) == ShiftLedgerColors.accentPrimary.resolvedColor(with: traits))
+    }
   }
 
   @Test("Edit Shift matches Add Shift display language and preserves overnight dates",

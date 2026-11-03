@@ -30,7 +30,14 @@ final class AddShiftViewController: UIViewController {
         super.viewDidLoad()
         title = AddShiftStrings.title
         navigationItem.largeTitleDisplayMode = .never
-        navigationItem.rightBarButtonItem = UIBarButtonItem(title: AddShiftStrings.save, style: .done, target: self, action: #selector(saveTapped))
+        let saveStyle: UIBarButtonItem.Style
+        if #available(iOS 26.0, *) {
+            saveStyle = .plain
+        } else {
+            saveStyle = .done
+        }
+        navigationItem.rightBarButtonItem = UIBarButtonItem(title: AddShiftStrings.save, style: saveStyle, target: self, action: #selector(saveTapped))
+        navigationItem.rightBarButtonItem?.tintColor = ShiftLedgerColors.accentPrimary
         bindView()
         render()
     }

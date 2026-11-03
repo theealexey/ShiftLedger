@@ -32,12 +32,19 @@ final class EditShiftViewController: UIViewController {
         super.viewDidLoad()
         title = EditShiftStrings.title
         navigationItem.largeTitleDisplayMode = .never
+        let saveStyle: UIBarButtonItem.Style
+        if #available(iOS 26.0, *) {
+            saveStyle = .plain
+        } else {
+            saveStyle = .done
+        }
         let saveItem = UIBarButtonItem(
             title: EditShiftStrings.save,
-            style: .done,
+            style: saveStyle,
             target: self,
             action: #selector(saveTapped)
         )
+        saveItem.tintColor = ShiftLedgerColors.accentPrimary
         saveItem.accessibilityIdentifier = "editShift.save"
         navigationItem.rightBarButtonItem = saveItem
         bindView()

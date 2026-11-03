@@ -85,6 +85,21 @@ struct AddShiftViewControllerTests {
         }
         _ = viewController.view
 
+        let saveItem = try #require(viewController.navigationItem.rightBarButtonItem)
+        #expect(saveItem.title == AddShiftStrings.save)
+        #expect(saveItem.isEnabled)
+        if #available(iOS 26.0, *) {
+            #expect(saveItem.style == .plain)
+        } else {
+            #expect(saveItem.style == .done)
+        }
+        #expect(saveItem.titleTextAttributes(for: .normal)?[.foregroundColor] == nil)
+        #expect(saveItem.titleTextAttributes(for: .disabled)?[.foregroundColor] == nil)
+        for style in [UIUserInterfaceStyle.light, .dark] {
+            let traits = UITraitCollection(userInterfaceStyle: style)
+            #expect(saveItem.tintColor?.resolvedColor(with: traits) == ShiftLedgerColors.accentPrimary.resolvedColor(with: traits))
+        }
+
         let workTypeRow: UIControl = try requireView("addShift.workType", in: viewController.view)
         #expect(workTypeRow.accessibilityValue == "Lectures")
         #expect(workTypeRow.accessibilityTraits.contains(.button) == false)
