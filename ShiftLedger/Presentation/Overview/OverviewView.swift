@@ -188,6 +188,7 @@ final class OverviewView: UIView, UIScrollViewDelegate {
         super.layoutSubviews()
         contentStack.layoutIfNeeded()
         updateGrossAmountFont()
+        updateShiftHistoryHeading()
         periodRailContainer.layoutIfNeeded()
         periodRailViewport.layoutIfNeeded()
         periodRailStack.layoutIfNeeded()
@@ -405,6 +406,8 @@ final class OverviewView: UIView, UIScrollViewDelegate {
         )
         shiftCountLabel.accessibilityIdentifier = "overview.shiftCount.label"
         shiftCountLabel.lineBreakMode = .byWordWrapping
+        shiftCountLabel.adjustsFontForContentSizeCategory = false
+        shiftCountLabel.lineBreakStrategy = []
         shiftCountLabel.setContentHuggingPriority(.defaultHigh, for: .horizontal)
         configureLabel(
             shiftCountValueLabel,
@@ -832,6 +835,43 @@ final class OverviewView: UIView, UIScrollViewDelegate {
         expectedGrossAmountLabel.numberOfLines = 0
         expectedGrossAmountLabel.textAlignment = .right
         expectedGrossAmountLabel.font = preferred.withSize(size)
+    }
+
+    private func updateShiftHistoryHeading() {
+        let width = contentStack.bounds.width
+        guard width > 0, let text = shiftCountLabel.text else { return }
+        let preferred = UIFont.preferredFont(forTextStyle: .headline, compatibleWith: traitCollection)
+        let measurement = UILabel()
+        measurement.font = preferred
+        measurement.text = text
+        let titleWidth = measurement.intrinsicContentSize.width
+        measurement.text = shiftCountValueLabel.text
+        let vertical = traitCollection.preferredContentSizeCategory.isAccessibilityCategory
+            || titleWidth + measurement.intrinsicContentSize.width + shiftCountStack.spacing > width
+        shiftCountStack.axis = vertical ? .vertical : .horizontal
+        shiftCountStack.alignment = vertical ? .fill : .firstBaseline
+
+        let available = width - 1 / max(1, traitCollection.displayScale)
+        let words = text.split(whereSeparator: { $0.isWhitespace }).map(String.init)
+        func wordsFit(_ font: UIFont) -> Bool {
+            measurement.font = font
+            return words.allSatisfy {
+                measurement.text = $0
+                return measurement.intrinsicContentSize.width <= available
+            }
+        }
+        var font = preferred
+        if !wordsFit(preferred) {
+            var lower: CGFloat = 17
+            var upper = preferred.pointSize
+            for _ in 0..<16 {
+                let middle = (lower + upper) / 2
+                if wordsFit(preferred.withSize(middle)) { lower = middle }
+                else { upper = middle }
+            }
+            font = preferred.withSize(lower)
+        }
+        if shiftCountLabel.font != font { shiftCountLabel.font = font }
     }
 
     private func updateReceiptHeaderFonts() {

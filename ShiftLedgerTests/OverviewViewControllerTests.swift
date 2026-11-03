@@ -6,6 +6,73 @@ import Testing
 struct OverviewViewControllerTests {
     private let displayLocale = Locale(identifier: "en_US_POSIX")
 
+    @Test("Saved Shift heading preserves complete words and count across text sizes",
+          arguments: [CGFloat(320), 375, 402], ["Все сохранённые смены", "All saved shifts"])
+    func savedShiftHeadingWrapsWholeWords(_ width: CGFloat, _ heading: String) throws {
+        let host = UIViewController()
+        let root = OverviewView()
+        host.view = root
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: width, height: 874))
+        window.rootViewController = host
+        window.isHidden = false
+        defer { window.isHidden = true }
+        root.renderContent(expectedGross: "4,700.00", expectedGrossContext: "Expected gross · EUR",
+            period: "2026", periodItems: [], showPeriodNavigation: false,
+            shiftCount: 12, shiftCards: [], canNavigatePrevious: false,
+            canNavigateNext: false, canCheckPaycheck: true)
+        let title: UILabel = try requireView(identifier: "overview.shiftCount.label", in: root)
+        let count: UILabel = try requireView(identifier: "overview.shiftCount.value", in: root)
+        let gross: UILabel = try requireView(identifier: "overview.expectedGross.amount", in: root)
+        title.text = heading
+        for style: UIUserInterfaceStyle in [.light, .dark] {
+            host.overrideUserInterfaceStyle = style
+            var normalSize: CGFloat?
+            for category: UIContentSizeCategory in [.large, .extraExtraLarge, .accessibilityExtraExtraExtraLarge, .large] {
+                host.traitOverrides.preferredContentSizeCategory = category
+                window.layoutIfNeeded()
+                root.layoutIfNeeded()
+                root.layoutIfNeeded()
+                #expect(title.text == heading && count.text == "12")
+                let titleFrame = title.convert(title.bounds, to: root)
+                let countFrame = count.convert(count.bounds, to: root)
+                #expect(!titleFrame.intersects(countFrame))
+                #expect(titleFrame.minX >= 0 && titleFrame.maxX <= width)
+                #expect(count.intrinsicContentSize.height <= count.bounds.height + 0.5)
+                #expect(gross.intrinsicContentSize.width <= gross.bounds.width)
+                let storage = NSTextStorage(string: heading, attributes: [.font: title.font as Any])
+                let manager = NSLayoutManager()
+                let container = NSTextContainer(size: CGSize(width: title.bounds.width, height: .greatestFiniteMagnitude))
+                container.lineFragmentPadding = 0
+                container.lineBreakMode = .byWordWrapping
+                manager.addTextContainer(container)
+                storage.addLayoutManager(manager)
+                manager.ensureLayout(for: container)
+                let words = heading.split(separator: " ").map(String.init)
+                manager.enumerateLineFragments(forGlyphRange: manager.glyphRange(for: container)) { _, _, _, range, _ in
+                    let characters = manager.characterRange(forGlyphRange: range, actualGlyphRange: nil)
+                    let line = (heading as NSString).substring(with: characters)
+                    for word in line.split(whereSeparator: { $0.isWhitespace }) {
+                        #expect(words.contains(String(word)))
+                    }
+                }
+                let fitted = title.sizeThatFits(CGSize(width: title.bounds.width, height: .greatestFiniteMagnitude))
+                let pixel = 1 / max(1, title.traitCollection.displayScale)
+                #expect(fitted.height <= title.bounds.height + pixel)
+                #expect(title.numberOfLines == 0 && title.lineBreakMode == .byWordWrapping)
+                for word in words {
+                    let measurement = UILabel()
+                    measurement.font = title.font
+                    measurement.text = word
+                    #expect(measurement.intrinsicContentSize.width <= title.bounds.width)
+                }
+                if category == .large {
+                    if let normalSize { #expect(abs(title.font.pointSize - normalSize) < 0.01) }
+                    else { normalSize = title.font.pointSize }
+                }
+            }
+        }
+    }
+
     @Test("Gross fits the complete localized amount without horizontal interaction",
           arguments: [CGFloat(320), 375, 402], ["ru_RU", "en_US"])
     func grossAmountRemainsWhole(_ width: CGFloat, _ localeID: String) throws {
