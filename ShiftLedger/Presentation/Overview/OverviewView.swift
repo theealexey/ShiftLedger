@@ -51,6 +51,8 @@ final class OverviewView: UIView, UIScrollViewDelegate {
     private let grossRule = OverviewReceiptRuleView()
     private let bottomRule = OverviewReceiptRuleView()
     private let perShiftPeriodLabel = UILabel()
+    private let perShiftTimeLabel = UILabel()
+    private let perShiftHeading = UIStackView()
     private let precisionLabel = UILabel()
     private let precisionStack = UIStackView()
     private let exactTotalField = OverviewReceiptFieldView()
@@ -104,6 +106,7 @@ final class OverviewView: UIView, UIScrollViewDelegate {
         registerForTraitChanges([UITraitPreferredContentSizeCategory.self]) { (self: Self, _) in
             self.updatePeriodRailForContentSizeCategory()
             self.updateActionButtonsForContentSizeCategory()
+            self.updateReceiptHeaderFonts()
         }
         renderIdle()
     }
@@ -118,6 +121,8 @@ final class OverviewView: UIView, UIScrollViewDelegate {
         expectedGrossContext: String,
         precisionExplanation: PrecisionExplanation? = nil,
         period: String,
+        periodTime: String? = nil,
+        periodAccessibilityLabel: String? = nil,
         periodItems: [PeriodItem],
         showPeriodNavigation: Bool,
         shiftCount: Int,
@@ -145,6 +150,9 @@ final class OverviewView: UIView, UIScrollViewDelegate {
         periodLabel.text = period
         periodLabel.accessibilityLabel = period
         perShiftPeriodLabel.text = period
+        perShiftPeriodLabel.accessibilityLabel = periodAccessibilityLabel ?? period
+        perShiftTimeLabel.text = periodTime
+        perShiftTimeLabel.isHidden = periodTime == nil
         renderPeriodRail(periodItems)
         shiftCountValueLabel.text = String(shiftCount)
         shiftCountStack.accessibilityLabel = "\(OverviewStrings.allShiftHistory) \(shiftCount)"
@@ -274,11 +282,23 @@ final class OverviewView: UIView, UIScrollViewDelegate {
             label.textAlignment = .center
             label.isAccessibilityElement = true
         }
+        brandLabel.numberOfLines = 1
+        [brandLabel, subtitleLabel].forEach { $0.adjustsFontForContentSizeCategory = false }
+        updateReceiptHeaderFonts()
         brandLabel.accessibilityIdentifier = "overview.receipt.brand"
         subtitleLabel.accessibilityIdentifier = "overview.receipt.subtitle"
         perShiftPeriodLabel.accessibilityIdentifier = "overview.receipt.perShiftPeriod"
         configureLabel(perShiftPeriodLabel, font: ShiftLedgerTypography.headline, color: ShiftLedgerColors.textPrimary)
         perShiftPeriodLabel.textAlignment = .center
+        perShiftPeriodLabel.isAccessibilityElement = true
+        configureLabel(perShiftTimeLabel, font: ShiftLedgerTypography.callout, color: ShiftLedgerColors.textSecondary)
+        perShiftTimeLabel.textAlignment = .center
+        perShiftTimeLabel.isAccessibilityElement = false
+        perShiftTimeLabel.accessibilityIdentifier = "overview.receipt.perShiftTime"
+        perShiftHeading.axis = .vertical
+        perShiftHeading.spacing = 6
+        perShiftHeading.addArrangedSubview(perShiftPeriodLabel)
+        perShiftHeading.addArrangedSubview(perShiftTimeLabel)
         for rule in [headerRule, periodRule, grossRule, bottomRule] {
             rule.heightAnchor.constraint(equalToConstant: 1).isActive = true
         }
@@ -460,7 +480,7 @@ final class OverviewView: UIView, UIScrollViewDelegate {
         [receiptPaper, checkPaycheckButton, addShiftButton, errorCard]
             .forEach(mainStack.addArrangedSubview)
         receiptPaper.addSubview(receiptStack)
-        [receiptHeader, headerRule, emptyCard, periodRailContainer, perShiftPeriodLabel, periodRule,
+        [receiptHeader, headerRule, emptyCard, periodRailContainer, perShiftHeading, periodRule,
          contentCard, grossRule, shiftHistoryStack, bottomRule]
             .forEach(receiptStack.addArrangedSubview)
         [brandLabel, subtitleLabel].forEach(receiptHeader.addArrangedSubview)
@@ -640,7 +660,7 @@ final class OverviewView: UIView, UIScrollViewDelegate {
         periodRule.isHidden = !content
         grossRule.isHidden = !content
         periodRailContainer.isHidden = !content || !showsPeriodNavigation
-        perShiftPeriodLabel.isHidden = !content || showsPeriodNavigation
+        perShiftHeading.isHidden = !content || showsPeriodNavigation
         contentCard.isHidden = !content
         shiftHistoryStack.isHidden = !shiftHistory
         checkPaycheckButton.isHidden = !checkPaycheck
@@ -667,6 +687,9 @@ final class OverviewView: UIView, UIScrollViewDelegate {
 
         for (index, item) in items.enumerated() {
             let itemView = OverviewPeriodRailItem(item: item)
+            if item.isSelected {
+                itemView.accessibilityLabel = periodLabel.accessibilityLabel
+            }
             itemView.accessibilityIdentifier = "overview.period.item.\(index)"
             itemView.addAction(UIAction { [weak self] _ in
                 self?.onPeriodTapped?(item.period)
@@ -716,6 +739,18 @@ final class OverviewView: UIView, UIScrollViewDelegate {
         let maximumOffset = max(minimumOffset, periodRailScrollView.contentSize.width
             - periodRailScrollView.bounds.width + periodRailScrollView.contentInset.right)
         return min(max(minimumOffset, centeredOffset), maximumOffset)
+    }
+
+    private func updateReceiptHeaderFonts() {
+        let metrics = UIFontMetrics(forTextStyle: .caption1)
+        brandLabel.font = metrics.scaledFont(
+            for: .monospacedSystemFont(ofSize: 15, weight: .semibold),
+            maximumPointSize: 20, compatibleWith: traitCollection
+        )
+        subtitleLabel.font = metrics.scaledFont(
+            for: .monospacedSystemFont(ofSize: 13, weight: .medium),
+            maximumPointSize: 18, compatibleWith: traitCollection
+        )
     }
 
     private func updatePeriodRailForContentSizeCategory() {

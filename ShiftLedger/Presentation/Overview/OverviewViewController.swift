@@ -164,7 +164,9 @@ final class OverviewViewController: UIViewController {
                 ),
                 expectedGrossContext: OverviewStrings.expectedGrossContext(currencyCode: currencyCode),
                 precisionExplanation: precisionExplanation(for: breakdown),
-                period: periodText,
+                period: periodText.date,
+                periodTime: periodText.time,
+                periodAccessibilityLabel: periodText.accessibilityLabel,
                 periodItems: railItems(from: content.railPeriods, selectedPeriod: period),
                 showPeriodNavigation: content.showPeriodNavigation,
                 shiftCount: content.shiftHistoryBreakdowns.count,
@@ -231,14 +233,13 @@ final class OverviewViewController: UIViewController {
     private func formattedPeriod(
         _ period: PayCalculationPeriod,
         breakdown: ExpectedGrossBreakdown
-    ) -> String? {
+    ) -> OverviewFormatting.PeriodHeading? {
         switch period {
         case let .scheduled(payPeriod):
-            return OverviewFormatting.scheduledPeriod(
-                payPeriod,
-                timeZoneIdentifier: timeZoneIdentifier,
-                locale: displayLocale
-            )
+            guard let date = OverviewFormatting.scheduledPeriod(
+                payPeriod, timeZoneIdentifier: timeZoneIdentifier, locale: displayLocale
+            ) else { return nil }
+            return OverviewFormatting.PeriodHeading(date: date, time: nil, accessibilityLabel: date)
         case let .perShift(shiftID):
             guard
                 breakdown.shiftBreakdowns.count == 1,
@@ -248,7 +249,7 @@ final class OverviewViewController: UIViewController {
                 return nil
             }
 
-            return OverviewFormatting.perShiftPeriod(
+            return OverviewFormatting.perShiftHeading(
                 shift,
                 timeZoneIdentifier: timeZoneIdentifier,
                 locale: displayLocale

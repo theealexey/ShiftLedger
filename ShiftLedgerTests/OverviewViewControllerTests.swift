@@ -6,6 +6,102 @@ import Testing
 struct OverviewViewControllerTests {
     private let displayLocale = Locale(identifier: "en_US_POSIX")
 
+    @Test("Decorative receipt header stays complete through Dynamic Type changes",
+          arguments: [CGFloat(320), 375, 402], ["ru_RU", "en_US"])
+    func receiptHeaderRemainsContained(_ width: CGFloat, _ localeID: String) throws {
+        let job = try makeJob(cycle: .perShift)
+        let shift = try makeShift(id: 1, month: 9, day: 15)
+        let model = OverviewViewModel(job: job, loadShifts: { [shift] }, currentDate: { shift.end })
+        let controller = OverviewViewController(viewModel: model, currencyCode: job.currencyCode,
+            timeZoneIdentifier: job.timeZoneIdentifier, displayLocale: Locale(identifier: localeID))
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: width, height: 874))
+        window.rootViewController = controller
+        window.isHidden = false
+        defer { window.isHidden = true }
+        let root = try requireRootView(controller)
+        let paper: UIView = try requireView(identifier: "overview.receipt.paper", in: root)
+        let brand: UILabel = try requireView(identifier: "overview.receipt.brand", in: root)
+        let subtitle: UILabel = try requireView(identifier: "overview.receipt.subtitle", in: root)
+        let date: UILabel = try requireView(identifier: "overview.receipt.perShiftPeriod", in: root)
+        let time: UILabel = try requireView(identifier: "overview.receipt.perShiftTime", in: root)
+        let gross: UILabel = try requireView(identifier: "overview.expectedGross.amount", in: root)
+        let heading = try #require(OverviewFormatting.perShiftHeading(shift,
+            timeZoneIdentifier: job.timeZoneIdentifier, locale: Locale(identifier: localeID)))
+        var normalBrandSize: CGFloat?
+        for category: UIContentSizeCategory in [.large, .accessibilityExtraExtraExtraLarge, .large] {
+            controller.traitOverrides.preferredContentSizeCategory = category
+            window.layoutIfNeeded()
+            root.layoutIfNeeded()
+            #expect(brand.text == "SHIFTLEDGER")
+            #expect(brand.numberOfLines == 1)
+            let text = try #require(brand.text)
+            #expect((text as NSString).size(withAttributes: [.font: brand.font as Any]).width <= brand.bounds.width + 0.5)
+            #expect(brand.bounds.height < brand.font.lineHeight * 1.5)
+            #expect(date.text == heading.date && time.text == heading.time)
+            #expect(date.accessibilityLabel == heading.accessibilityLabel)
+            #expect(!time.isAccessibilityElement)
+            #expect([brand, subtitle, date, time, gross].filter(\.isAccessibilityElement).count == 4)
+            for label in [brand, subtitle, date, time, gross] {
+                let frame = label.convert(label.bounds, to: paper)
+                #expect(frame.minX >= -0.5 && frame.maxX <= paper.bounds.width + 0.5)
+                let required = label.sizeThatFits(CGSize(width: label.bounds.width, height: .greatestFiniteMagnitude))
+                #expect(label.bounds.height + 0.5 >= required.height)
+            }
+            for (upper, lower) in zip([brand, subtitle, date, time], [subtitle, date, time, gross]) {
+                #expect(upper.convert(upper.bounds, to: paper).maxY <= lower.convert(lower.bounds, to: paper).minY)
+            }
+            if category == .large {
+                if let normalBrandSize { #expect(abs(brand.font.pointSize - normalBrandSize) < 0.01) }
+                else { normalBrandSize = brand.font.pointSize }
+            } else {
+                #expect(brand.font.pointSize < date.font.pointSize)
+            }
+        }
+    }
+
+    @Test("Hosted scheduled Overview preserves inclusive periods and real navigation",
+          arguments: [false, true], ["ru_RU", "en_US"])
+    func scheduledHeadingHostedNavigation(_ weekly: Bool, _ localeID: String) throws {
+        let cycle: PayCalculationCycle = weekly
+            ? .scheduled(.weekly(anchorDate: try LocalDate(year: 2026, month: 9, day: 7)))
+            : .scheduled(.calendarMonthly)
+        let job = try makeJob(cycle: cycle)
+        let shifts = try [makeShift(id: 1, month: 9, day: 15), makeShift(id: 2, month: 9, day: 16)]
+        let now = try date(year: 2026, month: 9, day: 18, hour: 12)
+        let model = OverviewViewModel(job: job, loadShifts: { shifts }, currentDate: { now })
+        let controller = OverviewViewController(viewModel: model, currencyCode: job.currencyCode,
+            timeZoneIdentifier: job.timeZoneIdentifier, displayLocale: Locale(identifier: localeID))
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 402, height: 874))
+        window.rootViewController = UINavigationController(rootViewController: controller)
+        window.isHidden = false
+        defer { window.isHidden = true }
+        let root = try requireRootView(controller)
+        let original = try requireContent(model.state)
+        let period: UILabel = try requireView(identifier: "overview.period.label", in: root)
+        let time: UILabel = try requireView(identifier: "overview.receipt.perShiftTime", in: root)
+        let previous: UIButton = try requireView(identifier: "overview.period.previous", in: root)
+        let next: UIButton = try requireView(identifier: "overview.period.next", in: root)
+        #expect(isEffectivelyHidden(time))
+        for category: UIContentSizeCategory in [.large, .accessibilityExtraExtraExtraLarge] {
+            controller.traitOverrides.preferredContentSizeCategory = category
+            window.layoutIfNeeded()
+            root.layoutIfNeeded()
+            #expect(period.text?.contains("2026") == true)
+            let data = try #require(UIGraphicsImageRenderer(bounds: root.bounds).image { context in
+                root.layer.render(in: context.cgContext)
+            }.pngData())
+            // A UIWindow-hosted UIKit layer capture, not installed-app navigation evidence.
+            Attachment.record(Array(data), named: "hosted-\(weekly ? "weekly" : "monthly")-\(localeID)-\(category.rawValue).png")
+        }
+        previous.sendActions(for: .touchUpInside)
+        #expect(try requireContent(model.state).selectedPeriod != original.selectedPeriod)
+        next.sendActions(for: .touchUpInside)
+        let restored = try requireContent(model.state)
+        #expect(restored.selectedPeriod == original.selectedPeriod)
+        #expect(restored.expectedBreakdown?.expectedGross == original.expectedBreakdown?.expectedGross)
+        #expect(shiftCardIdentifiers(in: root) == [shifts[1].id, shifts[0].id])
+    }
+
     @Test("Normal rail centers real periods without partial neighboring titles")
     func normalRailHasNoDuplicatePeriod() throws {
         let subject = try makeSubject(
@@ -39,6 +135,7 @@ struct OverviewViewControllerTests {
                     .intersection(rail.bounds).width
                 if period.period == content.selectedPeriod {
                     #expect(item.accessibilityTraits.contains(.selected))
+                    #expect(item.accessibilityLabel == fallback.accessibilityLabel)
                     #expect(item.backgroundColor == .clear)
                     #expect(item.layer.cornerRadius == 0)
                     #expect(item.bounds.height >= 44)
@@ -144,6 +241,24 @@ struct OverviewViewControllerTests {
         }
         let receipt: UIView = try requireView(identifier: "overview.receipt.paper", in: root)
         let perShiftPeriod: UILabel = try requireView(identifier: "overview.receipt.perShiftPeriod", in: root)
+        let time: UILabel = try requireView(identifier: "overview.receipt.perShiftTime", in: root)
+        let heading = try #require(OverviewFormatting.perShiftHeading(
+            latest, timeZoneIdentifier: "Europe/Stockholm", locale: displayLocale))
+        #expect(perShiftPeriod.text == heading.date)
+        #expect(time.text == heading.time)
+        #expect(perShiftPeriod.accessibilityLabel == heading.accessibilityLabel)
+        #expect(perShiftPeriod.isAccessibilityElement)
+        #expect(!time.isAccessibilityElement)
+        for size: UIContentSizeCategory in [.large, .accessibilityExtraExtraExtraLarge, .large] {
+            subject.viewController.traitOverrides.preferredContentSizeCategory = size
+            window.layoutIfNeeded()
+            root.layoutIfNeeded()
+            let dateFrame = perShiftPeriod.convert(perShiftPeriod.bounds, to: receipt)
+            let timeFrame = time.convert(time.bounds, to: receipt)
+            #expect(timeFrame.minY >= dateFrame.maxY + 4)
+            #expect(timeFrame.maxX <= receipt.bounds.width)
+            #expect(perShiftPeriod.numberOfLines == 0 && time.numberOfLines == 0)
+        }
         #expect(isEffectivelyHidden(perShiftPeriod) == false)
         #expect(perShiftPeriod.convert(perShiftPeriod.bounds, to: receipt).minY >= 0)
         #expect(shiftCardIdentifiers(in: root) == [latest.id, older.id])
@@ -962,7 +1077,7 @@ struct OverviewViewControllerTests {
             in: try requireRootView(subject.viewController)
         )
         #expect(label.text?.contains("Sep") == true)
-        #expect(label.text?.contains("30") == true)
+        #expect(label.text == "September 2026")
     }
 
     @Test("Scheduled Shift count represents all persisted Shifts")

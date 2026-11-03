@@ -1,6 +1,35 @@
 import Foundation
 
 enum OverviewFormatting {
+    struct PeriodHeading {
+        let date: String
+        let time: String?
+        let accessibilityLabel: String
+    }
+
+    static func perShiftHeading(
+        _ shift: Shift,
+        timeZoneIdentifier: String,
+        locale: Locale
+    ) -> PeriodHeading? {
+        guard let zone = TimeZone(identifier: timeZoneIdentifier),
+              let time = compactShiftTimeRange(shift, timeZoneIdentifier: timeZoneIdentifier, locale: locale)
+        else { return nil }
+        let calendar = configuredCalendar(timeZone: zone)
+        let date = dateHeading(shift, calendar: calendar, locale: locale, includeYear: true)
+        let endpoint = DateFormatter()
+        endpoint.calendar = calendar
+        endpoint.timeZone = zone
+        endpoint.locale = locale
+        endpoint.dateStyle = .long
+        endpoint.timeStyle = .short
+        if zone.secondsFromGMT(for: shift.start) != zone.secondsFromGMT(for: shift.end) {
+            endpoint.setLocalizedDateFormatFromTemplate("yMMMMdjmOOOO")
+        }
+        return PeriodHeading(date: date, time: time,
+                             accessibilityLabel: "\(endpoint.string(from: shift.start)) — \(endpoint.string(from: shift.end))")
+    }
+
     struct ShiftEndpoints: Equatable {
         let startTime: String
         let endTime: String
@@ -23,8 +52,7 @@ enum OverviewFormatting {
     static func compactScheduledPeriod(
         _ period: PayPeriod,
         timeZoneIdentifier: String,
-        locale: Locale,
-        referenceDate: Date = Date()
+        locale: Locale
     ) -> String? {
         guard let timeZone = TimeZone(identifier: timeZoneIdentifier),
               let end = try? period.endExclusive.addingDays(-1),
@@ -45,10 +73,7 @@ enum OverviewFormatting {
         formatter.locale = locale
         formatter.calendar = calendar
         formatter.timeZone = timeZone
-        let referenceYear = calendar.component(.year, from: referenceDate)
-        let needsYear = calendar.component(.year, from: startDate) != referenceYear
-            || calendar.component(.year, from: endDate) != referenceYear
-        formatter.dateTemplate = needsYear ? "yMMMd" : "MMMd"
+        formatter.dateTemplate = "yMMMd"
         return formatter.string(from: startDate, to: endDate)
     }
 
@@ -141,12 +166,22 @@ enum OverviewFormatting {
             return nil
         }
 
+        let calendar = configuredCalendar(timeZone: timeZone)
+        if calendar.component(.day, from: startDate) == 1,
+           calendar.date(byAdding: .month, value: 1, to: startDate)
+            == (try? period.endExclusive.startOfDay(in: timeZone)) {
+            let formatter = DateFormatter()
+            formatter.calendar = calendar
+            formatter.locale = locale
+            formatter.timeZone = timeZone
+            formatter.setLocalizedDateFormatFromTemplate("yMMMM")
+            return formatter.string(from: startDate)
+        }
         let formatter = DateIntervalFormatter()
-        formatter.calendar = configuredCalendar(timeZone: timeZone)
+        formatter.calendar = calendar
         formatter.locale = locale
         formatter.timeZone = timeZone
-        formatter.dateStyle = .medium
-        formatter.timeStyle = .none
+        formatter.dateTemplate = "yMMMMd"
         return formatter.string(from: startDate, to: endDate)
     }
 
@@ -200,7 +235,14 @@ enum OverviewFormatting {
         let referenceYear = calendar.component(.year, from: referenceDate)
         let needsYear = calendar.component(.year, from: shift.start) != referenceYear
             || calendar.component(.year, from: shift.end) != referenceYear
-        let template = needsYear ? "yMMMMd" : "MMMMd"
+        return dateHeading(shift, calendar: calendar, locale: locale, includeYear: needsYear)
+    }
+
+    private static func dateHeading(
+        _ shift: Shift, calendar: Calendar, locale: Locale, includeYear: Bool
+    ) -> String {
+        let timeZone = calendar.timeZone
+        let template = includeYear ? "yMMMMd" : "MMMMd"
         if !calendar.isDate(shift.start, inSameDayAs: shift.end) {
             let interval = DateIntervalFormatter()
             interval.calendar = calendar

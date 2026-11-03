@@ -65,10 +65,10 @@ struct OverviewFormattingTests {
         let monthly = PayPeriod(start: try localDate(year: 2026, month: 9, day: 1), endExclusive: try localDate(year: 2026, month: 10, day: 1))
         #expect(OverviewFormatting.compactScheduledPeriod(monthly, timeZoneIdentifier: "UTC", locale: locale) == "September 2026")
         let weekly = PayPeriod(start: try localDate(year: 2026, month: 9, day: 7), endExclusive: try localDate(year: 2026, month: 9, day: 14))
-        let text = try #require(OverviewFormatting.compactScheduledPeriod(weekly, timeZoneIdentifier: "UTC", locale: locale, referenceDate: try date(year: 2026, month: 9, day: 18, hour: 12, minute: 0)))
+        let text = try #require(OverviewFormatting.compactScheduledPeriod(weekly, timeZoneIdentifier: "UTC", locale: locale))
         #expect(text.contains("7"))
         #expect(text.contains("13"))
-        #expect(!text.contains("2026"))
+        #expect(text.contains("2026"))
     }
 
     @Test("Compact overnight rail title contains only local Shift start")
@@ -80,6 +80,71 @@ struct OverviewFormattingTests {
         #expect(text.contains("9:36"))
         #expect(!text.contains("Sep 13"))
         #expect(!text.contains("2026"))
+    }
+
+    @Test("Document period separates localized dates from endpoint clocks", arguments: ["ru_RU", "en_US"])
+    func documentPeriodHeading(_ localeID: String) throws {
+        let ru = localeID == "ru_RU"
+        let samples: [(Int, Int, Int, TimeInterval, String, String)] = [
+            (2026, 11, 5, 3600, "5 ноября 2026 г.", "November 5, 2026"),
+            (2026, 11, 5, 24 * 3600, "5—6 ноября 2026 г.", "November 5 – 6, 2026"),
+            (2026, 11, 5, 48 * 3600, "5—7 ноября 2026 г.", "November 5 – 7, 2026"),
+            (2026, 10, 31, 24 * 3600, "31 октября — 1 ноября 2026 г.", "October 31 – November 1, 2026"),
+            (2026, 12, 31, 24 * 3600, "31 декабря 2026 — 1 января 2027 г.", "December 31, 2026 – January 1, 2027"),
+            (2020, 11, 5, 3600, "5 ноября 2020 г.", "November 5, 2020")
+        ]
+        for (year, month, day, duration, russian, english) in samples {
+            let shift = try makeShift(start: date(year: year, month: month, day: day, hour: 14, minute: 43), duration: duration)
+            let heading = try #require(OverviewFormatting.perShiftHeading(
+                shift, timeZoneIdentifier: "UTC", locale: Locale(identifier: localeID)))
+            #expect(normalizedPeriodSpacing(heading.date) == (ru ? russian : english))
+            #expect(heading.time.map(normalizedPeriodSpacing) == (ru ? (duration == 3600 ? "14:43–15:43" : "14:43–14:43")
+                                      : (duration == 3600 ? "2:43 PM–3:43 PM" : "2:43 PM–2:43 PM")))
+            #expect(heading.accessibilityLabel.contains(String(year)))
+            #expect(heading.accessibilityLabel.contains(ru ? "14:43" : "2:43"))
+            #expect(heading.accessibilityLabel.components(separatedBy: " — ").count == 2)
+        }
+    }
+
+    @Test("Document heading follows Job timezone and disambiguates repeated DST clocks", arguments: ["ru_RU", "en_US"])
+    func documentPeriodJobTimezone(_ localeID: String) throws {
+        let locale = Locale(identifier: localeID)
+        let shift = try makeShift(start: date(year: 2026, month: 11, day: 1, hour: 5, minute: 30), duration: 3600)
+        let heading = try #require(OverviewFormatting.perShiftHeading(shift, timeZoneIdentifier: "America/New_York", locale: locale))
+        #expect(heading.time?.contains("GMT-04:00") == true)
+        #expect(heading.time?.contains("GMT-05:00") == true)
+        #expect(heading.accessibilityLabel.contains("GMT-04:00"))
+        #expect(heading.accessibilityLabel.contains("GMT-05:00"))
+        let midnight = try makeShift(start: date(year: 2026, month: 11, day: 5, hour: 23, minute: 30), duration: 3600)
+        let local = try #require(OverviewFormatting.perShiftHeading(midnight, timeZoneIdentifier: "Europe/Stockholm", locale: locale))
+        #expect(normalizedPeriodSpacing(local.date) == (localeID == "ru_RU" ? "6 ноября 2026 г." : "November 6, 2026"))
+    }
+
+    @Test("Scheduled document headings retain year and inclusive calendar boundaries", arguments: ["ru_RU", "en_US"])
+    func scheduledDocumentHeading(_ localeID: String) throws {
+        let ru = localeID == "ru_RU"
+        let locale = Locale(identifier: localeID)
+        let month = PayPeriod(start: try localDate(year: 2026, month: 9, day: 1),
+                              endExclusive: try localDate(year: 2026, month: 10, day: 1))
+        #expect(OverviewFormatting.scheduledPeriod(month, timeZoneIdentifier: "Europe/Stockholm", locale: locale).map(normalizedPeriodSpacing)
+                == (ru ? "сентябрь 2026 г." : "September 2026"))
+        let week = PayPeriod(start: try localDate(year: 2026, month: 9, day: 7),
+                             endExclusive: try localDate(year: 2026, month: 9, day: 14))
+        #expect(OverviewFormatting.scheduledPeriod(week, timeZoneIdentifier: "Europe/Stockholm", locale: locale).map(normalizedPeriodSpacing)
+                == (ru ? "7—13 сентября 2026 г." : "September 7 – 13, 2026"))
+        let boundary = PayPeriod(start: try localDate(year: 2026, month: 12, day: 31),
+                                 endExclusive: try localDate(year: 2027, month: 1, day: 2))
+        #expect(OverviewFormatting.scheduledPeriod(boundary, timeZoneIdentifier: "Europe/Stockholm", locale: locale).map(normalizedPeriodSpacing)
+                == (ru ? "31 декабря 2026 — 1 января 2027 г."
+                       : "December 31, 2026 – January 1, 2027"))
+        let rail = try #require(OverviewFormatting.compactScheduledPeriod(week, timeZoneIdentifier: "Europe/Stockholm", locale: locale))
+        #expect(rail.contains("2026"))
+    }
+
+    // ICU may choose ordinary, thin or nonbreaking spaces on different iOS releases.
+    // Keep every date/time token and separator; only normalize whitespace for comparison.
+    private func normalizedPeriodSpacing(_ text: String) -> String {
+        text.split(whereSeparator: { $0.isWhitespace }).joined(separator: " ")
     }
 
     private let locale = Locale(identifier: "en_US_POSIX")
@@ -138,7 +203,7 @@ struct OverviewFormattingTests {
         #expect(result.contains("14") == false)
     }
 
-    @Test("Monthly period displays the last day instead of endExclusive")
+    @Test("Monthly document heading uses month and year")
     func monthlyPeriodUsesLastVisibleDay() throws {
         let period = PayPeriod(
             start: try localDate(year: 2026, month: 9, day: 1),
@@ -152,7 +217,7 @@ struct OverviewFormattingTests {
         ))
 
         #expect(result.contains("Sep"))
-        #expect(result.contains("30"))
+        #expect(result == "September 2026")
         #expect(result.contains("Oct") == false)
     }
 
