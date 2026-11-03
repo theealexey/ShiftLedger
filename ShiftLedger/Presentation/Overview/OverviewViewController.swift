@@ -163,9 +163,9 @@ final class OverviewViewController: UIViewController {
                     locale: displayLocale
                 ),
                 expectedGrossContext: OverviewStrings.expectedGrossContext(currencyCode: currencyCode),
+                amountLocale: displayLocale,
                 precisionExplanation: precisionExplanation(for: breakdown),
                 period: periodText.date,
-                periodIdentity: period,
                 periodTime: periodText.time,
                 periodAccessibilityLabel: periodText.accessibilityLabel,
                 periodItems: railItems(from: content.railPeriods, selectedPeriod: period),

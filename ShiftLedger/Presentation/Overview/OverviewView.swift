@@ -71,9 +71,10 @@ final class OverviewView: UIView, UIScrollViewDelegate {
     private let contentStack = UIStackView()
     private let expectedGrossLabel = UILabel()
     private let expectedGrossAmountLabel = UILabel()
-    private let grossAmountScrollView = UIScrollView()
-    private let grossScrollHint = UILabel()
-    private var renderedPeriod: PayCalculationPeriod?
+    private let grossMeasurementLabel = UILabel()
+    private var grossFontLayout: (text: String, width: CGFloat, category: UIContentSizeCategory, scale: CGFloat)?
+    private var grossAmountText = ""
+    private var grossAmountLocale = Locale.current
     private let navigationStack = UIStackView()
     private let previousButton = UIButton(type: .system)
     private let periodLabel = UILabel()
@@ -123,9 +124,9 @@ final class OverviewView: UIView, UIScrollViewDelegate {
     func renderContent(
         expectedGross: String,
         expectedGrossContext: String,
+        amountLocale: Locale = .current,
         precisionExplanation: PrecisionExplanation? = nil,
         period: String,
-        periodIdentity: PayCalculationPeriod? = nil,
         periodTime: String? = nil,
         periodAccessibilityLabel: String? = nil,
         periodItems: [PeriodItem],
@@ -138,11 +139,13 @@ final class OverviewView: UIView, UIScrollViewDelegate {
     ) {
         showsPeriodNavigation = showPeriodNavigation
         periodRailContainer.accessibilityElementsHidden = !showPeriodNavigation
-        if renderedPeriod != periodIdentity || expectedGrossAmountLabel.text != expectedGross {
-            grossAmountScrollView.contentOffset = .zero
-        }
-        renderedPeriod = periodIdentity
+        grossAmountText = expectedGross
+        grossAmountLocale = amountLocale
+        grossFontLayout = nil
         expectedGrossAmountLabel.text = expectedGross
+        expectedGrossAmountLabel.numberOfLines = 1
+        expectedGrossAmountLabel.textAlignment = .natural
+        updateGrossAmountFont()
         expectedGrossAmountLabel.accessibilityLabel = "\(expectedGrossContext), \(expectedGross)"
         expectedGrossLabel.text = expectedGrossContext
         precisionLabel.text = OverviewStrings.roundedForDisplay
@@ -184,13 +187,7 @@ final class OverviewView: UIView, UIScrollViewDelegate {
     override func layoutSubviews() {
         super.layoutSubviews()
         contentStack.layoutIfNeeded()
-        let overflows = expectedGrossAmountLabel.intrinsicContentSize.width > grossAmountScrollView.bounds.width + 0.5
-        grossAmountScrollView.isScrollEnabled = overflows
-        if grossScrollHint.isHidden == overflows {
-            grossScrollHint.isHidden = !overflows
-            grossAmountScrollView.flashScrollIndicators()
-        }
-        if !overflows { grossAmountScrollView.contentOffset = .zero }
+        updateGrossAmountFont()
         periodRailContainer.layoutIfNeeded()
         periodRailViewport.layoutIfNeeded()
         periodRailStack.layoutIfNeeded()
@@ -348,17 +345,7 @@ final class OverviewView: UIView, UIScrollViewDelegate {
         expectedGrossAmountLabel.accessibilityIdentifier = "overview.expectedGross.amount"
         expectedGrossAmountLabel.isAccessibilityElement = true
         expectedGrossAmountLabel.numberOfLines = 1
-        expectedGrossAmountLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
-        grossAmountScrollView.accessibilityIdentifier = "overview.expectedGross.scroll"
-        grossAmountScrollView.showsHorizontalScrollIndicator = true
-        grossAmountScrollView.showsVerticalScrollIndicator = false
-        grossAmountScrollView.isDirectionalLockEnabled = true
-        configureLabel(grossScrollHint, font: ShiftLedgerTypography.caption, color: ShiftLedgerColors.textSecondary)
-        grossScrollHint.text = String(localized: "overview.expectedGross.scrollInstruction", table: "Localizable")
-        grossScrollHint.textAlignment = .center
-        grossScrollHint.isAccessibilityElement = false
-        grossScrollHint.accessibilityIdentifier = "overview.expectedGross.scrollHint"
-        grossScrollHint.isHidden = true
+        expectedGrossAmountLabel.adjustsFontForContentSizeCategory = false
         configureLabel(precisionLabel, font: UIFontMetrics(forTextStyle: .footnote).scaledFont(
             for: .monospacedSystemFont(ofSize: 12, weight: .regular)
         ), color: ShiftLedgerColors.textSecondary)
@@ -523,9 +510,7 @@ final class OverviewView: UIView, UIScrollViewDelegate {
         periodRailScrollView.addSubview(periodRailStack)
 
         contentCard.addSubview(contentStack)
-        grossAmountScrollView.addSubview(expectedGrossAmountLabel)
-        expectedGrossAmountLabel.translatesAutoresizingMaskIntoConstraints = false
-        [expectedGrossLabel, grossAmountScrollView, grossScrollHint, precisionStack]
+        [expectedGrossLabel, expectedGrossAmountLabel, precisionStack]
             .forEach(contentStack.addArrangedSubview)
         [shiftCountLabel, shiftCountValueLabel].forEach(shiftCountStack.addArrangedSubview)
 
@@ -547,12 +532,6 @@ final class OverviewView: UIView, UIScrollViewDelegate {
 
     private func configureLayout() {
         NSLayoutConstraint.activate([
-            expectedGrossAmountLabel.leadingAnchor.constraint(equalTo: grossAmountScrollView.contentLayoutGuide.leadingAnchor),
-            expectedGrossAmountLabel.trailingAnchor.constraint(equalTo: grossAmountScrollView.contentLayoutGuide.trailingAnchor),
-            expectedGrossAmountLabel.topAnchor.constraint(equalTo: grossAmountScrollView.contentLayoutGuide.topAnchor),
-            expectedGrossAmountLabel.bottomAnchor.constraint(equalTo: grossAmountScrollView.contentLayoutGuide.bottomAnchor),
-            expectedGrossAmountLabel.widthAnchor.constraint(greaterThanOrEqualTo: grossAmountScrollView.frameLayoutGuide.widthAnchor),
-            expectedGrossAmountLabel.heightAnchor.constraint(equalTo: grossAmountScrollView.frameLayoutGuide.heightAnchor),
             scrollView.topAnchor.constraint(equalTo: safeAreaLayoutGuide.topAnchor),
             scrollView.leadingAnchor.constraint(equalTo: leadingAnchor),
             scrollView.trailingAnchor.constraint(equalTo: trailingAnchor),
@@ -776,6 +755,83 @@ final class OverviewView: UIView, UIScrollViewDelegate {
         let maximumOffset = max(minimumOffset, periodRailScrollView.contentSize.width
             - periodRailScrollView.bounds.width + periodRailScrollView.contentInset.right)
         return min(max(minimumOffset, centeredOffset), maximumOffset)
+    }
+
+    private func updateGrossAmountFont() {
+        guard contentStack.bounds.width > 0 else { return }
+        let text = grossAmountText
+        let preferred = UIFontMetrics(forTextStyle: .largeTitle).scaledFont(
+            for: .monospacedDigitSystemFont(ofSize: 52, weight: .bold),
+            compatibleWith: traitCollection
+        )
+        let width = contentStack.bounds.width
+        let category = traitCollection.preferredContentSizeCategory
+        if let previous = grossFontLayout,
+           previous.text == text, previous.width == width, previous.category == category,
+           previous.scale == traitCollection.displayScale { return }
+        let available = width - 1 / max(1, traitCollection.displayScale)
+        grossMeasurementLabel.text = text
+        grossMeasurementLabel.numberOfLines = 1
+        func fits(_ size: CGFloat) -> Bool {
+            grossMeasurementLabel.font = preferred.withSize(size)
+            return grossMeasurementLabel.intrinsicContentSize.width <= available
+        }
+        let floor: CGFloat = 17
+        if !fits(floor) {
+            renderGroupedGross(text, preferred: preferred, available: available)
+            grossFontLayout = (text, width, category, traitCollection.displayScale)
+            return
+        }
+        var lower = floor
+        var upper = preferred.pointSize
+        if fits(upper) {
+            lower = upper
+        } else {
+            for _ in 0..<16 {
+                let candidate = (lower + upper) / 2
+                if fits(candidate) { lower = candidate } else { upper = candidate }
+            }
+        }
+        expectedGrossAmountLabel.text = text
+        expectedGrossAmountLabel.numberOfLines = 1
+        expectedGrossAmountLabel.textAlignment = .natural
+        expectedGrossAmountLabel.font = preferred.withSize(lower)
+        grossFontLayout = (text, width, category, traitCollection.displayScale)
+    }
+
+    private func renderGroupedGross(_ text: String, preferred: UIFont, available: CGFloat) {
+        let formatter = NumberFormatter()
+        formatter.locale = grossAmountLocale
+        formatter.numberStyle = .currency
+        let separator = formatter.currencyGroupingSeparator ?? formatter.groupingSeparator ?? ""
+        let groups = separator.isEmpty ? [text] : text.components(separatedBy: separator)
+        let tokens = groups.enumerated().map { index, group in
+            index < groups.count - 1 ? group + separator : group
+        }
+        var size = max(17, UIFont.preferredFont(forTextStyle: .body, compatibleWith: traitCollection).pointSize)
+        // Only whole groups are measured and wrapped; the final token includes the fraction.
+        func measuredWidth(_ value: String) -> CGFloat {
+            grossMeasurementLabel.text = value
+            grossMeasurementLabel.font = preferred.withSize(size)
+            return grossMeasurementLabel.intrinsicContentSize.width
+        }
+        while size > 17 && tokens.contains(where: { measuredWidth($0) > available }) {
+            size = max(17, size - 1)
+        }
+        var lines: [String] = []
+        var line = ""
+        for token in tokens {
+            if !line.isEmpty && measuredWidth(line + token) > available {
+                lines.append(line)
+                line = ""
+            }
+            line += token
+        }
+        if !line.isEmpty { lines.append(line) }
+        expectedGrossAmountLabel.text = lines.joined(separator: "\n")
+        expectedGrossAmountLabel.numberOfLines = 0
+        expectedGrossAmountLabel.textAlignment = .right
+        expectedGrossAmountLabel.font = preferred.withSize(size)
     }
 
     private func updateReceiptHeaderFonts() {

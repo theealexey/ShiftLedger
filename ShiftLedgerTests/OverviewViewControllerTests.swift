@@ -6,7 +6,7 @@ import Testing
 struct OverviewViewControllerTests {
     private let displayLocale = Locale(identifier: "en_US_POSIX")
 
-    @Test("Gross retains every localized glyph at full Dynamic Type size with reachable overflow",
+    @Test("Gross fits the complete localized amount without horizontal interaction",
           arguments: [CGFloat(320), 375, 402], ["ru_RU", "en_US"])
     func grossAmountRemainsWhole(_ width: CGFloat, _ localeID: String) throws {
         let locale = Locale(identifier: localeID)
@@ -27,12 +27,11 @@ struct OverviewViewControllerTests {
             defer { window.isHidden = true }
             let root = try requireRootView(controller)
             let label: UILabel = try requireView(identifier: "overview.expectedGross.amount", in: root)
-            let viewport: UIScrollView = try requireView(identifier: "overview.expectedGross.scroll", in: root)
-            let hint: UILabel = try requireView(identifier: "overview.expectedGross.scrollHint", in: root)
             let caption: UILabel = try requireView(identifier: "overview.expectedGross.label", in: root)
             let expected = OverviewFormatting.heroAmount(amount, currencyCode: "EUR", locale: locale)
             for appearance: UIUserInterfaceStyle in [.light, .dark] {
                 controller.overrideUserInterfaceStyle = appearance
+                var normalFontSize: CGFloat?
                 for category: UIContentSizeCategory in [.large, .extraExtraLarge, .accessibilityExtraExtraLarge, .accessibilityExtraExtraExtraLarge, .large] {
                     controller.traitOverrides.preferredContentSizeCategory = category
                     window.layoutIfNeeded()
@@ -45,31 +44,153 @@ struct OverviewViewControllerTests {
                     #expect(label.bounds.width + 0.5 >= natural.width)
                     #expect(label.bounds.height + 0.5 >= natural.height)
                     #expect(label.bounds.height < label.font.lineHeight * 1.5)
-                    #expect(viewport.contentSize.height <= viewport.bounds.height + 0.5)
-                    #expect(caption.convert(caption.bounds, to: root).maxY <= viewport.convert(viewport.bounds, to: root).minY)
-                    let overflow = max(0, viewport.contentSize.width - viewport.bounds.width)
-                    #expect(viewport.isScrollEnabled == (natural.width > viewport.bounds.width + 0.5))
-                    #expect(hint.isHidden == !viewport.isScrollEnabled)
-                    #expect(hint.text?.isEmpty == false)
-                    #expect(!hint.isAccessibilityElement)
-                    if !hint.isHidden {
-                        #expect(hint.bounds.height + 0.5 >= hint.sizeThatFits(CGSize(width: hint.bounds.width, height: .greatestFiniteMagnitude)).height)
-                        #expect(viewport.convert(viewport.bounds, to: root).maxY <= hint.convert(hint.bounds, to: root).minY)
+                    #expect(label.font.pointSize >= 17)
+                    if category == .large {
+                        if let normalFontSize { #expect(abs(normalFontSize - label.font.pointSize) < 0.01) }
+                        else { normalFontSize = label.font.pointSize }
                     }
-                    if overflow > 0.5 {
-                        viewport.setContentOffset(CGPoint(x: overflow, y: 0), animated: false)
-                        #expect(abs(label.convert(label.bounds, to: viewport).maxX - viewport.bounds.maxX) < 0.5)
-                        #expect(viewport.hitTest(CGPoint(x: viewport.bounds.midX, y: viewport.bounds.midY), with: nil) != nil)
-                        viewport.setContentOffset(.zero, animated: false)
-                        #expect(abs(label.convert(label.bounds, to: viewport).minX - viewport.bounds.minX) < 0.5)
-                    }
+                    let fittedSize = label.font.pointSize
+                    window.frame.size.width = width == 320 ? 402 : 320
+                    window.layoutIfNeeded()
+                    root.layoutIfNeeded()
+                    #expect(label.intrinsicContentSize.width <= label.bounds.width)
+                    window.frame.size.width = width
+                    window.layoutIfNeeded()
+                    root.layoutIfNeeded()
+                    #expect(abs(fittedSize - label.font.pointSize) < 0.01)
+                    #expect(caption.convert(caption.bounds, to: root).maxY <= label.convert(label.bounds, to: root).minY)
+                    #expect(descendant(identifier: "overview.expectedGross.scroll", in: root) == nil)
+                    #expect(descendant(identifier: "overview.expectedGross.scrollHint", in: root) == nil)
                     #expect(try requireContent(model.state).expectedBreakdown?.expectedGross == amount)
                 }
             }
         }
     }
 
-    @Test("Equal gross in another payroll period resets horizontal reading position")
+    @Test("Extreme signed amounts wrap only at localized grouping boundaries",
+          arguments: [CGFloat(320), 375, 402], ["ru_RU", "en_US"])
+    func extremeGrossGroups(_ width: CGFloat, _ localeID: String) throws {
+        let locale = Locale(identifier: localeID)
+        let formatter = NumberFormatter()
+        formatter.locale = locale
+        formatter.numberStyle = .currency
+        let separator = try #require(formatter.currencyGroupingSeparator)
+        let host = UIViewController()
+        let root = OverviewView()
+        host.view = root
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: width, height: 874))
+        window.rootViewController = host
+        window.isHidden = false
+        defer { window.isHidden = true }
+        let label: UILabel = try requireView(identifier: "overview.expectedGross.amount", in: root)
+        for input in ["123456789012345678901234567890123456.78", "-123456789012345678901234567890123456.78", "-999999999999.99", "-4700", "1"] {
+            let value = try #require(Decimal(string: input))
+            let formatted = OverviewFormatting.heroAmount(value, currencyCode: "EUR", locale: locale)
+            for style: UIUserInterfaceStyle in [.light, .dark] {
+                host.overrideUserInterfaceStyle = style
+                for category: UIContentSizeCategory in [.large, .accessibilityExtraExtraLarge, .accessibilityExtraExtraExtraLarge, .large] {
+                    host.traitOverrides.preferredContentSizeCategory = category
+                    root.renderContent(expectedGross: formatted, expectedGrossContext: "EUR", amountLocale: locale,
+                        period: "2026", periodItems: [], showPeriodNavigation: false,
+                        shiftCount: 0, shiftCards: [], canNavigatePrevious: false,
+                        canNavigateNext: false, canCheckPaycheck: true)
+                    window.layoutIfNeeded()
+                    root.layoutIfNeeded()
+                    root.layoutIfNeeded()
+                    let rendered = try #require(label.text)
+                    #expect(rendered.replacingOccurrences(of: "\n", with: "") == formatted)
+                    #expect(label.accessibilityLabel == "EUR, " + formatted)
+                    #expect(label.font.pointSize >= 17)
+                    let lines = rendered.components(separatedBy: "\n")
+                    for line in lines.dropLast() { #expect(line.hasSuffix(separator)) }
+                    #expect(lines.last?.hasSuffix(formatted.components(separatedBy: separator).last ?? formatted) == true)
+                    let floorMeasurement = UILabel()
+                    floorMeasurement.font = label.font.withSize(17)
+                    let groups = formatted.components(separatedBy: separator)
+                    for (index, group) in groups.enumerated() {
+                        floorMeasurement.text = group + (index < groups.count - 1 ? separator : "")
+                        #expect(floorMeasurement.intrinsicContentSize.width <= label.bounds.width - 1 / max(1, label.traitCollection.displayScale))
+                    }
+                    let measurement = UILabel()
+                    measurement.font = label.font
+                    for line in lines {
+                        measurement.text = line
+                        #expect(measurement.intrinsicContentSize.width <= label.bounds.width)
+                    }
+                    #expect(label.intrinsicContentSize.height <= label.bounds.height + 0.5)
+                    if width == 320, input.count > 30, category == .accessibilityExtraExtraExtraLarge {
+                        let scroll: UIScrollView = try requireView(identifier: "overview.pageScroll", in: root)
+                        let hero: UIView = try requireView(identifier: "overview.expectedGross.hero", in: root)
+                        let section = hero.convert(hero.bounds, to: scroll)
+                        #expect(section.height + 32 <= scroll.bounds.height)
+                        scroll.scrollRectToVisible(section.insetBy(dx: 0, dy: -16), animated: false)
+                        window.layoutIfNeeded()
+                        root.layoutIfNeeded()
+                        let visibleSection = hero.convert(hero.bounds, to: scroll)
+                        #expect(scroll.bounds.contains(visibleSection))
+                        let data = try #require(UIGraphicsImageRenderer(bounds: window.bounds).image { context in
+                            window.layer.render(in: context.cgContext)
+                        }.pngData())
+                        let sign = input.hasPrefix("-") ? "negative" : "positive"
+                        let appearance = style == .dark ? "dark" : "light"
+                        Attachment.record(Array(data), named: "fallback-\(localeID)-\(sign)-\(appearance).png")
+                    }
+                    window.frame.size.width = width == 320 ? 402 : 320
+                    window.layoutIfNeeded()
+                    root.layoutIfNeeded()
+                    #expect(label.text?.replacingOccurrences(of: "\n", with: "") == formatted)
+                    #expect(label.intrinsicContentSize.width <= label.bounds.width)
+                    #expect(label.font.pointSize >= 17)
+                    window.frame.size.width = width
+                    window.layoutIfNeeded()
+                    root.layoutIfNeeded()
+                    if input.count > 30 { #expect(lines.count > 1) }
+                    else { #expect(lines.count == 1) }
+                    #expect(descendant(identifier: "overview.expectedGross.scroll", in: root) == nil)
+                }
+            }
+        }
+    }
+
+    @Test("Gross transitions replace financial content synchronously before layout", arguments: ["ru_RU", "en_US"])
+    func grossTransitionsAreSynchronous(_ localeID: String) throws {
+        let locale = Locale(identifier: localeID)
+        let root = OverviewView()
+        let host = UIViewController()
+        host.view = root
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 320, height: 874))
+        window.rootViewController = host
+        window.isHidden = false
+        defer { window.isHidden = true }
+        let label: UILabel = try requireView(identifier: "overview.expectedGross.amount", in: root)
+        let extreme = "123456789012345678901234567890123456.78"
+        for input in ["12.05", "1", "12.05", "0", "2.01", "1", extreme, "1", extreme, "-" + extreme, "-" + extreme] {
+            let value = try #require(Decimal(string: input))
+            let formatted = OverviewFormatting.heroAmount(value, currencyCode: "EUR", locale: locale)
+            root.renderContent(expectedGross: formatted, expectedGrossContext: "EUR", amountLocale: locale,
+                period: input, periodItems: [], showPeriodNavigation: false,
+                shiftCount: 0, shiftCards: [], canNavigatePrevious: false,
+                canNavigateNext: false, canCheckPaycheck: true)
+            // Deliberately before any explicit layout: geometry cannot own the current money value.
+            #expect(label.text?.replacingOccurrences(of: "\n", with: "") == formatted)
+            #expect(label.accessibilityLabel == "EUR, " + formatted)
+            for category: UIContentSizeCategory in [.large, .accessibilityExtraExtraExtraLarge, .large] {
+                host.traitOverrides.preferredContentSizeCategory = category
+                for width: CGFloat in [375, 320] {
+                    window.frame.size.width = width
+                    window.layoutIfNeeded()
+                    root.layoutIfNeeded()
+                    #expect(label.text?.replacingOccurrences(of: "\n", with: "") == formatted)
+                    #expect(label.intrinsicContentSize.width <= label.bounds.width)
+                    #expect(label.intrinsicContentSize.height <= label.bounds.height + 0.5)
+                    #expect(label.font.pointSize >= 17)
+                    if input.count < 10 { #expect(label.numberOfLines == 1) }
+                }
+            }
+        }
+    }
+
+    @Test("Equal gross remains fully visible when payroll period changes")
     func equalAmountPeriodResetsOverflow() throws {
         let job = try makeJob(cycle: .scheduled(.calendarMonthly))
         let shifts = try [makeShift(id: 1, month: 8, day: 15), makeShift(id: 2, month: 9, day: 15)]
@@ -81,24 +202,18 @@ struct OverviewViewControllerTests {
         defer { window.isHidden = true }
         window.layoutIfNeeded()
         let root = try requireRootView(subject.viewController)
-        let viewport: UIScrollView = try requireView(identifier: "overview.expectedGross.scroll", in: root)
         let amount: UILabel = try requireView(identifier: "overview.expectedGross.amount", in: root)
         let previous: UIButton = try requireView(identifier: "overview.period.previous", in: root)
         let next: UIButton = try requireView(identifier: "overview.period.next", in: root)
         let originalText = amount.text
-        let end = viewport.contentSize.width - viewport.bounds.width
-        #expect(end > 0)
-        viewport.setContentOffset(CGPoint(x: end, y: 0), animated: false)
-        #expect(viewport.contentOffset.x > 0)
         previous.sendActions(for: .touchUpInside)
         window.layoutIfNeeded()
         #expect(amount.text == originalText)
-        #expect(viewport.contentOffset.x == 0)
-        viewport.setContentOffset(CGPoint(x: end, y: 0), animated: false)
+        #expect(amount.intrinsicContentSize.width <= amount.bounds.width + 0.5)
         next.sendActions(for: .touchUpInside)
         window.layoutIfNeeded()
         #expect(amount.text == originalText)
-        #expect(viewport.contentOffset.x == 0)
+        #expect(amount.intrinsicContentSize.width <= amount.bounds.width + 0.5)
     }
 
     @Test("Decorative receipt header stays complete through Dynamic Type changes",
@@ -122,7 +237,6 @@ struct OverviewViewControllerTests {
         let gross: UILabel = try requireView(identifier: "overview.expectedGross.amount", in: root)
         let heading = try #require(OverviewFormatting.perShiftHeading(shift,
             timeZoneIdentifier: job.timeZoneIdentifier, locale: Locale(identifier: localeID)))
-        let grossViewport: UIScrollView = try requireView(identifier: "overview.expectedGross.scroll", in: root)
         var normalBrandSize: CGFloat?
         for category: UIContentSizeCategory in [.large, .accessibilityExtraExtraExtraLarge, .large] {
             controller.traitOverrides.preferredContentSizeCategory = category
@@ -138,7 +252,7 @@ struct OverviewViewControllerTests {
             #expect(!time.isAccessibilityElement)
             #expect([brand, subtitle, date, time, gross].filter(\.isAccessibilityElement).count == 4)
             for label in [brand, subtitle, date, time, gross] {
-                let boundedView: UIView = label === gross ? grossViewport : label
+                let boundedView: UIView = label
                 let frame = boundedView.convert(boundedView.bounds, to: paper)
                 #expect(frame.minX >= -0.5 && frame.maxX <= paper.bounds.width + 0.5)
                 let required = label.sizeThatFits(CGSize(width: label.bounds.width, height: .greatestFiniteMagnitude))
@@ -2812,7 +2926,7 @@ struct OverviewViewControllerTests {
             in: try requireRootView(subject.viewController)
         )
 
-        #expect(amount.adjustsFontForContentSizeCategory)
+        #expect(!amount.adjustsFontForContentSizeCategory)
         #expect(period.adjustsFontForContentSizeCategory)
         #expect(amount.numberOfLines == 1)
         #expect(period.numberOfLines == 0)
