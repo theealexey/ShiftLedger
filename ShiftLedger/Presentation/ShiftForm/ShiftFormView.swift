@@ -40,6 +40,7 @@ final class ShiftFormView: UIView {
     private let breakStartRow: ShiftFormValueRow
     private let breakEndRow: ShiftFormValueRow
     private let validationLabel = UILabel()
+    private var supplementaryViews: [UIView] = []
 
     init(identifiers: ShiftFormIdentifiers) {
         workTypeRow = ShiftFormValueRow(
@@ -77,6 +78,18 @@ final class ShiftFormView: UIView {
     @available(*, unavailable)
     required init?(coder: NSCoder) {
         nil
+    }
+
+    func setSupplementaryViews(header: UIView?, footer: UIView?) {
+        supplementaryViews.forEach { $0.removeFromSuperview() }
+        supplementaryViews = [header, footer].compactMap { $0 }
+        if let header {
+            stack.insertArrangedSubview(header, at: 0)
+            stack.setCustomSpacing(20, after: header)
+        }
+        if let footer {
+            stack.addArrangedSubview(footer)
+        }
     }
 
     func render(

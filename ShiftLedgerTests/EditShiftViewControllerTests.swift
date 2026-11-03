@@ -621,7 +621,89 @@ struct EditShiftViewControllerTests {
     #expect(deleteButton.bounds.height >= 44)
     #expect(deleteButton.titleLabel?.numberOfLines == 0)
     #expect(deleteButton.isEnabled)
-    expectNoOverlap()
+    #expect(deleteButton.isDescendant(of: screen))
+    screen.scrollRectToVisible(deleteButton.convert(deleteButton.bounds, to: screen), animated: false)
+    window.layoutIfNeeded()
+    let visibleButton = deleteButton.convert(deleteButton.bounds, to: screen)
+    #expect(screen.bounds.contains(visibleButton))
+    #expect(deleteButton.hitTest(CGPoint(x: deleteButton.bounds.midX, y: deleteButton.bounds.midY), with: nil) != nil)
+  }
+
+  @Test("Edit form preserves scrolling, complete heading and destructive reachability",
+        arguments: [UIContentSizeCategory.large, .accessibilityExtraExtraLarge, .accessibilityExtraExtraExtraLarge],
+        [UIUserInterfaceStyle.light, .dark])
+  func scrollingLayout(category: UIContentSizeCategory, appearance: UIUserInterfaceStyle) throws {
+    let workType = try makeWorkType(id: testWorkTypeID, name: "Lectures")
+    let shift = try Shift(id: shiftID, jobID: testJobID, workTypeID: workType.id,
+                          start: start, end: end)
+    var saves = 0
+    var deletes = 0
+    let model = EditShiftViewModel(timeZoneIdentifier: "UTC", workTypes: [workType], shift: shift,
+                                  saveShift: { _ in saves += 1; return .success(()) },
+                                  deleteShift: { _ in deletes += 1; return .success(()) })
+    let controller = EditShiftViewController(viewModel: model)
+    controller.traitOverrides.preferredContentSizeCategory = category
+    controller.overrideUserInterfaceStyle = appearance
+    let window = makeVisibleWindow(root: controller)
+    defer { hide(window) }
+    let scroll: UIScrollView = try requireView("editShift.screen", in: controller.view)
+    let delete: UIButton = try requireView("editShift.delete", in: controller.view)
+    let form = try #require(firstDescendant(of: ShiftFormView.self, in: controller.view))
+    func expectReachable(_ target: UIView) {
+      scroll.scrollRectToVisible(target.convert(target.bounds, to: scroll), animated: false)
+      window.layoutIfNeeded()
+      let frame = target.convert(target.bounds, to: scroll)
+      #expect(scroll.bounds.insetBy(dx: -0.5, dy: -0.5).contains(frame))
+      let center = target.convert(CGPoint(x: target.bounds.midX, y: target.bounds.midY), to: window)
+      let hit = window.hitTest(center, with: nil)
+      #expect(hit === target || hit?.isDescendant(of: target) == true)
+    }
+    for enabled in [false, true] {
+      form.onBreakEnabledChanged?(enabled)
+      if enabled {
+        model.setBreakStart(start.addingTimeInterval(3600))
+        model.setBreakEnd(start.addingTimeInterval(1800))
+        // Re-render through the real break event after making the interval invalid.
+        form.onBreakEnabledChanged?(true)
+      }
+      window.layoutIfNeeded()
+      for id in ["start", "end"] + (enabled ? ["breakStart", "breakEnd"] : []) {
+        let row: UIControl = try requireView("editShift.\(id)", in: controller.view)
+        expectReachable(row)
+        #expect(row.accessibilityValue?.isEmpty == false)
+      }
+      if enabled {
+        let validation = try #require(labelDescendants(in: form).first {
+          $0.text == AddShiftStrings.breakEndAfterStartError && !$0.isHidden
+        })
+        scroll.scrollRectToVisible(validation.convert(validation.bounds, to: scroll), animated: false)
+        window.layoutIfNeeded()
+        #expect(scroll.bounds.contains(validation.convert(validation.bounds, to: scroll)))
+        #expect(validation.bounds.height + 0.5 >= validation.sizeThatFits(
+          CGSize(width: validation.bounds.width, height: .greatestFiniteMagnitude)).height)
+        #expect(controller.navigationItem.rightBarButtonItem?.isEnabled == false)
+      }
+      if category.isAccessibilityCategory {
+        let heading: UILabel = try requireView("editShift.heading", in: controller.view)
+        #expect(heading.text == EditShiftStrings.title)
+        #expect(heading.accessibilityTraits.contains(.header))
+        #expect(heading.bounds.height + 0.5 >= heading.sizeThatFits(
+          CGSize(width: heading.bounds.width, height: .greatestFiniteMagnitude)).height)
+        #expect(controller.navigationItem.title == "")
+        #expect(delete.isDescendant(of: scroll))
+        expectReachable(delete)
+      } else {
+        #expect(controller.navigationItem.title == EditShiftStrings.title)
+        #expect(!delete.isDescendant(of: scroll))
+      }
+      #expect(delete.bounds.width >= 44 && delete.bounds.height >= 44)
+      #expect(delete.isEnabled)
+    }
+    #expect(saves == 0 && deletes == 0)
+    controller.traitOverrides.preferredContentSizeCategory = .large
+    window.layoutIfNeeded()
+    #expect(controller.navigationItem.title == EditShiftStrings.title)
+    #expect(!delete.isDescendant(of: scroll))
   }
 
   @Test("Delete presents exact destructive confirmation")

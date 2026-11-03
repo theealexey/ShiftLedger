@@ -32,6 +32,10 @@ final class EditShiftViewController: UIViewController {
         super.viewDidLoad()
         title = EditShiftStrings.title
         navigationItem.largeTitleDisplayMode = .never
+        registerForTraitChanges([UITraitPreferredContentSizeCategory.self]) { (self: Self, _) in
+            self.updateNavigationTitle()
+        }
+        updateNavigationTitle()
         let saveStyle: UIBarButtonItem.Style
         if #available(iOS 26.0, *) {
             saveStyle = .plain
@@ -62,6 +66,12 @@ final class EditShiftViewController: UIViewController {
             self?.render()
         }
         editShiftView.onDeleteTapped = { [weak self] in self?.presentDeleteConfirmation() }
+    }
+
+    private func updateNavigationTitle() {
+        // The complete heading scrolls with the form at accessibility sizes.
+        navigationItem.title = traitCollection.preferredContentSizeCategory.isAccessibilityCategory
+            ? "" : EditShiftStrings.title
     }
 
     private func render() {
