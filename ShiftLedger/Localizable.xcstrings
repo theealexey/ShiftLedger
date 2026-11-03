@@ -1087,6 +1087,13 @@
         "ru" : { "stringUnit" : { "state" : "translated", "value" : "Обзор" } }
       }
     },
+    "overview.expectedGross.scrollInstruction" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Swipe left or right on the amount" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Проведите по сумме влево или вправо" } }
+      }
+    },
     "overview.expectedGross" : {
       "extractionState" : "manual",
       "localizations" : {

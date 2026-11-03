@@ -165,6 +165,7 @@ final class OverviewViewController: UIViewController {
                 expectedGrossContext: OverviewStrings.expectedGrossContext(currencyCode: currencyCode),
                 precisionExplanation: precisionExplanation(for: breakdown),
                 period: periodText.date,
+                periodIdentity: period,
                 periodTime: periodText.time,
                 periodAccessibilityLabel: periodText.accessibilityLabel,
                 periodItems: railItems(from: content.railPeriods, selectedPeriod: period),

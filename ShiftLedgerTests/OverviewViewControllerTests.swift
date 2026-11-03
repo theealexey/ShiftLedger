@@ -6,6 +6,101 @@ import Testing
 struct OverviewViewControllerTests {
     private let displayLocale = Locale(identifier: "en_US_POSIX")
 
+    @Test("Gross retains every localized glyph at full Dynamic Type size with reachable overflow",
+          arguments: [CGFloat(320), 375, 402], ["ru_RU", "en_US"])
+    func grossAmountRemainsWhole(_ width: CGFloat, _ localeID: String) throws {
+        let locale = Locale(identifier: localeID)
+        for amountText in ["0", "1", "4700", "1234567.89", "999999999999.99", "1.004"] {
+            let amount = try #require(Decimal(string: amountText))
+            let job = try Job(id: testWorkTypeID, currencyCode: "EUR",
+                timeZoneIdentifier: "Europe/Stockholm", basePayBasis: .fixedPerShift,
+                payCalculationCycle: .scheduled(.calendarMonthly),
+                payRates: [try PayRate(amount: amount == 0 ? 1 : amount, effectiveFrom: nil)],
+                createdAt: Date(timeIntervalSinceReferenceDate: 0))
+            let shift = try makeShift(id: 1, month: 9, day: 15)
+            let model = OverviewViewModel(job: job, loadShifts: { amount == 0 ? [] : [shift] }, currentDate: { shift.end })
+            let controller = OverviewViewController(viewModel: model, currencyCode: job.currencyCode,
+                timeZoneIdentifier: job.timeZoneIdentifier, displayLocale: locale)
+            let window = UIWindow(frame: CGRect(x: 0, y: 0, width: width, height: 874))
+            window.rootViewController = controller
+            window.isHidden = false
+            defer { window.isHidden = true }
+            let root = try requireRootView(controller)
+            let label: UILabel = try requireView(identifier: "overview.expectedGross.amount", in: root)
+            let viewport: UIScrollView = try requireView(identifier: "overview.expectedGross.scroll", in: root)
+            let hint: UILabel = try requireView(identifier: "overview.expectedGross.scrollHint", in: root)
+            let caption: UILabel = try requireView(identifier: "overview.expectedGross.label", in: root)
+            let expected = OverviewFormatting.heroAmount(amount, currencyCode: "EUR", locale: locale)
+            for appearance: UIUserInterfaceStyle in [.light, .dark] {
+                controller.overrideUserInterfaceStyle = appearance
+                for category: UIContentSizeCategory in [.large, .extraExtraLarge, .accessibilityExtraExtraLarge, .accessibilityExtraExtraExtraLarge, .large] {
+                    controller.traitOverrides.preferredContentSizeCategory = category
+                    window.layoutIfNeeded()
+                    root.layoutIfNeeded()
+                    root.layoutIfNeeded()
+                    #expect(label.text == expected)
+                    #expect(label.accessibilityLabel?.contains(expected) == true)
+                    #expect(label.numberOfLines == 1 && !label.adjustsFontSizeToFitWidth)
+                    let natural = label.intrinsicContentSize
+                    #expect(label.bounds.width + 0.5 >= natural.width)
+                    #expect(label.bounds.height + 0.5 >= natural.height)
+                    #expect(label.bounds.height < label.font.lineHeight * 1.5)
+                    #expect(viewport.contentSize.height <= viewport.bounds.height + 0.5)
+                    #expect(caption.convert(caption.bounds, to: root).maxY <= viewport.convert(viewport.bounds, to: root).minY)
+                    let overflow = max(0, viewport.contentSize.width - viewport.bounds.width)
+                    #expect(viewport.isScrollEnabled == (natural.width > viewport.bounds.width + 0.5))
+                    #expect(hint.isHidden == !viewport.isScrollEnabled)
+                    #expect(hint.text?.isEmpty == false)
+                    #expect(!hint.isAccessibilityElement)
+                    if !hint.isHidden {
+                        #expect(hint.bounds.height + 0.5 >= hint.sizeThatFits(CGSize(width: hint.bounds.width, height: .greatestFiniteMagnitude)).height)
+                        #expect(viewport.convert(viewport.bounds, to: root).maxY <= hint.convert(hint.bounds, to: root).minY)
+                    }
+                    if overflow > 0.5 {
+                        viewport.setContentOffset(CGPoint(x: overflow, y: 0), animated: false)
+                        #expect(abs(label.convert(label.bounds, to: viewport).maxX - viewport.bounds.maxX) < 0.5)
+                        #expect(viewport.hitTest(CGPoint(x: viewport.bounds.midX, y: viewport.bounds.midY), with: nil) != nil)
+                        viewport.setContentOffset(.zero, animated: false)
+                        #expect(abs(label.convert(label.bounds, to: viewport).minX - viewport.bounds.minX) < 0.5)
+                    }
+                    #expect(try requireContent(model.state).expectedBreakdown?.expectedGross == amount)
+                }
+            }
+        }
+    }
+
+    @Test("Equal gross in another payroll period resets horizontal reading position")
+    func equalAmountPeriodResetsOverflow() throws {
+        let job = try makeJob(cycle: .scheduled(.calendarMonthly))
+        let shifts = try [makeShift(id: 1, month: 8, day: 15), makeShift(id: 2, month: 9, day: 15)]
+        let subject = try makeSubject(job: job, shifts: shifts)
+        subject.viewController.traitOverrides.preferredContentSizeCategory = .accessibilityExtraExtraExtraLarge
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 320, height: 874))
+        window.rootViewController = subject.viewController
+        window.isHidden = false
+        defer { window.isHidden = true }
+        window.layoutIfNeeded()
+        let root = try requireRootView(subject.viewController)
+        let viewport: UIScrollView = try requireView(identifier: "overview.expectedGross.scroll", in: root)
+        let amount: UILabel = try requireView(identifier: "overview.expectedGross.amount", in: root)
+        let previous: UIButton = try requireView(identifier: "overview.period.previous", in: root)
+        let next: UIButton = try requireView(identifier: "overview.period.next", in: root)
+        let originalText = amount.text
+        let end = viewport.contentSize.width - viewport.bounds.width
+        #expect(end > 0)
+        viewport.setContentOffset(CGPoint(x: end, y: 0), animated: false)
+        #expect(viewport.contentOffset.x > 0)
+        previous.sendActions(for: .touchUpInside)
+        window.layoutIfNeeded()
+        #expect(amount.text == originalText)
+        #expect(viewport.contentOffset.x == 0)
+        viewport.setContentOffset(CGPoint(x: end, y: 0), animated: false)
+        next.sendActions(for: .touchUpInside)
+        window.layoutIfNeeded()
+        #expect(amount.text == originalText)
+        #expect(viewport.contentOffset.x == 0)
+    }
+
     @Test("Decorative receipt header stays complete through Dynamic Type changes",
           arguments: [CGFloat(320), 375, 402], ["ru_RU", "en_US"])
     func receiptHeaderRemainsContained(_ width: CGFloat, _ localeID: String) throws {
@@ -27,6 +122,7 @@ struct OverviewViewControllerTests {
         let gross: UILabel = try requireView(identifier: "overview.expectedGross.amount", in: root)
         let heading = try #require(OverviewFormatting.perShiftHeading(shift,
             timeZoneIdentifier: job.timeZoneIdentifier, locale: Locale(identifier: localeID)))
+        let grossViewport: UIScrollView = try requireView(identifier: "overview.expectedGross.scroll", in: root)
         var normalBrandSize: CGFloat?
         for category: UIContentSizeCategory in [.large, .accessibilityExtraExtraExtraLarge, .large] {
             controller.traitOverrides.preferredContentSizeCategory = category
@@ -42,7 +138,8 @@ struct OverviewViewControllerTests {
             #expect(!time.isAccessibilityElement)
             #expect([brand, subtitle, date, time, gross].filter(\.isAccessibilityElement).count == 4)
             for label in [brand, subtitle, date, time, gross] {
-                let frame = label.convert(label.bounds, to: paper)
+                let boundedView: UIView = label === gross ? grossViewport : label
+                let frame = boundedView.convert(boundedView.bounds, to: paper)
                 #expect(frame.minX >= -0.5 && frame.maxX <= paper.bounds.width + 0.5)
                 let required = label.sizeThatFits(CGSize(width: label.bounds.width, height: .greatestFiniteMagnitude))
                 #expect(label.bounds.height + 0.5 >= required.height)
@@ -2717,7 +2814,7 @@ struct OverviewViewControllerTests {
 
         #expect(amount.adjustsFontForContentSizeCategory)
         #expect(period.adjustsFontForContentSizeCategory)
-        #expect(amount.numberOfLines == 0)
+        #expect(amount.numberOfLines == 1)
         #expect(period.numberOfLines == 0)
         let rail: UIScrollView = try requireView(identifier: "overview.period.rail", in: try requireRootView(subject.viewController))
         #expect(isEffectivelyHidden(rail))

@@ -71,6 +71,9 @@ final class OverviewView: UIView, UIScrollViewDelegate {
     private let contentStack = UIStackView()
     private let expectedGrossLabel = UILabel()
     private let expectedGrossAmountLabel = UILabel()
+    private let grossAmountScrollView = UIScrollView()
+    private let grossScrollHint = UILabel()
+    private var renderedPeriod: PayCalculationPeriod?
     private let navigationStack = UIStackView()
     private let previousButton = UIButton(type: .system)
     private let periodLabel = UILabel()
@@ -107,6 +110,7 @@ final class OverviewView: UIView, UIScrollViewDelegate {
             self.updatePeriodRailForContentSizeCategory()
             self.updateActionButtonsForContentSizeCategory()
             self.updateReceiptHeaderFonts()
+            self.setNeedsLayout()
         }
         renderIdle()
     }
@@ -121,6 +125,7 @@ final class OverviewView: UIView, UIScrollViewDelegate {
         expectedGrossContext: String,
         precisionExplanation: PrecisionExplanation? = nil,
         period: String,
+        periodIdentity: PayCalculationPeriod? = nil,
         periodTime: String? = nil,
         periodAccessibilityLabel: String? = nil,
         periodItems: [PeriodItem],
@@ -133,6 +138,10 @@ final class OverviewView: UIView, UIScrollViewDelegate {
     ) {
         showsPeriodNavigation = showPeriodNavigation
         periodRailContainer.accessibilityElementsHidden = !showPeriodNavigation
+        if renderedPeriod != periodIdentity || expectedGrossAmountLabel.text != expectedGross {
+            grossAmountScrollView.contentOffset = .zero
+        }
+        renderedPeriod = periodIdentity
         expectedGrossAmountLabel.text = expectedGross
         expectedGrossAmountLabel.accessibilityLabel = "\(expectedGrossContext), \(expectedGross)"
         expectedGrossLabel.text = expectedGrossContext
@@ -174,6 +183,14 @@ final class OverviewView: UIView, UIScrollViewDelegate {
 
     override func layoutSubviews() {
         super.layoutSubviews()
+        contentStack.layoutIfNeeded()
+        let overflows = expectedGrossAmountLabel.intrinsicContentSize.width > grossAmountScrollView.bounds.width + 0.5
+        grossAmountScrollView.isScrollEnabled = overflows
+        if grossScrollHint.isHidden == overflows {
+            grossScrollHint.isHidden = !overflows
+            grossAmountScrollView.flashScrollIndicators()
+        }
+        if !overflows { grossAmountScrollView.contentOffset = .zero }
         periodRailContainer.layoutIfNeeded()
         periodRailViewport.layoutIfNeeded()
         periodRailStack.layoutIfNeeded()
@@ -330,6 +347,18 @@ final class OverviewView: UIView, UIScrollViewDelegate {
         )
         expectedGrossAmountLabel.accessibilityIdentifier = "overview.expectedGross.amount"
         expectedGrossAmountLabel.isAccessibilityElement = true
+        expectedGrossAmountLabel.numberOfLines = 1
+        expectedGrossAmountLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
+        grossAmountScrollView.accessibilityIdentifier = "overview.expectedGross.scroll"
+        grossAmountScrollView.showsHorizontalScrollIndicator = true
+        grossAmountScrollView.showsVerticalScrollIndicator = false
+        grossAmountScrollView.isDirectionalLockEnabled = true
+        configureLabel(grossScrollHint, font: ShiftLedgerTypography.caption, color: ShiftLedgerColors.textSecondary)
+        grossScrollHint.text = String(localized: "overview.expectedGross.scrollInstruction", table: "Localizable")
+        grossScrollHint.textAlignment = .center
+        grossScrollHint.isAccessibilityElement = false
+        grossScrollHint.accessibilityIdentifier = "overview.expectedGross.scrollHint"
+        grossScrollHint.isHidden = true
         configureLabel(precisionLabel, font: UIFontMetrics(forTextStyle: .footnote).scaledFont(
             for: .monospacedSystemFont(ofSize: 12, weight: .regular)
         ), color: ShiftLedgerColors.textSecondary)
@@ -494,7 +523,9 @@ final class OverviewView: UIView, UIScrollViewDelegate {
         periodRailScrollView.addSubview(periodRailStack)
 
         contentCard.addSubview(contentStack)
-        [expectedGrossLabel, expectedGrossAmountLabel, precisionStack]
+        grossAmountScrollView.addSubview(expectedGrossAmountLabel)
+        expectedGrossAmountLabel.translatesAutoresizingMaskIntoConstraints = false
+        [expectedGrossLabel, grossAmountScrollView, grossScrollHint, precisionStack]
             .forEach(contentStack.addArrangedSubview)
         [shiftCountLabel, shiftCountValueLabel].forEach(shiftCountStack.addArrangedSubview)
 
@@ -507,7 +538,7 @@ final class OverviewView: UIView, UIScrollViewDelegate {
         errorCard.addSubview(errorStack)
         [errorTitleLabel, errorMessageLabel, retryButton].forEach(errorStack.addArrangedSubview)
 
-        contentCard.accessibilityElements = [expectedGrossLabel, expectedGrossAmountLabel]
+        contentCard.accessibilityElements = [expectedGrossAmountLabel]
 
         mainStack.setCustomSpacing(22, after: receiptPaper)
         receiptStack.setCustomSpacing(20, after: periodRule)
@@ -516,6 +547,12 @@ final class OverviewView: UIView, UIScrollViewDelegate {
 
     private func configureLayout() {
         NSLayoutConstraint.activate([
+            expectedGrossAmountLabel.leadingAnchor.constraint(equalTo: grossAmountScrollView.contentLayoutGuide.leadingAnchor),
+            expectedGrossAmountLabel.trailingAnchor.constraint(equalTo: grossAmountScrollView.contentLayoutGuide.trailingAnchor),
+            expectedGrossAmountLabel.topAnchor.constraint(equalTo: grossAmountScrollView.contentLayoutGuide.topAnchor),
+            expectedGrossAmountLabel.bottomAnchor.constraint(equalTo: grossAmountScrollView.contentLayoutGuide.bottomAnchor),
+            expectedGrossAmountLabel.widthAnchor.constraint(greaterThanOrEqualTo: grossAmountScrollView.frameLayoutGuide.widthAnchor),
+            expectedGrossAmountLabel.heightAnchor.constraint(equalTo: grossAmountScrollView.frameLayoutGuide.heightAnchor),
             scrollView.topAnchor.constraint(equalTo: safeAreaLayoutGuide.topAnchor),
             scrollView.leadingAnchor.constraint(equalTo: leadingAnchor),
             scrollView.trailingAnchor.constraint(equalTo: trailingAnchor),
