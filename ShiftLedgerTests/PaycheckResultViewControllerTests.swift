@@ -547,7 +547,6 @@ struct PaycheckResultViewControllerTests {
             "paycheckResult.expected.label",
             "paycheckResult.actual.label",
             "paycheckResult.difference.label",
-            "paycheckResult.explanation",
             "paycheckResult.breakdown.title",
             "paycheckResult.breakdown.row.0.workType",
             "paycheckResult.breakdown.row.0.date",
@@ -656,6 +655,120 @@ struct PaycheckResultViewControllerTests {
                         #expect(comparison.difference == actual - 4700)
                     }
                 }
+            }
+        }
+    }
+
+    @Test("Supporting text preserves words and layout", arguments: [320.0, 375.0, 402.0])
+    func explanationWrapsWords(_ width: Double) throws {
+        let controller = try makeViewController(try makeComparison(expected: 4700, actual: 4700))
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: width, height: 874))
+        window.rootViewController = controller
+        window.isHidden = false
+        defer { window.isHidden = true }
+        controller.loadViewIfNeeded()
+        let label: UILabel = try requireView(identifier: "paycheckResult.explanation", in: controller.view)
+        for language in ["ru", "en"] {
+            let path = try #require(Bundle(for: ActualGrossEntryView.self).path(forResource: language, ofType: "lproj"))
+            let bundle = try #require(Bundle(path: path))
+            for key in ["paycheckResult.equal", "paycheckResult.lower", "paycheckResult.higher"] {
+                let text = bundle.localizedString(forKey: key, value: nil, table: "Localizable")
+                #expect(text != key)
+                let root = try #require(controller.view as? PaycheckResultView)
+                let expected: UILabel = try requireView(identifier: "paycheckResult.expected.value", in: root)
+                let actual: UILabel = try requireView(identifier: "paycheckResult.actual.value", in: root)
+                let difference: UILabel = try requireView(identifier: "paycheckResult.difference.value", in: root)
+                root.render(.init(expected: expected.text ?? "", actual: actual.text ?? "",
+                    difference: difference.text ?? "", explanation: text, breakdownRows: [], emptyBreakdownMessage: nil))
+                for appearance in [UIUserInterfaceStyle.light, .dark] {
+                    controller.overrideUserInterfaceStyle = appearance
+                    var normalFont: UIFont?
+                    for category in [UIContentSizeCategory.large, .accessibilityExtraExtraExtraLarge, .large] {
+                        controller.traitOverrides.preferredContentSizeCategory = category
+                        window.layoutIfNeeded()
+                        controller.view.setNeedsLayout()
+                        controller.view.layoutIfNeeded()
+                        #expect(label.text == text)
+                        #expect(label.font.pointSize >= 17)
+                        if category == .large {
+                            #expect(label.font.fontName == UIFont.preferredFont(forTextStyle: .body,
+                                compatibleWith: UITraitCollection(preferredContentSizeCategory: .large)).fontName)
+                            #expect(label.font.pointSize == 17)
+                        }
+                        let probe = UILabel()
+                        probe.font = label.font
+                        for word in text.split(whereSeparator: { $0.isWhitespace }) {
+                            probe.text = String(word)
+                            #expect(probe.sizeThatFits(CGSize(width: 10000, height: 10000)).width <= label.bounds.width)
+                        }
+                        #expect(label.sizeThatFits(CGSize(width: label.bounds.width, height: 10000)).height <= label.bounds.height + 1)
+                        let attributed = try #require(label.attributedText)
+                        let style = try #require(attributed.attribute(.paragraphStyle, at: 0, effectiveRange: nil) as? NSParagraphStyle)
+                        let storage = NSTextStorage(attributedString: attributed)
+                        let manager = NSLayoutManager()
+                        storage.addLayoutManager(manager)
+                        let container = NSTextContainer(size: CGSize(width: label.bounds.width, height: 10000))
+                        container.lineFragmentPadding = 0
+                        manager.addTextContainer(container)
+                        manager.ensureLayout(for: container)
+                        let string = text as NSString
+                        manager.enumerateLineFragments(forGlyphRange: manager.glyphRange(for: container)) { _, _, _, glyphs, _ in
+                            let end = NSMaxRange(manager.characterRange(forGlyphRange: glyphs, actualGlyphRange: nil))
+                            if end > 0 && end < string.length {
+                                let before = string.substring(with: NSRange(location: end - 1, length: 1))
+                                let after = string.substring(with: NSRange(location: end, length: 1))
+                                #expect(before.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
+                                        after.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                            }
+                        }
+                        if let stack = label.superview as? UIStackView,
+                           let index = stack.arrangedSubviews.firstIndex(of: label),
+                           index + 1 < stack.arrangedSubviews.count {
+                            #expect(label.frame.maxY <= stack.arrangedSubviews[index + 1].frame.minY)
+                        }
+                        #expect(style.usesDefaultHyphenation == false)
+                        #expect(label.numberOfLines == 0)
+                        if category == .large {
+                            if let normalFont { #expect(label.font == normalFont) }
+                            normalFont = label.font
+                        }
+                        let bounds = label.bounds
+                        controller.view.setNeedsLayout()
+                        controller.view.layoutIfNeeded()
+                        #expect(label.bounds == bounds)
+                    }
+                }
+            }
+        }
+    }
+
+
+    @Test("Done geometry is recorded across repeated Dynamic Type cycles")
+    func doneGeometryTransitions() throws {
+        let controller = try makeViewController(try makeComparison(expected: 4700, actual: 4700))
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 402, height: 874))
+        window.rootViewController = controller
+        window.isHidden = false
+        defer { window.isHidden = true }
+        controller.loadViewIfNeeded()
+        let button: UIButton = try requireView(identifier: "paycheckResult.done", in: controller.view)
+        var initial: CGFloat?
+        for cycle in 0..<2 {
+            for category in [UIContentSizeCategory.large, .accessibilityExtraExtraExtraLarge, .large] {
+                controller.traitOverrides.preferredContentSizeCategory = category
+                for _ in 0..<5 {
+                    window.layoutIfNeeded()
+                    controller.view.setNeedsLayout()
+                    controller.view.layoutIfNeeded()
+                }
+                let scroll = try #require(controller.view.subviews.compactMap { $0 as? UIScrollView }.first)
+                print("SL529 DONE", cycle, category.rawValue, button.frame, button.bounds,
+                      button.intrinsicContentSize, button.configuration?.contentInsets as Any,
+                      button.layoutMargins, button.constraints, scroll.contentSize, scroll.contentOffset)
+                if initial == nil { initial = button.bounds.height }
+                if category == .large { #expect(button.bounds.height == initial) }
+                #expect(button.bounds.height >= 50)
+                #expect(button.bounds.width > 0)
             }
         }
     }

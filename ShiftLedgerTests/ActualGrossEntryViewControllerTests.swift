@@ -248,7 +248,6 @@ struct ActualGrossEntryViewControllerTests {
 
         let identifiers = [
             "actualGrossEntry.question",
-            "actualGrossEntry.supporting",
             "actualGrossEntry.currency",
             "actualGrossEntry.validation"
         ]
@@ -381,6 +380,136 @@ struct ActualGrossEntryViewControllerTests {
             }
         }
         label.text = original
+    }
+
+    @Test("Supporting text preserves words and layout", arguments: [320.0, 375.0, 402.0])
+    func supportingWrapsWords(_ width: Double) throws {
+        let controller = makeViewController()
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: width, height: 874))
+        window.rootViewController = controller
+        window.isHidden = false
+        defer { window.isHidden = true }
+        controller.loadViewIfNeeded()
+        let label: UILabel = try requireView(identifier: "actualGrossEntry.supporting", in: controller.view)
+        for language in ["ru", "en"] {
+            let path = try #require(Bundle(for: ActualGrossEntryView.self).path(forResource: language, ofType: "lproj"))
+            let bundle = try #require(Bundle(path: path))
+            let text = bundle.localizedString(forKey: "actualGrossEntry.supporting", value: nil, table: "Localizable")
+            #expect(text != "actualGrossEntry.supporting")
+            label.text = text
+            for appearance in [UIUserInterfaceStyle.light, .dark] {
+                controller.overrideUserInterfaceStyle = appearance
+                var normalFont: UIFont?
+                for category in [UIContentSizeCategory.large, .accessibilityExtraExtraExtraLarge, .large] {
+                    controller.traitOverrides.preferredContentSizeCategory = category
+                    window.layoutIfNeeded()
+                    controller.view.setNeedsLayout()
+                    controller.view.layoutIfNeeded()
+                    #expect(label.text == text)
+                    #expect(label.font.pointSize >= 17)
+                    if category == .large {
+                        #expect(label.font.fontName == UIFont.preferredFont(forTextStyle: .body,
+                            compatibleWith: UITraitCollection(preferredContentSizeCategory: .large)).fontName)
+                        #expect(label.font.pointSize == 17)
+                    }
+                    let probe = UILabel()
+                    probe.font = label.font
+                    for word in text.split(whereSeparator: { $0.isWhitespace }) {
+                        probe.text = String(word)
+                        #expect(probe.sizeThatFits(CGSize(width: 10000, height: 10000)).width <= label.bounds.width)
+                    }
+                    #expect(label.sizeThatFits(CGSize(width: label.bounds.width, height: 10000)).height <= label.bounds.height + 1)
+                    let attributed = try #require(label.attributedText)
+                    let style = try #require(attributed.attribute(.paragraphStyle, at: 0, effectiveRange: nil) as? NSParagraphStyle)
+                    let storage = NSTextStorage(attributedString: attributed)
+                    let manager = NSLayoutManager()
+                    storage.addLayoutManager(manager)
+                    let container = NSTextContainer(size: CGSize(width: label.bounds.width, height: 10000))
+                    container.lineFragmentPadding = 0
+                    manager.addTextContainer(container)
+                    manager.ensureLayout(for: container)
+                    let string = text as NSString
+                    manager.enumerateLineFragments(forGlyphRange: manager.glyphRange(for: container)) { _, _, _, glyphs, _ in
+                        let end = NSMaxRange(manager.characterRange(forGlyphRange: glyphs, actualGlyphRange: nil))
+                        if end > 0 && end < string.length {
+                            let before = string.substring(with: NSRange(location: end - 1, length: 1))
+                            let after = string.substring(with: NSRange(location: end, length: 1))
+                            #expect(before.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
+                                    after.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                        }
+                    }
+                    if let stack = label.superview as? UIStackView,
+                       let index = stack.arrangedSubviews.firstIndex(of: label),
+                       index + 1 < stack.arrangedSubviews.count {
+                        #expect(label.frame.maxY <= stack.arrangedSubviews[index + 1].frame.minY)
+                    }
+                    #expect(style.usesDefaultHyphenation == false)
+                    #expect(label.numberOfLines == 0)
+                    if category == .large {
+                        if let normalFont { #expect(label.font == normalFont) }
+                        normalFont = label.font
+                    }
+                    let bounds = label.bounds
+                    controller.view.setNeedsLayout()
+                    controller.view.layoutIfNeeded()
+                    #expect(label.bounds == bounds)
+                }
+            }
+        }
+    }
+
+    @Test("Supporting geometry stabilizes across same-controller width changes")
+    func supportingWidthTransitions() throws {
+        let controller = makeViewController()
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 402, height: 874))
+        window.rootViewController = controller
+        window.isHidden = false
+        defer { window.isHidden = true }
+        controller.loadViewIfNeeded()
+        let label: UILabel = try requireView(identifier: "actualGrossEntry.supporting", in: controller.view)
+        for language in ["ru", "en"] {
+            let path = try #require(Bundle(for: ActualGrossEntryView.self).path(forResource: language, ofType: "lproj"))
+            let bundle = try #require(Bundle(path: path))
+            label.text = bundle.localizedString(forKey: "actualGrossEntry.supporting", value: nil, table: "Localizable")
+            for category in [UIContentSizeCategory.large, .accessibilityExtraExtraExtraLarge, .large] {
+                controller.traitOverrides.preferredContentSizeCategory = category
+                for width in [402.0, 320.0, 375.0, 402.0] {
+                    window.frame.size.width = width
+                    var lastBounds: CGRect?
+                    var lastFont: UIFont?
+                    var stablePass: Int?
+                    for pass in 1...5 {
+                        window.setNeedsLayout()
+                        window.layoutIfNeeded()
+                        controller.view.setNeedsLayout()
+                        controller.view.layoutIfNeeded()
+                        print("SL529 WIDTH", language, category.rawValue, width, pass,
+                              controller.view.bounds, label.bounds, label.font.fontName, label.font.pointSize,
+                              label.sizeThatFits(CGSize(width: label.bounds.width, height: 10000)).height)
+                        if label.bounds == lastBounds && label.font == lastFont { stablePass = pass; break }
+                        lastBounds = label.bounds
+                        lastFont = label.font
+                    }
+                    #expect(stablePass != nil)
+                    #expect(abs(label.bounds.width - (width - 48)) < 1)
+                    #expect(label.font.pointSize >= 17)
+                    if category == .large { #expect(label.font.pointSize == 17) }
+                    let probe = UILabel()
+                    probe.font = label.font
+                    for word in (label.text ?? "").split(whereSeparator: { $0.isWhitespace }) {
+                        probe.text = String(word)
+                        #expect(probe.sizeThatFits(CGSize(width: 10000, height: 10000)).width <= label.bounds.width)
+                    }
+                    #expect(label.sizeThatFits(CGSize(width: label.bounds.width, height: 10000)).height <= label.bounds.height + 1)
+                    if let stack = label.superview as? UIStackView,
+                       let index = stack.arrangedSubviews.firstIndex(of: label) {
+                        let gap = stack.arrangedSubviews[index + 1].frame.minY - label.frame.maxY
+                        print("SL529 GAP", gap)
+                        #expect(gap >= 0)
+                    }
+                }
+            }
+        }
     }
 
     private func makeViewController(

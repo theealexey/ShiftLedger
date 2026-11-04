@@ -50,11 +50,65 @@ final class PaycheckResultView: UIView {
         configureHierarchy()
         configureLayout()
         configureInteractions()
+        registerForTraitChanges([UITraitPreferredContentSizeCategory.self]) { (self: PaycheckResultView, _) in
+            self.setNeedsLayout()
+        }
     }
 
     @available(*, unavailable)
     required init?(coder: NSCoder) {
         nil
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        updateExplanationWrapping()
+    }
+
+    private func updateExplanationWrapping() {
+        guard explanationLabel.bounds.width > 1, let text = explanationLabel.text, !text.isEmpty else { return }
+        let preferred = UIFont.preferredFont(forTextStyle: .body, compatibleWith: traitCollection)
+        let base = UIFont.systemFont(ofSize: preferred.pointSize, weight: .regular)
+        let probe = UILabel()
+        let scale = max(1, traitCollection.displayScale)
+        let available = floor(explanationLabel.bounds.width * scale) / scale - 1 / scale
+        let words = text.split(whereSeparator: { $0.isWhitespace })
+        func fits(_ size: CGFloat) -> Bool {
+            probe.font = base.withSize(size)
+            return words.allSatisfy { word in
+                probe.text = String(word)
+                return ceil(probe.sizeThatFits(CGSize(width: 10000, height: 10000)).width * scale) / scale <= available
+            }
+        }
+        var lower = min(17, base.pointSize)
+        var upper = base.pointSize
+        // Unsupported widths retain the canonical text; never install a known non-fitting font.
+        guard fits(lower) else { return }
+        if fits(upper) { lower = upper } else {
+            for _ in 0..<14 {
+                let candidate = (lower + upper) / 2
+                if fits(candidate) { lower = candidate } else { upper = candidate }
+            }
+        }
+        let font = base.withSize(lower)
+        if explanationLabel.font == font,
+           let current = explanationLabel.attributedText, current.string == text,
+           current.attribute(.font, at: 0, effectiveRange: nil) as? UIFont == font,
+           let style = current.attribute(.paragraphStyle, at: 0, effectiveRange: nil) as? NSParagraphStyle,
+           style.lineBreakMode == .byWordWrapping, style.lineBreakStrategy.isEmpty,
+           style.hyphenationFactor == 0.001, !style.usesDefaultHyphenation { return }
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.lineBreakMode = .byWordWrapping
+        paragraph.lineBreakStrategy = []
+        paragraph.hyphenationFactor = 0.001
+        paragraph.usesDefaultHyphenation = false
+        let attributed = NSAttributedString(string: text, attributes: [
+            .font: font, .foregroundColor: ShiftLedgerColors.textSecondary, .paragraphStyle: paragraph
+        ])
+        if explanationLabel.font != font { explanationLabel.font = font }
+        if explanationLabel.attributedText?.isEqual(to: attributed) != true {
+            explanationLabel.attributedText = attributed
+        }
     }
 
     func render(_ model: RenderModel) {
@@ -139,6 +193,9 @@ final class PaycheckResultView: UIView {
             font: ShiftLedgerTypography.body,
             color: ShiftLedgerColors.textSecondary
         )
+        explanationLabel.adjustsFontForContentSizeCategory = false
+        explanationLabel.lineBreakMode = .byWordWrapping
+        explanationLabel.lineBreakStrategy = []
         explanationLabel.accessibilityIdentifier = "paycheckResult.explanation"
 
         configureLabel(

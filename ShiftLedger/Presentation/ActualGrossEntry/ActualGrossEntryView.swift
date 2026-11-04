@@ -37,6 +37,7 @@ final class ActualGrossEntryView: UIView {
     }
 
     override func layoutSubviews() {
+        updateSupportingWrapping()
         super.layoutSubviews()
         guard amountLabel.bounds.width > 1, let text = amountLabel.text, !text.isEmpty else { return }
         let baseFont = UIFont.preferredFont(forTextStyle: .callout, compatibleWith: traitCollection)
@@ -84,6 +85,52 @@ final class ActualGrossEntryView: UIView {
         ])
         if amountLabel.attributedText?.isEqual(to: attributed) != true {
             amountLabel.attributedText = attributed
+        }
+    }
+
+    private func updateSupportingWrapping() {
+        guard supportingLabel.bounds.width > 1, let text = supportingLabel.text, !text.isEmpty else { return }
+        let preferred = UIFont.preferredFont(forTextStyle: .body, compatibleWith: traitCollection)
+        let base = UIFont.systemFont(ofSize: preferred.pointSize, weight: .regular)
+        let probe = UILabel()
+        let scale = max(1, traitCollection.displayScale)
+        let available = floor(supportingLabel.bounds.width * scale) / scale - 1 / scale
+        let words = text.split(whereSeparator: { $0.isWhitespace })
+        func fits(_ size: CGFloat) -> Bool {
+            probe.font = base.withSize(size)
+            return words.allSatisfy { word in
+                probe.text = String(word)
+                return ceil(probe.sizeThatFits(CGSize(width: 10000, height: 10000)).width * scale) / scale <= available
+            }
+        }
+        var lower = min(17, base.pointSize)
+        var upper = base.pointSize
+        // Unsupported widths retain the canonical text; never install a known non-fitting font.
+        guard fits(lower) else { return }
+        if fits(upper) { lower = upper } else {
+            for _ in 0..<14 {
+                let candidate = (lower + upper) / 2
+                if fits(candidate) { lower = candidate } else { upper = candidate }
+            }
+        }
+        let font = base.withSize(lower)
+        if supportingLabel.font == font,
+           let current = supportingLabel.attributedText, current.string == text,
+           current.attribute(.font, at: 0, effectiveRange: nil) as? UIFont == font,
+           let style = current.attribute(.paragraphStyle, at: 0, effectiveRange: nil) as? NSParagraphStyle,
+           style.lineBreakMode == .byWordWrapping, style.lineBreakStrategy.isEmpty,
+           style.hyphenationFactor == 0.001, !style.usesDefaultHyphenation { return }
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.lineBreakMode = .byWordWrapping
+        paragraph.lineBreakStrategy = []
+        paragraph.hyphenationFactor = 0.001
+        paragraph.usesDefaultHyphenation = false
+        let attributed = NSAttributedString(string: text, attributes: [
+            .font: font, .foregroundColor: ShiftLedgerColors.textSecondary, .paragraphStyle: paragraph
+        ])
+        if supportingLabel.font != font { supportingLabel.font = font }
+        if supportingLabel.attributedText?.isEqual(to: attributed) != true {
+            supportingLabel.attributedText = attributed
         }
     }
 
@@ -139,6 +186,9 @@ final class ActualGrossEntryView: UIView {
             font: ShiftLedgerTypography.body,
             color: ShiftLedgerColors.textSecondary
         )
+        supportingLabel.adjustsFontForContentSizeCategory = false
+        supportingLabel.lineBreakMode = .byWordWrapping
+        supportingLabel.lineBreakStrategy = []
         supportingLabel.accessibilityIdentifier = "actualGrossEntry.supporting"
 
         amountContainer.backgroundColor = ShiftLedgerColors.surfacePrimary
