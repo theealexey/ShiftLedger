@@ -249,7 +249,6 @@ struct ActualGrossEntryViewControllerTests {
         let identifiers = [
             "actualGrossEntry.question",
             "actualGrossEntry.supporting",
-            "actualGrossEntry.amount.label",
             "actualGrossEntry.currency",
             "actualGrossEntry.validation"
         ]
@@ -293,6 +292,95 @@ struct ActualGrossEntryViewControllerTests {
         let scrollView = try #require(firstDescendant(of: UIScrollView.self, in: viewController.view))
 
         #expect(scrollView.alwaysBounceVertical)
+    }
+
+    @Test("Amount caption fits complete words and restores Dynamic Type", arguments: [320.0, 375.0, 402.0])
+    func amountCaptionFitsWords(_ width: Double) throws {
+        let controller = makeViewController()
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: width, height: 874))
+        window.rootViewController = controller
+        window.isHidden = false
+        defer { window.isHidden = true }
+        controller.loadViewIfNeeded()
+        let label: UILabel = try requireView(identifier: "actualGrossEntry.amount.label", in: controller.view)
+        let original = label.text
+        for appearance in [UIUserInterfaceStyle.light, .dark] {
+            controller.overrideUserInterfaceStyle = appearance
+            for language in ["ru", "en"] {
+                let path = try #require(Bundle(for: ActualGrossEntryView.self).path(forResource: language, ofType: "lproj"))
+                let bundle = try #require(Bundle(path: path))
+                let text = bundle.localizedString(forKey: "actualGrossEntry.amount", value: nil, table: "Localizable")
+                #expect(text != "actualGrossEntry.amount")
+                #expect(text == (language == "ru" ? "Фактическая сумма до вычетов" : "Actual gross"))
+                label.text = text
+                var normalSize: CGFloat?
+                for category in [UIContentSizeCategory.large, .accessibilityExtraExtraLarge, .accessibilityExtraExtraExtraLarge, .large] {
+                    controller.traitOverrides.preferredContentSizeCategory = category
+                    window.layoutIfNeeded()
+                    controller.view.setNeedsLayout()
+                    controller.view.layoutIfNeeded()
+                    controller.view.layoutIfNeeded()
+                    #expect(label.text == text)
+                    #expect(abs(label.bounds.width - (width - 80)) < 1)
+                    let attributed = try #require(label.attributedText)
+                    let paragraph = try #require(attributed.attribute(.paragraphStyle, at: 0,
+                        effectiveRange: nil) as? NSParagraphStyle)
+                    #expect(paragraph.usesDefaultHyphenation == false)
+                    #expect(paragraph.hyphenationFactor == Float(0.001))
+                    let renderedFont = try #require(attributed.attribute(.font, at: 0,
+                        effectiveRange: nil) as? UIFont)
+                    #expect(renderedFont == label.font)
+                    #expect(renderedFont.fontDescriptor.object(forKey: .textStyle) as? String != UIFont.TextStyle.callout.rawValue)
+                    let storage = NSTextStorage(attributedString: attributed)
+                    let manager = NSLayoutManager()
+                    manager.usesDefaultHyphenation = true
+                    storage.addLayoutManager(manager)
+                    let container = NSTextContainer(size: CGSize(width: label.bounds.width, height: 10000))
+                    container.lineFragmentPadding = 0
+                    manager.addTextContainer(container)
+                    manager.ensureLayout(for: container)
+                    let string = text as NSString
+                    manager.enumerateLineFragments(forGlyphRange: manager.glyphRange(for: container)) { _, _, _, glyphs, _ in
+                        let range = manager.characterRange(forGlyphRange: glyphs, actualGlyphRange: nil)
+                        let end = NSMaxRange(range)
+                        if end > 0 && end < string.length {
+                            let before = string.substring(with: NSRange(location: end - 1, length: 1))
+                            let after = string.substring(with: NSRange(location: end, length: 1))
+                            #expect(before.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
+                                    after.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                        }
+                    }
+                    let probe = UILabel()
+                    probe.font = renderedFont
+                    for word in text.split(whereSeparator: { $0.isWhitespace }) {
+                        probe.text = String(word)
+                        let size = probe.sizeThatFits(CGSize(width: CGFloat.greatestFiniteMagnitude,
+                                                           height: CGFloat.greatestFiniteMagnitude))
+                        #expect(size.width <= label.bounds.width)
+                    }
+                    let height = label.sizeThatFits(CGSize(width: label.bounds.width,
+                                                          height: CGFloat.greatestFiniteMagnitude)).height
+                    #expect(height <= label.bounds.height + 1 / max(1, label.traitCollection.displayScale))
+                    if category == .large {
+                        if let normalSize { #expect(label.font.pointSize == normalSize) }
+                        normalSize = label.font.pointSize
+                        let token = UIFont.preferredFont(forTextStyle: .callout,
+                            compatibleWith: UITraitCollection(preferredContentSizeCategory: .large))
+                        #expect(label.font.pointSize == token.pointSize)
+                        #expect(label.font.fontName == token.fontName)
+                        #expect(label.font.fontDescriptor.symbolicTraits == token.fontDescriptor.symbolicTraits)
+                    } else {
+                        #expect(label.font.pointSize >= 17)
+                        #expect(label.font.pointSize > (normalSize ?? 0))
+                    }
+                    let stableFont = label.font
+                    controller.view.setNeedsLayout()
+                    controller.view.layoutIfNeeded()
+                    #expect(label.font == stableFont)
+                }
+            }
+        }
+        label.text = original
     }
 
     private func makeViewController(

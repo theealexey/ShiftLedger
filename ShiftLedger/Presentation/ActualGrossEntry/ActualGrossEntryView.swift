@@ -26,11 +26,65 @@ final class ActualGrossEntryView: UIView {
         configureHierarchy()
         configureLayout()
         configureInteractions()
+        registerForTraitChanges([UITraitPreferredContentSizeCategory.self]) { (self: ActualGrossEntryView, _) in
+            self.setNeedsLayout()
+        }
     }
 
     @available(*, unavailable)
     required init?(coder: NSCoder) {
         nil
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        guard amountLabel.bounds.width > 1, let text = amountLabel.text, !text.isEmpty else { return }
+        let baseFont = UIFont.preferredFont(forTextStyle: .callout, compatibleWith: traitCollection)
+        // Callout uses the regular system face. Keep its scaled size while managing resizing locally.
+        let descriptor = UIFont.systemFont(ofSize: baseFont.pointSize, weight: .regular).fontDescriptor
+        let measure = UILabel()
+        measure.numberOfLines = 1
+        let words = text.split(whereSeparator: { $0.isWhitespace })
+        let scale = max(1, traitCollection.displayScale)
+        let available = floor(amountLabel.bounds.width * scale) / scale - 1 / scale
+        func fits(_ size: CGFloat) -> Bool {
+            measure.font = UIFont(descriptor: descriptor, size: size)
+            return words.allSatisfy { word in
+                measure.text = String(word)
+                let width = measure.sizeThatFits(CGSize(width: CGFloat.greatestFiniteMagnitude,
+                                                       height: CGFloat.greatestFiniteMagnitude)).width
+                return ceil(width * scale) / scale <= available
+            }
+        }
+        var upper = baseFont.pointSize
+        // Never reduce below the normal body size, or below the requested font at smaller categories.
+        var lower = min(upper, UIFont.preferredFont(forTextStyle: .body,
+            compatibleWith: UITraitCollection(preferredContentSizeCategory: .large)).pointSize)
+        // Transient zero/narrow layouts must not crash or install a known non-fitting font.
+        // Supported viewport widths (320 pt and above) are checked by the hosted layout test.
+        guard fits(lower) else { return }
+        if fits(upper) {
+            lower = upper
+        } else {
+            for _ in 0..<14 {
+                let candidate = (lower + upper) / 2
+                if fits(candidate) { lower = candidate } else { upper = candidate }
+            }
+        }
+        let fitted = UIFont(descriptor: descriptor, size: lower)
+        if amountLabel.font != fitted { amountLabel.font = fitted }
+        let style = NSMutableParagraphStyle()
+        style.lineBreakMode = .byWordWrapping
+        style.lineBreakStrategy = []
+        // Zero inherits the layout manager's factor; a positive threshold overrides it.
+        style.hyphenationFactor = 0.001
+        style.usesDefaultHyphenation = false
+        let attributed = NSAttributedString(string: text, attributes: [
+            .font: fitted, .foregroundColor: ShiftLedgerColors.textSecondary, .paragraphStyle: style
+        ])
+        if amountLabel.attributedText?.isEqual(to: attributed) != true {
+            amountLabel.attributedText = attributed
+        }
     }
 
     func render(
@@ -101,6 +155,9 @@ final class ActualGrossEntryView: UIView {
             font: ShiftLedgerTypography.callout,
             color: ShiftLedgerColors.textSecondary
         )
+        amountLabel.lineBreakMode = .byWordWrapping
+        amountLabel.lineBreakStrategy = []
+        amountLabel.adjustsFontForContentSizeCategory = false
         amountLabel.accessibilityIdentifier = "actualGrossEntry.amount.label"
 
         amountRow.axis = .horizontal

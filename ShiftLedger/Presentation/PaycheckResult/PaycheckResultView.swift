@@ -30,13 +30,13 @@ final class PaycheckResultView: UIView {
     private let summaryStack = UIStackView()
     private let expectedStack = UIStackView()
     private let expectedLabel = UILabel()
-    private let expectedValueLabel = UILabel()
+    private let expectedValueLabel = SummaryValueLabel(isDifference: false)
     private let actualStack = UIStackView()
     private let actualLabel = UILabel()
-    private let actualValueLabel = UILabel()
+    private let actualValueLabel = SummaryValueLabel(isDifference: false)
     private let differenceStack = UIStackView()
     private let differenceLabel = UILabel()
-    private let differenceValueLabel = UILabel()
+    private let differenceValueLabel = SummaryValueLabel(isDifference: true)
 
     private let explanationLabel = UILabel()
     private let breakdownTitleLabel = UILabel()
@@ -76,6 +76,7 @@ final class PaycheckResultView: UIView {
 
         emptyBreakdownLabel.text = model.emptyBreakdownMessage
         emptyBreakdownLabel.isHidden = model.emptyBreakdownMessage == nil
+        setNeedsLayout()
     }
 
     func renderPeriod(_ heading: OverviewFormatting.PeriodHeading) {
@@ -236,6 +237,8 @@ final class PaycheckResultView: UIView {
         titleLabel.accessibilityIdentifier = labelIdentifier
         configureLabel(valueLabel, font: valueFont, color: ShiftLedgerColors.textPrimary)
         valueLabel.accessibilityIdentifier = valueIdentifier
+        valueLabel.adjustsFontForContentSizeCategory = false
+        valueLabel.lineBreakMode = .byWordWrapping
         [titleLabel, valueLabel].forEach(stack.addArrangedSubview)
     }
 
@@ -319,6 +322,62 @@ final class PaycheckResultView: UIView {
         label.textColor = color
         label.numberOfLines = 0
         label.adjustsFontForContentSizeCategory = true
+    }
+
+    private final class SummaryValueLabel: UILabel {
+        private let isDifference: Bool
+
+        init(isDifference: Bool) {
+            self.isDifference = isDifference
+            super.init(frame: .zero)
+            registerForTraitChanges([UITraitPreferredContentSizeCategory.self]) { (self: SummaryValueLabel, _) in
+                self.setNeedsLayout()
+            }
+        }
+
+        @available(*, unavailable)
+        required init?(coder: NSCoder) { nil }
+
+        override var text: String? {
+            didSet { setNeedsLayout() }
+        }
+
+        override func layoutSubviews() {
+            super.layoutSubviews()
+            guard let text, bounds.width > 1 else { return }
+            var baseFont = UIFont.preferredFont(forTextStyle: .headline, compatibleWith: traitCollection)
+            if isDifference {
+                traitCollection.performAsCurrent { baseFont = ShiftLedgerTypography.display }
+            }
+            let measure = UILabel()
+            measure.text = text
+            let scale = max(1, traitCollection.displayScale)
+            let available = floor(bounds.width * scale) / scale - 1 / scale
+            func fits(_ size: CGFloat) -> Bool {
+                measure.font = baseFont.withSize(size)
+                let width = measure.sizeThatFits(CGSize(width: CGFloat.greatestFiniteMagnitude,
+                                                       height: CGFloat.greatestFiniteMagnitude)).width
+                return ceil(width * scale) / scale <= available
+            }
+            var upper = baseFont.pointSize
+            var lower = min(upper, UIFont.preferredFont(forTextStyle: .body,
+                compatibleWith: UITraitCollection(preferredContentSizeCategory: .large)).pointSize)
+            // Keep unlimited lines for values outside the readable single-line range.
+            guard fits(lower) else {
+                if font != baseFont { font = baseFont }
+                return
+            }
+            if fits(upper) {
+                lower = upper
+            } else {
+                for _ in 0..<14 {
+                    let candidate = (lower + upper) / 2
+                    if fits(candidate) { lower = candidate } else { upper = candidate }
+                }
+            }
+            let fitted = baseFont.withSize(lower)
+            if font != fitted { font = fitted }
+        }
     }
 
     private final class BreakdownMetricRow: UIStackView {

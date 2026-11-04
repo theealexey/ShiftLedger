@@ -545,11 +545,8 @@ struct PaycheckResultViewControllerTests {
 
         for identifier in [
             "paycheckResult.expected.label",
-            "paycheckResult.expected.value",
             "paycheckResult.actual.label",
-            "paycheckResult.actual.value",
             "paycheckResult.difference.label",
-            "paycheckResult.difference.value",
             "paycheckResult.explanation",
             "paycheckResult.breakdown.title",
             "paycheckResult.breakdown.row.0.workType",
@@ -600,6 +597,67 @@ struct PaycheckResultViewControllerTests {
         let scrollView = try #require(firstDescendant(of: UIScrollView.self, in: viewController.view))
 
         #expect(scrollView.alwaysBounceVertical)
+    }
+
+    @Test("Summary preserves complete monetary strings across widths and traits", arguments: [320.0, 375.0, 402.0])
+    func summaryMoneyFits(_ width: Double) throws {
+        for language in ["ru_RU", "en_US"] {
+            for appearance in [UIUserInterfaceStyle.light, .dark] {
+                for raw in ["0", "4699.99", "4700", "4700.00000001", "123456.78", "1234567.89", "999999999999.99"] {
+                    let actual = try #require(Decimal(string: raw, locale: locale))
+                    let comparison = try makeComparison(expected: 4700, actual: actual)
+                    let displayLocale = Locale(identifier: language)
+                    let controller = PaycheckResultViewController(comparison: comparison,
+                        currencyCode: "SEK", timeZoneIdentifier: "Europe/Stockholm", workTypes: [], displayLocale: displayLocale)
+                    controller.overrideUserInterfaceStyle = appearance
+                    let window = UIWindow(frame: CGRect(x: 0, y: 0, width: width, height: 874))
+                    window.rootViewController = controller
+                    window.isHidden = false
+                    defer { window.isHidden = true }
+                    controller.loadViewIfNeeded()
+                    let model = PaycheckResultFormatting.renderModel(comparison: comparison, currencyCode: "SEK",
+                        timeZoneIdentifier: "Europe/Stockholm", workTypes: [], locale: displayLocale)
+                    let labels: [UILabel] = try ["expected", "actual", "difference"].map {
+                        try requireView(identifier: "paycheckResult.\($0).value", in: controller.view)
+                    }
+                    var normalFonts: [UIFont]?
+                    for category in [UIContentSizeCategory.large, .accessibilityExtraExtraLarge, .accessibilityExtraExtraExtraLarge, .large] {
+                        controller.traitOverrides.preferredContentSizeCategory = category
+                        controller.view.setNeedsLayout()
+                        window.layoutIfNeeded()
+                        controller.view.layoutIfNeeded()
+                        for (label, text) in zip(labels, [model.expected, model.actual, model.difference]) {
+                            #expect(label.text == text)
+                            #expect(label.accessibilityLabel == text)
+                            let probe = UILabel()
+                            probe.text = text
+                            probe.font = label.font
+                            let size = probe.sizeThatFits(CGSize(width: CGFloat.greatestFiniteMagnitude,
+                                                               height: CGFloat.greatestFiniteMagnitude))
+                            #expect(size.width <= label.bounds.width)
+                            #expect(size.height <= label.bounds.height + 1)
+                            #expect(label.font.pointSize >= 17)
+                            let frame = label.convert(label.bounds, to: controller.view)
+                            #expect(frame.minX >= 0 && frame.maxX <= width)
+                        }
+                        for pair in zip(labels, labels.dropFirst()) {
+                            #expect(pair.0.convert(pair.0.bounds, to: controller.view).maxY <
+                                    pair.1.convert(pair.1.bounds, to: controller.view).minY)
+                        }
+                        let fonts = try labels.map { try #require($0.font) }
+                        if category == .large {
+                            if let normalFonts { #expect(fonts == normalFonts) }
+                            normalFonts = fonts
+                        }
+                        controller.view.setNeedsLayout()
+                        controller.view.layoutIfNeeded()
+                        let repeatedFonts = try labels.map { try #require($0.font) }
+                        #expect(repeatedFonts == fonts)
+                        #expect(comparison.difference == actual - 4700)
+                    }
+                }
+            }
+        }
     }
 
     private func makeViewController(
