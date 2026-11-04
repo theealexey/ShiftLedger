@@ -4,6 +4,75 @@ import UIKit
 
 @MainActor
 struct MainCoordinatorTests {
+    @Test("Selected payroll context is displayed through comparison, correction and return",
+          arguments: ["ru_RU", "en_US"], ["sameDay", "overnight", "monthly", "weekly", "biweekly"])
+    func selectedPeriodContext(_ localeID: String, _ kind: String) throws {
+        let locale = Locale(identifier: localeID)
+        let anchor = try LocalDate(year: 2001, month: 1, day: 1)
+        let cycle: PayCalculationCycle = switch kind {
+        case "monthly": .scheduled(.calendarMonthly)
+        case "weekly": .scheduled(.weekly(anchorDate: anchor))
+        case "biweekly": .scheduled(.biweekly(anchorDate: anchor))
+        default: .perShift
+        }
+        let harness = try makeHarness(cycle: cycle, displayLocale: locale)
+        let start = Date(timeIntervalSinceReferenceDate: 800_000_000)
+        let shift = try Shift(jobID: testWorkTypeID, workTypeID: testWorkTypeID,
+            start: start, end: start.addingTimeInterval(kind == "overnight" ? 72_000 : 3_600))
+        if kind == "sameDay" || kind == "overnight" { harness.metrics.overviewShifts = [shift] }
+        harness.coordinator.start()
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 320, height: 874))
+        window.rootViewController = harness.navigationController
+        window.isHidden = false
+        defer { window.isHidden = true }
+        harness.overview.loadViewIfNeeded()
+        var period: PayCalculationPeriod?
+        let original = harness.overview.onCheckPaycheck
+        harness.overview.onCheckPaycheck = { selected in period = selected; original?(selected) }
+        let check: UIButton = try requireView("overview.checkPaycheck", in: harness.overview.view)
+        check.sendActions(for: .touchUpInside)
+        let selected = try #require(period)
+        let heading = try #require(harness.overview.paycheckPeriodHeading(for: selected))
+        let text = [heading.date, heading.time].compactMap { $0 }.joined(separator: "\n")
+        #expect(text.contains(kind == "sameDay" || kind == "overnight" ? "2026" : "2001"))
+        let entry = try #require(harness.navigationController.topViewController as? ActualGrossEntryViewController)
+        entry.loadViewIfNeeded()
+        let entryLabel: UILabel = try requireView("actualGrossEntry.period", in: entry.view)
+        #expect(entryLabel.text == text && !entryLabel.isHidden)
+        for category: UIContentSizeCategory in [.large, .accessibilityExtraExtraExtraLarge, .large] {
+            entry.traitOverrides.preferredContentSizeCategory = category
+            window.layoutIfNeeded()
+            entry.view.layoutIfNeeded()
+            #expect(entryLabel.sizeThatFits(CGSize(width: entryLabel.bounds.width, height: .greatestFiniteMagnitude)).height <= entryLabel.bounds.height + 1)
+            let amount: UIView = try requireView("actualGrossEntry.amount.container", in: entry.view)
+            #expect(entryLabel.convert(entryLabel.bounds, to: entry.view).maxY <= amount.convert(amount.bounds, to: entry.view).minY)
+        }
+        let field: UITextField = try requireView("actualGrossEntry.amount.input", in: entry.view)
+        for amount in ["100", "101"] {
+            field.text = amount
+            field.sendActions(for: .editingChanged)
+            let compare: UIButton = try requireView("actualGrossEntry.compare", in: entry.view)
+            compare.sendActions(for: .touchUpInside)
+            let result = try #require(harness.navigationController.topViewController as? PaycheckResultViewController)
+            result.loadViewIfNeeded()
+            let resultLabel: UILabel = try requireView("paycheckResult.period", in: result.view)
+            #expect(resultLabel.text == text)
+            #expect(harness.metrics.preparedPeriods.last == selected)
+            for category: UIContentSizeCategory in [.large, .accessibilityExtraExtraExtraLarge, .large] {
+                result.traitOverrides.preferredContentSizeCategory = category
+                window.layoutIfNeeded()
+                result.view.layoutIfNeeded()
+                #expect(resultLabel.sizeThatFits(CGSize(width: resultLabel.bounds.width, height: .greatestFiniteMagnitude)).height <= resultLabel.bounds.height + 1)
+            }
+            if amount == "100" {
+                _ = harness.navigationController.popViewController(animated: false)
+                #expect(entryLabel.text == text && field.text == amount)
+            } else { result.onDone?() }
+        }
+        #expect(harness.navigationController.topViewController === harness.overview)
+        #expect(harness.overview.paycheckPeriodHeading(for: selected)?.date == heading.date)
+    }
+
     @Test("Main flow installs one stable Overview root")
     func startsWithOneOverviewRoot() throws {
         let harness = try makeHarness()
@@ -410,6 +479,7 @@ struct MainCoordinatorTests {
 
     private func makeHarness(
         cycle: PayCalculationCycle = .scheduled(.calendarMonthly),
+        displayLocale: Locale = Locale(identifier: "en_US"),
         prepareComparison: @escaping @MainActor (Job, PayCalculationPeriod, ActualGross) throws -> PaycheckComparison = { job, period, actualGross in
             try job.paycheckComparison(for: period, actualGross: actualGross, from: [])
         }
@@ -426,7 +496,8 @@ struct MainCoordinatorTests {
                 currentDate: { Date(timeIntervalSinceReferenceDate: 0) }
             ),
             currencyCode: job.currencyCode,
-            timeZoneIdentifier: job.timeZoneIdentifier
+            timeZoneIdentifier: job.timeZoneIdentifier,
+            displayLocale: displayLocale
         )
         let navigationController = NonAnimatingNavigationController()
         let dependencies = MainCoordinator.Dependencies(

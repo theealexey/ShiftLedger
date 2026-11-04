@@ -290,6 +290,19 @@ final class OverviewViewController: UIViewController {
         }
     }
 
+    func paycheckPeriodHeading(for period: PayCalculationPeriod) -> OverviewFormatting.PeriodHeading? {
+        guard case let .content(content) = viewModel.state,
+              content.selectedPeriod == period,
+              let breakdown = content.expectedBreakdown else { return nil }
+        if case let .scheduled(payPeriod) = period {
+            guard let date = OverviewFormatting.compactScheduledPeriod(
+                payPeriod, timeZoneIdentifier: timeZoneIdentifier, locale: displayLocale
+            ) else { return nil }
+            return OverviewFormatting.PeriodHeading(date: date, time: nil, accessibilityLabel: date)
+        }
+        return formattedPeriod(period, breakdown: breakdown)
+    }
+
     private func checkPaycheck() {
         guard
             case let .content(content) = viewModel.state,

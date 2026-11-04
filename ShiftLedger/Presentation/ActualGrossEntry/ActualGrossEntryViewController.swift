@@ -18,6 +18,10 @@ final class ActualGrossEntryViewController: UIViewController {
         nil
     }
 
+    func displayPeriod(_ heading: OverviewFormatting.PeriodHeading) {
+        actualGrossEntryView.renderPeriod(heading)
+    }
+
     override func loadView() {
         view = actualGrossEntryView
     }

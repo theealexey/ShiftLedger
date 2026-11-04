@@ -232,6 +232,9 @@ final class MainCoordinator {
 
     private func showActualGrossEntry(for period: PayCalculationPeriod) {
         let viewController = dependencies.makeActualGrossEntry(job.currencyCode)
+        if let heading = overviewViewController.paycheckPeriodHeading(for: period) {
+            viewController.displayPeriod(heading)
+        }
         viewController.onContinue = { [weak self, weak viewController] actualGross in
             guard let self, let viewController else {
                 return
@@ -267,6 +270,9 @@ final class MainCoordinator {
 
     private func showPaycheckResult(_ comparison: PaycheckComparison) {
         let viewController = dependencies.makePaycheckResult(comparison, job)
+        if let heading = overviewViewController.paycheckPeriodHeading(for: comparison.expected.period) {
+            viewController.displayPeriod(heading)
+        }
         viewController.onDone = { [weak self] in
             self?.returnToOverview()
         }

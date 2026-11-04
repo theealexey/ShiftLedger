@@ -30,6 +30,10 @@ final class PaycheckResultViewController: UIViewController {
         nil
     }
 
+    func displayPeriod(_ heading: OverviewFormatting.PeriodHeading) {
+        paycheckResultView.renderPeriod(heading)
+    }
+
     override func loadView() {
         view = paycheckResultView
     }

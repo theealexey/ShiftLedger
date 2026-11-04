@@ -20,6 +20,8 @@ final class PaycheckResultView: UIView {
 
     var onDoneTapped: (() -> Void)?
 
+    private let periodLabel = UILabel()
+
     private let scrollView = UIScrollView()
     private let contentView = UIView()
     private let mainStack = UIStackView()
@@ -76,7 +78,20 @@ final class PaycheckResultView: UIView {
         emptyBreakdownLabel.isHidden = model.emptyBreakdownMessage == nil
     }
 
+    func renderPeriod(_ heading: OverviewFormatting.PeriodHeading) {
+        periodLabel.text = [heading.date, heading.time].compactMap { $0 }.joined(separator: "\n")
+        periodLabel.accessibilityLabel = heading.accessibilityLabel
+        periodLabel.isHidden = false
+    }
+
     private func configureAppearance() {
+        periodLabel.font = ShiftLedgerTypography.callout
+        periodLabel.textColor = ShiftLedgerColors.textSecondary
+        periodLabel.adjustsFontForContentSizeCategory = true
+        periodLabel.numberOfLines = 0
+        periodLabel.lineBreakMode = .byWordWrapping
+        periodLabel.accessibilityIdentifier = "paycheckResult.period"
+        periodLabel.isHidden = true
         backgroundColor = ShiftLedgerColors.backgroundPrimary
         accessibilityIdentifier = "paycheckResult.screen"
         scrollView.alwaysBounceVertical = true
@@ -165,6 +180,8 @@ final class PaycheckResultView: UIView {
         contentView.addSubview(mainStack)
         [summaryCard, explanationLabel, breakdownTitleLabel, breakdownRowsStack, emptyBreakdownLabel, doneButton]
             .forEach(mainStack.addArrangedSubview)
+
+        mainStack.insertArrangedSubview(periodLabel, at: 0)
 
         summaryCard.addSubview(summaryStack)
         [expectedStack, actualStack, differenceStack].forEach(summaryStack.addArrangedSubview)

@@ -4,6 +4,8 @@ final class ActualGrossEntryView: UIView {
     var onAmountChanged: ((String) -> Void)?
     var onCompareTapped: (() -> Void)?
 
+    private let periodLabel = UILabel()
+
     private let scrollView = UIScrollView()
     private let contentView = UIView()
     private let contentStack = UIStackView()
@@ -47,7 +49,20 @@ final class ActualGrossEntryView: UIView {
         validationLabel.isHidden = validationMessage == nil
     }
 
+    func renderPeriod(_ heading: OverviewFormatting.PeriodHeading) {
+        periodLabel.text = [heading.date, heading.time].compactMap { $0 }.joined(separator: "\n")
+        periodLabel.accessibilityLabel = heading.accessibilityLabel
+        periodLabel.isHidden = false
+    }
+
     private func configureAppearance() {
+        periodLabel.font = ShiftLedgerTypography.callout
+        periodLabel.textColor = ShiftLedgerColors.textSecondary
+        periodLabel.adjustsFontForContentSizeCategory = true
+        periodLabel.numberOfLines = 0
+        periodLabel.lineBreakMode = .byWordWrapping
+        periodLabel.accessibilityIdentifier = "actualGrossEntry.period"
+        periodLabel.isHidden = true
         backgroundColor = ShiftLedgerColors.backgroundPrimary
         accessibilityIdentifier = "actualGrossEntry.screen"
         scrollView.alwaysBounceVertical = true
@@ -147,6 +162,8 @@ final class ActualGrossEntryView: UIView {
         amountContainer.addSubview(inputStack)
         [amountLabel, amountRow].forEach(inputStack.addArrangedSubview)
         [amountTextField, currencyLabel].forEach(amountRow.addArrangedSubview)
+
+        contentStack.insertArrangedSubview(periodLabel, at: 2)
 
         contentStack.setCustomSpacing(8, after: questionLabel)
         contentStack.setCustomSpacing(24, after: supportingLabel)
