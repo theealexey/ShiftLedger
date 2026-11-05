@@ -12,22 +12,24 @@ enum OverviewFormatting {
         timeZoneIdentifier: String,
         locale: Locale
     ) -> PeriodHeading? {
-        guard let zone = TimeZone(identifier: timeZoneIdentifier),
-              let time = compactShiftTimeRange(shift, timeZoneIdentifier: timeZoneIdentifier, locale: locale)
-        else { return nil }
-        let calendar = configuredCalendar(timeZone: zone)
-        let date = dateHeading(shift, calendar: calendar, locale: locale, includeYear: true)
+        guard let zone = TimeZone(identifier: timeZoneIdentifier) else { return nil }
         let endpoint = DateFormatter()
-        endpoint.calendar = calendar
+        endpoint.calendar = configuredCalendar(timeZone: zone)
         endpoint.timeZone = zone
         endpoint.locale = locale
-        endpoint.dateStyle = .long
+        endpoint.dateStyle = .medium
         endpoint.timeStyle = .short
         if zone.secondsFromGMT(for: shift.start) != zone.secondsFromGMT(for: shift.end) {
-            endpoint.setLocalizedDateFormatFromTemplate("yMMMMdjmOOOO")
+            endpoint.setLocalizedDateFormatFromTemplate("yMMMdjmOOOO")
         }
-        return PeriodHeading(date: date, time: time,
-                             accessibilityLabel: "\(endpoint.string(from: shift.start)) — \(endpoint.string(from: shift.end))")
+        let language = locale.language.languageCode?.identifier ?? "en"
+        let bundle = Bundle.main.path(forResource: language, ofType: "lproj")
+            .flatMap(Bundle.init(path:)) ?? .main
+        let startTitle = bundle.localizedString(forKey: "payrollPeriod.start", value: nil, table: "Localizable")
+        let endTitle = bundle.localizedString(forKey: "payrollPeriod.end", value: nil, table: "Localizable")
+        let start = "\(startTitle): \(endpoint.string(from: shift.start))"
+        let end = "\(endTitle): \(endpoint.string(from: shift.end))"
+        return PeriodHeading(date: start, time: end, accessibilityLabel: "\(start); \(end)")
     }
 
     struct ShiftEndpoints: Equatable {

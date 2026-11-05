@@ -1,6 +1,20 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "payrollPeriod.start" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Start" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Начало" } }
+      }
+    },
+    "payrollPeriod.end" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "End" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Конец" } }
+      }
+    },
     "archive.jobs.loadFailed" : {
       "extractionState" : "manual",
       "localizations" : {

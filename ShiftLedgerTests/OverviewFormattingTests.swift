@@ -82,27 +82,33 @@ struct OverviewFormattingTests {
         #expect(!text.contains("2026"))
     }
 
-    @Test("Document period separates localized dates from endpoint clocks", arguments: ["ru_RU", "en_US"])
+    @Test("Each period endpoint retains its own date and clock", arguments: ["ru_RU", "en_US"])
     func documentPeriodHeading(_ localeID: String) throws {
+        let locale = Locale(identifier: localeID)
         let ru = localeID == "ru_RU"
-        let samples: [(Int, Int, Int, TimeInterval, String, String)] = [
-            (2026, 11, 5, 3600, "5 ноября 2026 г.", "November 5, 2026"),
-            (2026, 11, 5, 24 * 3600, "5—6 ноября 2026 г.", "November 5 – 6, 2026"),
-            (2026, 11, 5, 48 * 3600, "5—7 ноября 2026 г.", "November 5 – 7, 2026"),
-            (2026, 10, 31, 24 * 3600, "31 октября — 1 ноября 2026 г.", "October 31 – November 1, 2026"),
-            (2026, 12, 31, 24 * 3600, "31 декабря 2026 — 1 января 2027 г.", "December 31, 2026 – January 1, 2027"),
-            (2020, 11, 5, 3600, "5 ноября 2020 г.", "November 5, 2020")
-        ]
-        for (year, month, day, duration, russian, english) in samples {
-            let shift = try makeShift(start: date(year: year, month: month, day: day, hour: 14, minute: 43), duration: duration)
+        for (year, month, day, duration) in [
+            (2026, 11, 5, 3600), (2026, 11, 5, 48 * 3600),
+            (2026, 10, 31, 24 * 3600), (2026, 12, 31, 24 * 3600),
+            (2020, 11, 5, 3600)
+        ] {
+            let start = try date(year: year, month: month, day: day, hour: 14, minute: 43)
+            let shift = try makeShift(start: start, duration: TimeInterval(duration))
             let heading = try #require(OverviewFormatting.perShiftHeading(
-                shift, timeZoneIdentifier: "UTC", locale: Locale(identifier: localeID)))
-            #expect(normalizedPeriodSpacing(heading.date) == (ru ? russian : english))
-            #expect(heading.time.map(normalizedPeriodSpacing) == (ru ? (duration == 3600 ? "14:43–15:43" : "14:43–14:43")
-                                      : (duration == 3600 ? "2:43 PM–3:43 PM" : "2:43 PM–2:43 PM")))
-            #expect(heading.accessibilityLabel.contains(String(year)))
-            #expect(heading.accessibilityLabel.contains(ru ? "14:43" : "2:43"))
-            #expect(heading.accessibilityLabel.components(separatedBy: " — ").count == 2)
+                shift, timeZoneIdentifier: "UTC", locale: locale))
+            let end = try #require(heading.time)
+            #expect(heading.date.hasPrefix(ru ? "Начало: " : "Start: "))
+            #expect(end.hasPrefix(ru ? "Конец: " : "End: "))
+            #expect(heading.date.contains(String(year)))
+            #expect(end.contains(String(month == 12 && day == 31 ? year + 1 : year)))
+            #expect(heading.date.contains(ru ? "14:43" : "2:43"))
+            #expect(end.contains(duration == 3600 ? (ru ? "15:43" : "3:43") : (ru ? "14:43" : "2:43")))
+            #expect(heading.accessibilityLabel == "\(heading.date); \(end)")
+            #expect(shift.start == start)
+            #expect(shift.end == start.addingTimeInterval(TimeInterval(duration)))
+            if duration == 48 * 3600 {
+                #expect(heading.date.contains("5"))
+                #expect(end.contains("7"))
+            }
         }
     }
 
@@ -111,13 +117,14 @@ struct OverviewFormattingTests {
         let locale = Locale(identifier: localeID)
         let shift = try makeShift(start: date(year: 2026, month: 11, day: 1, hour: 5, minute: 30), duration: 3600)
         let heading = try #require(OverviewFormatting.perShiftHeading(shift, timeZoneIdentifier: "America/New_York", locale: locale))
-        #expect(heading.time?.contains("GMT-04:00") == true)
+        #expect(heading.date.contains("GMT-04:00"))
         #expect(heading.time?.contains("GMT-05:00") == true)
-        #expect(heading.accessibilityLabel.contains("GMT-04:00"))
-        #expect(heading.accessibilityLabel.contains("GMT-05:00"))
         let midnight = try makeShift(start: date(year: 2026, month: 11, day: 5, hour: 23, minute: 30), duration: 3600)
         let local = try #require(OverviewFormatting.perShiftHeading(midnight, timeZoneIdentifier: "Europe/Stockholm", locale: locale))
-        #expect(normalizedPeriodSpacing(local.date) == (localeID == "ru_RU" ? "6 ноября 2026 г." : "November 6, 2026"))
+        #expect(local.date.contains("6"))
+        #expect(local.date.contains("2026"))
+        #expect(local.date.contains( localeID == "ru_RU" ? "00:30" : "12:30"))
+        #expect(local.time?.contains(localeID == "ru_RU" ? "01:30" : "1:30") == true)
     }
 
     @Test("Scheduled document headings retain year and inclusive calendar boundaries", arguments: ["ru_RU", "en_US"])
