@@ -553,6 +553,41 @@ struct OverviewFormattingTests {
         #expect(result == expected)
     }
 
+    @Test("Receipt row associates both local endpoints", arguments: ["ru_RU", "en_US"])
+    func rowEndpointAssociation(_ identifier: String) throws {
+        let locale = Locale(identifier: identifier)
+        let reference = try date(year: 2026, month: 11, day: 5, hour: 14, minute: 43)
+        let same = try makeShift(start: reference, duration: 3600)
+        let compact = try #require(OverviewFormatting.shiftRowHeading(same,
+            timeZoneIdentifier: "UTC", locale: locale, referenceDate: reference))
+        #expect(compact.date == OverviewFormatting.frontShiftDate(same, timeZoneIdentifier: "UTC", locale: locale, referenceDate: reference))
+        #expect(compact.time == OverviewFormatting.compactShiftTimeRange(same, timeZoneIdentifier: "UTC", locale: locale))
+        for (month, day, hour, duration) in [(11, 5, 14, 48 * 3600), (11, 5, 22, 8 * 3600),
+                                           (10, 31, 22, 8 * 3600), (12, 31, 22, 8 * 3600)] {
+            let start = try date(year: 2026, month: month, day: day, hour: hour, minute: 43)
+            let shift = try makeShift(start: start, duration: TimeInterval(duration))
+            let heading = try #require(OverviewFormatting.shiftRowHeading(shift,
+                timeZoneIdentifier: "UTC", locale: locale, referenceDate: reference))
+            #expect(heading.time.hasPrefix("→ "))
+            #expect(heading.date.contains(identifier == "ru_RU" ? "\(hour):43" : (hour == 14 ? "2:43" : "10:43")))
+            #expect(heading.time.contains(duration == 48 * 3600 ? (identifier == "ru_RU" ? "14:43" : "2:43") : (identifier == "ru_RU" ? "06:43" : "6:43")))
+            if month == 12 { #expect(heading.date.contains("2026")); #expect(heading.time.contains("2027")) }
+            #expect(shift.end == start.addingTimeInterval(TimeInterval(duration)))
+        }
+        for (month, day, hour) in [(3, 8, 6), (11, 1, 5)] {
+            let shift = try makeShift(start: date(year: 2026, month: month, day: day, hour: hour, minute: 30), duration: 3600)
+            let heading = try #require(OverviewFormatting.shiftRowHeading(shift,
+                timeZoneIdentifier: "America/New_York", locale: locale, referenceDate: reference))
+            print("SL531 DST \(identifier) month=\(month): \(heading.date) | \(heading.time)")
+            if month == 11 { #expect(heading.time.contains("GMT-04:00")); #expect(heading.time.contains("GMT-05:00")) }
+            else {
+                #expect(heading.time.contains("1:30")); #expect(heading.time.contains("3:30"))
+                #expect(heading.time.contains("GMT-05:00")); #expect(heading.time.contains("GMT-04:00"))
+            }
+            #expect(shift.end.timeIntervalSince(shift.start) == 3600)
+        }
+    }
+
     @Test("Shift card duration uses complete localized components")
     func shiftCardDurationUsesCompleteLocalizedComponents() {
         let result = OverviewFormatting.duration(8 * 3_600 + 30 * 60)

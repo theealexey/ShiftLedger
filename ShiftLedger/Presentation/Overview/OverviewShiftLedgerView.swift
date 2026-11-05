@@ -60,6 +60,7 @@ final class OverviewShiftLedgerView: UIView {
 final class OverviewShiftLedgerRowView: UIControl {
     private let content = UIStackView()
     private let heading = UIStackView()
+    private let boundaryStack = UIStackView()
     private let dateLabel = UILabel()
     private let amountLabel = UILabel()
     private let timeLabel = UILabel()
@@ -93,6 +94,47 @@ final class OverviewShiftLedgerRowView: UIControl {
     override func layoutSubviews() {
         updateHeadingAxis()
         super.layoutSubviews()
+        updateOffsetFont()
+    }
+
+    private func updateOffsetFont() {
+        let base = UIFontMetrics(forTextStyle: .callout).scaledFont(
+            for: .monospacedSystemFont(ofSize: 14, weight: .regular), compatibleWith: traitCollection)
+        guard let text = timeLabel.text else { return }
+        let hasOffset = text.contains("GMT") || text.contains("UTC")
+        if timeLabel.adjustsFontForContentSizeCategory == hasOffset {
+            timeLabel.adjustsFontForContentSizeCategory = !hasOffset
+        }
+        let lineBreak: NSLineBreakMode = hasOffset ? .byWordWrapping : .byTruncatingTail
+        if timeLabel.lineBreakMode != lineBreak { timeLabel.lineBreakMode = lineBreak }
+        guard hasOffset else {
+            if timeLabel.font != base { timeLabel.font = base }
+            return
+        }
+        let scale = max(traitCollection.displayScale, 1)
+        let width = floor(timeLabel.bounds.width * scale) / scale - 1 / scale
+        guard width > 0 else { return }
+        let tokens = text.split(whereSeparator: { $0.isWhitespace }).map(String.init)
+        let measure = UILabel()
+        func fits(_ size: CGFloat) -> Bool {
+            measure.font = base.withSize(size)
+            return tokens.allSatisfy { token in
+                measure.text = token
+                return ceil(measure.sizeThatFits(CGSize(width: CGFloat.greatestFiniteMagnitude,
+                    height: CGFloat.greatestFiniteMagnitude)).width * scale) / scale <= width
+            }
+        }
+        var lower = min(17, base.pointSize)
+        var upper = base.pointSize
+        guard fits(lower) else { return }
+        if !fits(upper) {
+            for _ in 0..<14 {
+                let middle = (lower + upper) / 2
+                if fits(middle) { lower = middle } else { upper = middle }
+            }
+        } else { lower = upper }
+        let fitted = base.withSize(lower)
+        if timeLabel.font != fitted { timeLabel.font = fitted }
     }
 
     override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
@@ -139,6 +181,15 @@ final class OverviewShiftLedgerRowView: UIControl {
         amountLabel.accessibilityIdentifier = "\(prefix).expected"
         timeLabel.text = card.timeRange
         timeLabel.accessibilityIdentifier = "\(prefix).time"
+        let boundaryContainer = card.endpoints.startDate == nil ? summary : boundaryStack
+        if timeLabel.superview !== boundaryContainer {
+            timeLabel.removeFromSuperview()
+            if boundaryContainer === summary {
+                summary.insertArrangedSubview(timeLabel, at: 0)
+            } else {
+                boundaryStack.addArrangedSubview(timeLabel)
+            }
+        }
         durationLabel.text = OverviewStrings.paidDuration(card.paidDuration)
         durationLabel.accessibilityIdentifier = "\(prefix).duration"
 
@@ -183,7 +234,10 @@ final class OverviewShiftLedgerRowView: UIControl {
         heading.spacing = 8
         amountLabel.textAlignment = .right
         amountLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
-        heading.addArrangedSubview(dateLabel)
+        boundaryStack.axis = .vertical
+        boundaryStack.spacing = 4
+        boundaryStack.addArrangedSubview(dateLabel)
+        heading.addArrangedSubview(boundaryStack)
         heading.addArrangedSubview(amountLabel)
 
         summary.axis = .horizontal
@@ -290,8 +344,10 @@ final class OverviewShiftLedgerRowView: UIControl {
         details.layoutMargins = UIEdgeInsets(top: 8,
             left: traitCollection.preferredContentSizeCategory.isAccessibilityCategory ? 0 : 12,
             bottom: 8, right: 0)
+        let boundaryWidth = max(dateLabel.intrinsicContentSize.width,
+            timeLabel.superview === boundaryStack ? timeLabel.intrinsicContentSize.width : 0)
         let vertical = traitCollection.preferredContentSizeCategory.isAccessibilityCategory
-            || dateLabel.intrinsicContentSize.width + amountLabel.intrinsicContentSize.width + 36 > available
+            || boundaryWidth + amountLabel.intrinsicContentSize.width + 36 > available
         let axis: NSLayoutConstraint.Axis = vertical ? .vertical : .horizontal
         if heading.axis != axis {
             heading.axis = axis

@@ -261,6 +261,33 @@ enum OverviewFormatting {
         return formatter.string(from: shift.start)
     }
 
+    static func shiftRowHeading(
+        _ shift: Shift,
+        timeZoneIdentifier: String,
+        locale: Locale,
+        referenceDate: Date = Date()
+    ) -> (date: String, time: String)? {
+        guard let zone = TimeZone(identifier: timeZoneIdentifier) else { return nil }
+        let calendar = configuredCalendar(timeZone: zone)
+        if calendar.isDate(shift.start, inSameDayAs: shift.end) {
+            guard let date = frontShiftDate(shift, timeZoneIdentifier: timeZoneIdentifier,
+                                            locale: locale, referenceDate: referenceDate),
+                  let time = compactShiftTimeRange(shift, timeZoneIdentifier: timeZoneIdentifier, locale: locale,
+                                                   includeChangingOffsets: true)
+            else { return nil }
+            return (date, time)
+        }
+        let needsYear = calendar.component(.year, from: shift.start) != calendar.component(.year, from: referenceDate)
+            || calendar.component(.year, from: shift.end) != calendar.component(.year, from: referenceDate)
+        let formatter = DateFormatter()
+        formatter.calendar = calendar
+        formatter.locale = locale
+        formatter.timeZone = zone
+        let offset = zone.secondsFromGMT(for: shift.start) != zone.secondsFromGMT(for: shift.end)
+        formatter.setLocalizedDateFormatFromTemplate((needsYear ? "yMMMdjm" : "MMMdjm") + (offset ? "OOOO" : ""))
+        return (formatter.string(from: shift.start), "→ \(formatter.string(from: shift.end))")
+    }
+
     static func shiftEndpoints(
         _ shift: Shift,
         timeZoneIdentifier: String,
@@ -317,7 +344,8 @@ enum OverviewFormatting {
     static func compactShiftTimeRange(
         _ shift: Shift,
         timeZoneIdentifier: String,
-        locale: Locale
+        locale: Locale,
+        includeChangingOffsets: Bool = false
     ) -> String? {
         guard let timeZone = TimeZone(identifier: timeZoneIdentifier) else {
             return nil
@@ -333,7 +361,7 @@ enum OverviewFormatting {
 
         let startTime = timeFormatter.string(from: shift.start)
         let endTime = timeFormatter.string(from: shift.end)
-        if startTime == endTime,
+        if (startTime == endTime || includeChangingOffsets),
            timeZone.secondsFromGMT(for: shift.start) != timeZone.secondsFromGMT(for: shift.end) {
             timeFormatter.setLocalizedDateFormatFromTemplate("jmOOOO")
             return "\(timeFormatter.string(from: shift.start))–\(timeFormatter.string(from: shift.end))"

@@ -27,17 +27,12 @@ struct OverviewShiftCardMapper {
         try shiftBreakdowns.reversed().map { shiftBreakdown in
             let shift = shiftBreakdown.shift
             guard
-                let frontDate = OverviewFormatting.frontShiftDate(
+                let heading = OverviewFormatting.shiftRowHeading(
                     shift,
                     timeZoneIdentifier: timeZoneIdentifier,
                     locale: displayLocale
                 ),
                 let endpoints = OverviewFormatting.shiftEndpoints(
-                    shift,
-                    timeZoneIdentifier: timeZoneIdentifier,
-                    locale: displayLocale
-                ),
-                let compactTimeRange = OverviewFormatting.compactShiftTimeRange(
                     shift,
                     timeZoneIdentifier: timeZoneIdentifier,
                     locale: displayLocale
@@ -121,8 +116,8 @@ struct OverviewShiftCardMapper {
 
             return OverviewView.ShiftCard(
                 id: shift.id,
-                frontDate: frontDate,
-                timeRange: compactTimeRange,
+                frontDate: heading.date,
+                timeRange: heading.time,
                 endpoints: endpoints,
                 expectedAmount: expectedAmount,
                 exactExpectedAmount: exactExpectedAmount,

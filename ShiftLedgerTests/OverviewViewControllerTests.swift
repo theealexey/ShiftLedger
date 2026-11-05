@@ -1404,22 +1404,22 @@ struct OverviewViewControllerTests {
             identifier: "overview.shift.\(newer.id.uuidString).duration",
             in: try requireRootView(subject.viewController)
         )
-        #expect(frontDate.text == OverviewFormatting.frontShiftDate(
+        #expect(frontDate.text == OverviewFormatting.shiftRowHeading(
             newer,
             timeZoneIdentifier: job.timeZoneIdentifier,
             locale: displayLocale
-        ))
+        )?.date)
         #expect(amount.text == OverviewFormatting.currency(
             Decimal(160),
             currencyCode: job.currencyCode,
             locale: displayLocale
         ))
         #expect(duration.text == OverviewStrings.paidDuration(OverviewFormatting.duration(newer.paidDuration)))
-        let expectedTime = try #require(OverviewFormatting.compactShiftTimeRange(
+        let expectedTime = try #require(OverviewFormatting.shiftRowHeading(
             newer,
             timeZoneIdentifier: job.timeZoneIdentifier,
             locale: displayLocale
-        ))
+        )?.time)
         let time: UILabel = try requireView(identifier: "overview.shift.\(newer.id.uuidString).time",
             in: try requireRootView(subject.viewController))
         #expect(time.text == expectedTime)
@@ -1467,16 +1467,16 @@ struct OverviewViewControllerTests {
         )
 
         #expect(card.bounds.height >= 92)
-        #expect(date.text == OverviewFormatting.frontShiftDate(
+        #expect(date.text == OverviewFormatting.shiftRowHeading(
             older,
             timeZoneIdentifier: job.timeZoneIdentifier,
             locale: displayLocale
-        ))
-        #expect(time.text == OverviewFormatting.compactShiftTimeRange(
+        )?.date)
+        #expect(time.text == OverviewFormatting.shiftRowHeading(
             older,
             timeZoneIdentifier: job.timeZoneIdentifier,
             locale: displayLocale
-        ))
+        )?.time)
         #expect(amount.text == OverviewFormatting.currency(
             160, currencyCode: job.currencyCode, locale: displayLocale
         ))
@@ -1709,8 +1709,8 @@ struct OverviewViewControllerTests {
         card.sendActions(for: .touchUpInside)
 
         let time: UILabel = try requireView(identifier: "overview.shift.\(overnight.id.uuidString).time", in: card)
-        #expect(time.text == OverviewFormatting.compactShiftTimeRange(overnight,
-            timeZoneIdentifier: job.timeZoneIdentifier, locale: displayLocale))
+        #expect(time.text == OverviewFormatting.shiftRowHeading(overnight,
+            timeZoneIdentifier: job.timeZoneIdentifier, locale: displayLocale)?.time)
         #expect(descendant(identifier: "overview.shift.\(overnight.id.uuidString).endpoints", in: card) == nil)
         let fullDate = try #require(OverviewFormatting.shiftDate(
             overnight,
@@ -1752,6 +1752,125 @@ struct OverviewViewControllerTests {
             CGSize(width: amount.bounds.width, height: CGFloat.greatestFiniteMagnitude)
         ).height)
         #expect(amount.convert(amount.bounds, to: view).minY >= date.convert(date.bounds, to: view).maxY)
+    }
+
+    @Test("Multi-day row keeps endpoints together across widths and traits",
+          arguments: [CGFloat(320), 375, 402], ["ru_RU", "en_US"])
+    func rowBoundaryGeometry(_ width: CGFloat, _ localeID: String) throws {
+        for scenario in 0..<3 {
+            let job = try Job(id: testWorkTypeID, currencyCode: "EUR",
+                timeZoneIdentifier: scenario == 0 ? "Europe/Stockholm" : "America/New_York",
+                basePayBasis: .hourly, payCalculationCycle: .scheduled(.calendarMonthly),
+                payRates: [try PayRate(amount: 20, effectiveFrom: nil)],
+                createdAt: Date(timeIntervalSinceReferenceDate: 0))
+            let start: Date
+            if scenario == 0 {
+                start = try date(year: 2026, month: 9, day: 10, hour: 14).addingTimeInterval(43 * 60)
+            } else {
+                start = try #require(ISO8601DateFormatter().date(from: scenario == 1
+                    ? "2026-11-01T05:30:00Z" : "2026-03-08T06:30:00Z"))
+            }
+            let zone = scenario == 0 ? job.timeZoneIdentifier : "America/New_York"
+            let shift = try Shift(id: UUID(), jobID: job.id, workTypeID: testWorkTypeID,
+                                  start: start, end: start.addingTimeInterval(scenario == 0 ? 48 * 3600 : 3600))
+            let subject = try makeSubject(job: job, shifts: [shift])
+            let locale = Locale(identifier: localeID)
+            let controller = OverviewViewController(viewModel: subject.viewModel, currencyCode: job.currencyCode,
+                timeZoneIdentifier: zone, displayLocale: locale)
+            let window = UIWindow(frame: CGRect(x: 0, y: 0, width: width, height: 874))
+            window.rootViewController = controller
+            window.isHidden = false
+            defer { window.isHidden = true }
+            let root = try requireRootView(controller)
+            let prefix = "overview.shift.\(shift.id.uuidString)"
+            let row: UIControl = try requireView(identifier: prefix, in: root)
+            let date: UILabel = try requireView(identifier: "\(prefix).date", in: row)
+            let time: UILabel = try requireView(identifier: "\(prefix).time", in: row)
+            let amount: UILabel = try requireView(identifier: "\(prefix).expected", in: row)
+            let duration: UILabel = try requireView(identifier: "\(prefix).duration", in: row)
+            let initialMoney = amount.text
+            let initialDuration = duration.text
+            let expected = try #require(OverviewFormatting.shiftRowHeading(shift,
+                timeZoneIdentifier: zone, locale: locale))
+            for appearance in [UIUserInterfaceStyle.light, .dark] {
+                controller.overrideUserInterfaceStyle = appearance
+                for (step, category) in [UIContentSizeCategory.large, .accessibilityExtraExtraExtraLarge, .large].enumerated() {
+                    controller.traitOverrides.preferredContentSizeCategory = category
+                    for _ in 0..<5 { root.setNeedsLayout(); window.layoutIfNeeded() }
+                    #expect(date.text == expected.date && time.text == expected.time)
+                    #expect((date.superview === time.superview) == (scenario == 0))
+                    if scenario > 0 {
+                        #expect(time.text?.contains("GMT-04:00") == true)
+                        #expect(time.text?.contains("GMT-05:00") == true)
+                    }
+                    if scenario > 0 {
+                        let clock = localeID == "ru_RU" ? "01:30" : "1:30 AM"
+                        let endClock = scenario == 1 ? clock : (localeID == "ru_RU" ? "03:30" : "3:30 AM")
+                        let startOffset = scenario == 1 ? "GMT-04:00" : "GMT-05:00"
+                        let endOffset = scenario == 1 ? "GMT-05:00" : "GMT-04:00"
+                        let normalized = (time.text ?? "").components(separatedBy: .whitespacesAndNewlines)
+                            .filter { !$0.isEmpty }.joined(separator: " ")
+                        #expect(normalized == "\(clock) \(startOffset)–\(endClock) \(endOffset)")
+                        let storage = NSTextStorage(string: time.text ?? "", attributes: [.font: time.font as Any])
+                        let manager = NSLayoutManager()
+                        let container = NSTextContainer(size: CGSize(width: time.bounds.width, height: .greatestFiniteMagnitude))
+                        container.lineFragmentPadding = 0
+                        container.lineBreakMode = time.lineBreakMode
+                        manager.addTextContainer(container)
+                        storage.addLayoutManager(manager)
+                        manager.ensureLayout(for: container)
+                        for offset in ["GMT-04:00", "GMT-05:00"] {
+                            let range = ((time.text ?? "") as NSString).range(of: offset)
+                            let glyphs = manager.glyphRange(forCharacterRange: range, actualCharacterRange: nil)
+                            var line = NSRange()
+                            _ = manager.lineFragmentRect(forGlyphAt: glyphs.location, effectiveRange: &line)
+                            #expect(NSMaxRange(glyphs) <= NSMaxRange(line))
+                        }
+                        if category.isAccessibilityCategory { #expect(time.font.pointSize >= 17) }
+                        if category == .large { #expect(abs(time.font.pointSize - 14) < 0.01) }
+                        #expect(amount.text == OverviewFormatting.currency(20, currencyCode: "EUR", locale: locale))
+                        #expect(shift.paidDuration == 3600)
+                        #expect(duration.text == OverviewStrings.paidDuration(OverviewFormatting.duration(3600)))
+                        #expect(shift.end == ISO8601DateFormatter().date(from: scenario == 1
+                            ? "2026-11-01T06:30:00Z" : "2026-03-08T07:30:00Z"))
+                        print("SL531 HOSTED \(width) \(localeID) scenario=\(scenario) \(appearance.rawValue) \(category.rawValue) row=\(row.bounds) date=\(date.frame) time=\(time.frame) font=\(time.font.pointSize) money=\(amount.frame) duration=\(duration.frame)")
+                        if step < 2 {
+                            let data = try #require(UIGraphicsImageRenderer(bounds: row.bounds).image { context in
+                                row.layer.render(in: context.cgContext)
+                            }.pngData())
+                            let fixture = scenario == 1 ? "fallback" : "spring"
+                            let style = appearance == .light ? "light" : "dark"
+                            let size = category == .large ? "normal" : "axxxl"
+                            Attachment.record(Array(data), named: "dst-\(fixture)-\(localeID)-\(Int(width))-\(style)-\(size).png")
+                        }
+                    }
+                    #expect(amount.text == initialMoney && duration.text == initialDuration)
+                    for label in [date, time, amount, duration] {
+                        #expect(label.bounds.width > 0)
+                        #expect(label.bounds.height + 0.5 >= label.sizeThatFits(
+                            CGSize(width: label.bounds.width, height: .greatestFiniteMagnitude)).height)
+                        let frame = label.convert(label.bounds, to: row)
+                        #expect(frame.minX >= 0 && frame.maxX <= row.bounds.width + 0.5)
+                    }
+                    let endFrame = time.convert(time.bounds, to: row)
+                    let amountFrame = amount.convert(amount.bounds, to: row)
+                    #expect(!endFrame.intersects(amountFrame))
+                    #expect(time.convert(time.bounds, to: row).minY >= date.convert(date.bounds, to: row).maxY)
+                    let frames = [date.frame, time.frame, amount.frame, duration.frame]
+                    for _ in 0..<3 { root.setNeedsLayout(); window.layoutIfNeeded() }
+                    #expect(frames == [date.frame, time.frame, amount.frame, duration.frame])
+                    #expect(row.hitTest(CGPoint(x: 8, y: 8), with: nil) === row)
+                }
+            }
+            row.sendActions(for: .touchUpInside)
+            let selected = try requireContent(subject.viewModel.state)
+            #expect(selected.selectedShiftID == shift.id)
+            #expect(selected.expandedShiftID == nil)
+            row.sendActions(for: .touchUpInside)
+            #expect(try requireContent(subject.viewModel.state).expandedShiftID == shift.id)
+            row.sendActions(for: .touchUpInside)
+            #expect(try requireContent(subject.viewModel.state).expandedShiftID == nil)
+        }
     }
 
     @Test("Per-shift card selection drives payroll while retaining every persisted card")
