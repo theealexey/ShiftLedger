@@ -234,7 +234,7 @@ final class ShiftLedgerUITests: XCTestCase {
         app.launch()
         defer { app.terminate() }
         try completeFixedPerShiftOnboarding(in: app, scheduledPayroll: false)
-        _ = try requireElement(app.staticTexts["overview.receipt.brand"], message: "Empty PerShift must retain receipt paper")
+        _ = try requireElement(app.staticTexts["overview.navigation.brand"], message: "Empty PerShift must retain navigation branding")
         _ = try requireElement(app.staticTexts["overview.empty.title"], message: "Empty PerShift must explain how to begin")
         XCTAssertFalse(app.buttons["overview.checkPaycheck"].exists)
         attachScreenshot(named: "SL511-final-empty-per-shift-receipt", from: app)
@@ -265,7 +265,7 @@ final class ShiftLedgerUITests: XCTestCase {
         XCTAssertNotEqual(period.label, olderPeriod)
         XCTAssertFalse(app.scrollViews["overview.period.rail"].isHittable)
         _ = try scrollToHittable(
-            requerying: { app.staticTexts["overview.receipt.brand"] },
+            requerying: { app.staticTexts["overview.receipt.perShiftPeriod"] },
             in: app, direction: .towardTop, message: "PerShift receipt heading must be reachable"
         )
         attachScreenshot(named: "SL511-receipt-per-shift-two-records", from: app)
@@ -304,7 +304,7 @@ final class ShiftLedgerUITests: XCTestCase {
         XCTAssertEqual(period.label, olderPeriod)
         XCTAssertEqual(Set(shiftCards(in: app).map(\.identifier)), identities)
         _ = try scrollToHittable(
-            requerying: { app.staticTexts["overview.receipt.brand"] },
+            requerying: { app.staticTexts["overview.receipt.perShiftPeriod"] },
             in: app, direction: .towardTop, message: "Collapsed receipt must resize and remain scrollable"
         )
         attachScreenshot(named: "SL511-receipt-per-shift-historical-collapsed", from: app)
@@ -336,7 +336,7 @@ final class ShiftLedgerUITests: XCTestCase {
         app.launch()
         try assertShiftCount(1, expectedHeroAmount: "1.00", in: app)
         _ = try scrollToHittable(
-            requerying: { app.staticTexts["overview.receipt.brand"] },
+            requerying: { app.staticTexts["overview.period.label"] },
             in: app, direction: .towardTop,
             message: "Accessibility receipt heading must remain readable"
         )
@@ -390,7 +390,7 @@ final class ShiftLedgerUITests: XCTestCase {
         }
         app.launch()
         _ = try scrollToHittable(
-            requerying: { app.staticTexts["overview.receipt.brand"] },
+            requerying: { app.scrollViews["overview.period.rail"] },
             in: app, direction: .towardTop, message: "Russian receipt heading must be reachable"
         )
         attachScreenshot(named: "SL511-refinement-russian-top", from: app)
@@ -417,7 +417,7 @@ final class ShiftLedgerUITests: XCTestCase {
         ]
         app.launch()
         _ = try scrollToHittable(
-            requerying: { app.staticTexts["overview.receipt.brand"] }, in: app,
+            requerying: { app.staticTexts["overview.period.label"] }, in: app,
             direction: .towardTop, message: "Russian XXL receipt heading must be reachable"
         )
         attachScreenshot(named: "SL511-final-russian-xxl-top", from: app)
@@ -486,7 +486,7 @@ final class ShiftLedgerUITests: XCTestCase {
         XCTAssertEqual(normalizedWhitespace(app.otherElements["overview.receipt.precision.exactField"].label), "Exact total, €12.048")
         XCTAssertEqual(normalizedWhitespace(app.otherElements["overview.receipt.precision.displayedField"].label), "Displayed, €12.05")
         _ = try scrollToHittable(
-            requerying: { app.staticTexts["overview.receipt.brand"] },
+            requerying: { app.scrollViews["overview.period.rail"] },
             in: app,
             direction: .towardTop,
             message: "Receipt heading and precision explanation must be reachable"
@@ -588,7 +588,7 @@ final class ShiftLedgerUITests: XCTestCase {
         XCTAssertEqual(normalizedWhitespace(accessibilityApp.staticTexts["overview.expectedGross.amount"].label), "Expected gross · EUR, 12.05")
         XCTAssertEqual(Set(shiftCards(in: accessibilityApp).map(\.identifier)), Set(identifiers))
         _ = try scrollToHittable(
-            requerying: { accessibilityApp.staticTexts["overview.receipt.brand"] },
+            requerying: { accessibilityApp.staticTexts["overview.period.label"] },
             in: accessibilityApp, direction: .towardTop,
             message: "Twelve-Shift receipt heading must remain reachable at Accessibility XXL"
         )

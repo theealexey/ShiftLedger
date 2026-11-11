@@ -46,7 +46,19 @@ final class OverviewViewController: UIViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        title = OverviewStrings.title
+        let brand = UILabel()
+        brand.text = "ShiftLedger"
+        brand.textColor = ShiftLedgerColors.textPrimary
+        brand.accessibilityIdentifier = "overview.navigation.brand"
+        brand.accessibilityTraits = .header
+        brand.adjustsFontForContentSizeCategory = true
+        let base = UIFont.systemFont(ofSize: 20, weight: .semibold)
+        let serif = base.fontDescriptor.withDesign(.serif).map { UIFont(descriptor: $0, size: 20) } ?? base
+        brand.font = UIFontMetrics(forTextStyle: .title3).scaledFont(
+            for: serif, maximumPointSize: 28, compatibleWith: traitCollection
+        )
+        title = brand.text
+        navigationItem.titleView = brand
         configureNavigationItem()
         bindView()
         viewModel.load()

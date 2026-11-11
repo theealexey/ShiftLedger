@@ -248,6 +248,7 @@ final class ActualGrossEntryView: UIView {
         configuration.title = ActualGrossEntryStrings.compare
         configuration.cornerStyle = .large
         configuration.baseBackgroundColor = ShiftLedgerColors.accentPrimary
+        configuration.baseForegroundColor = ShiftLedgerColors.onAccent
         compareButton.configuration = configuration
         compareButton.titleLabel?.font = ShiftLedgerTypography.button
         compareButton.titleLabel?.adjustsFontForContentSizeCategory = true

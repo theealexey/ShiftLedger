@@ -173,7 +173,7 @@ final class OverviewShiftLedgerRowView: UIControl {
             : nil
         isAccessibilityElement = true
 
-        backgroundColor = card.isSelected ? OverviewReceiptPaperView.selectedSurface : .clear
+        backgroundColor = card.isSelected ? ShiftLedgerColors.surfaceSelected : .clear
         selectedRule.isHidden = !card.isSelected
         dateLabel.text = card.frontDate
         dateLabel.accessibilityIdentifier = "\(prefix).date"

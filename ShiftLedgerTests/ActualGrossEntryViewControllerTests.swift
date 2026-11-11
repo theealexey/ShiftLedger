@@ -122,6 +122,27 @@ struct ActualGrossEntryViewControllerTests {
             in: viewController.view
         )
 
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 402, height: 874))
+        window.rootViewController = viewController
+        window.isHidden = false
+        defer { window.isHidden = true }
+        for style: UIUserInterfaceStyle in [.light, .dark, .light] {
+            window.overrideUserInterfaceStyle = style
+            window.layoutIfNeeded()
+            for enabled in [true, false, true] {
+                button.isEnabled = enabled
+                button.updateConfiguration()
+                let configuration = try #require(button.configuration)
+                let traits = button.traitCollection
+                #expect(traits.userInterfaceStyle == style)
+                #expect(configuration.baseBackgroundColor?.resolvedColor(with: traits)
+                    == ShiftLedgerColors.accentPrimary.resolvedColor(with: traits))
+                #expect(configuration.baseForegroundColor?.resolvedColor(with: traits)
+                    == ShiftLedgerColors.onAccent.resolvedColor(with: traits))
+                #expect(button.isEnabled == enabled)
+            }
+        }
+
         button.sendActions(for: .touchUpInside)
 
         #expect(callCount == 1)

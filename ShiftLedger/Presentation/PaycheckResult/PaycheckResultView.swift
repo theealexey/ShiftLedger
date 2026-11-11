@@ -221,6 +221,7 @@ final class PaycheckResultView: UIView {
         configuration.title = PaycheckResultStrings.done
         configuration.cornerStyle = .large
         configuration.baseBackgroundColor = ShiftLedgerColors.accentPrimary
+        configuration.baseForegroundColor = ShiftLedgerColors.onAccent
         doneButton.configuration = configuration
         doneButton.titleLabel?.font = ShiftLedgerTypography.button
         doneButton.titleLabel?.adjustsFontForContentSizeCategory = true

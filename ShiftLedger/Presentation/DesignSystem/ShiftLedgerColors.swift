@@ -14,11 +14,14 @@ enum ShiftLedgerColors {
     static let backgroundSecondary = UIColor(resource: .DesignSystem.backgroundSecondary)
     static let surfacePrimary = UIColor(resource: .DesignSystem.surfacePrimary)
 
+    static let surfaceSelected = UIColor(resource: .DesignSystem.surfaceSelected)
+
     static let textPrimary = UIColor(resource: .DesignSystem.textPrimary)
     static let textSecondary = UIColor(resource: .DesignSystem.textSecondary)
     static let textTertiary = UIColor(resource: .DesignSystem.textTertiary)
 
     static let accentPrimary = UIColor(resource: .DesignSystem.accentPrimary)
+    static let onAccent = UIColor(resource: .DesignSystem.onAccent)
     static let separator = UIColor(resource: .DesignSystem.separator)
 
     static let statusNegative = UIColor(resource: .DesignSystem.statusNegative)

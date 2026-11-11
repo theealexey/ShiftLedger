@@ -2,17 +2,7 @@ import UIKit
 
 /// Decorative paper only; receipt content remains ordinary, interactive UIKit views.
 final class OverviewReceiptPaperView: UIView {
-    static let surface = UIColor { traits in
-        traits.userInterfaceStyle == .dark
-            ? UIColor(red: 0.13, green: 0.14, blue: 0.15, alpha: 1)
-            : UIColor(red: 0.985, green: 0.975, blue: 0.95, alpha: 1)
-    }
-
-    static let selectedSurface = UIColor { traits in
-        traits.userInterfaceStyle == .dark
-            ? UIColor(red: 0.20, green: 0.21, blue: 0.22, alpha: 1)
-            : UIColor(red: 0.94, green: 0.925, blue: 0.88, alpha: 1)
-    }
+    static let surface = ShiftLedgerColors.surfacePrimary
 
     private let paperLayer = CAShapeLayer()
     private var lastSize: CGSize = .zero
@@ -116,6 +106,6 @@ final class OverviewReceiptRuleView: UIView {
     }
 
     private func updateColor() {
-        ruleLayer.strokeColor = ShiftLedgerColors.textTertiary.resolvedColor(with: traitCollection).cgColor
+        ruleLayer.strokeColor = ShiftLedgerColors.separator.resolvedColor(with: traitCollection).cgColor
     }
 }

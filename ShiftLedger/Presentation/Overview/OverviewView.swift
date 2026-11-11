@@ -43,10 +43,6 @@ final class OverviewView: UIView, UIScrollViewDelegate {
     private let mainStack = UIStackView()
     private let receiptPaper = OverviewReceiptPaperView()
     private let receiptStack = UIStackView()
-    private let receiptHeader = UIStackView()
-    private let brandLabel = UILabel()
-    private let subtitleLabel = UILabel()
-    private let headerRule = OverviewReceiptRuleView()
     private let periodRule = OverviewReceiptRuleView()
     private let grossRule = OverviewReceiptRuleView()
     private let bottomRule = OverviewReceiptRuleView()
@@ -110,7 +106,6 @@ final class OverviewView: UIView, UIScrollViewDelegate {
         registerForTraitChanges([UITraitPreferredContentSizeCategory.self]) { (self: Self, _) in
             self.updatePeriodRailForContentSizeCategory()
             self.updateActionButtonsForContentSizeCategory()
-            self.updateReceiptHeaderFonts()
             self.setNeedsLayout()
         }
         renderIdle()
@@ -282,26 +277,6 @@ final class OverviewView: UIView, UIScrollViewDelegate {
         receiptPaper.accessibilityIdentifier = "overview.receipt.paper"
         receiptStack.axis = .vertical
         receiptStack.spacing = 16
-        receiptHeader.axis = .vertical
-        receiptHeader.alignment = .center
-        receiptHeader.spacing = 4
-        brandLabel.text = OverviewStrings.receiptBrand
-        subtitleLabel.text = OverviewStrings.receiptSubtitle
-        for (label, size, weight) in [
-            (brandLabel, CGFloat(15), UIFont.Weight.semibold),
-            (subtitleLabel, CGFloat(13), UIFont.Weight.medium)
-        ] {
-            configureLabel(label, font: UIFontMetrics(forTextStyle: .caption1).scaledFont(
-                for: .monospacedSystemFont(ofSize: size, weight: weight)
-            ), color: ShiftLedgerColors.textPrimary)
-            label.textAlignment = .center
-            label.isAccessibilityElement = true
-        }
-        brandLabel.numberOfLines = 1
-        [brandLabel, subtitleLabel].forEach { $0.adjustsFontForContentSizeCategory = false }
-        updateReceiptHeaderFonts()
-        brandLabel.accessibilityIdentifier = "overview.receipt.brand"
-        subtitleLabel.accessibilityIdentifier = "overview.receipt.subtitle"
         perShiftPeriodLabel.accessibilityIdentifier = "overview.receipt.perShiftPeriod"
         configureLabel(perShiftPeriodLabel, font: ShiftLedgerTypography.headline, color: ShiftLedgerColors.textPrimary)
         perShiftPeriodLabel.textAlignment = .center
@@ -314,10 +289,9 @@ final class OverviewView: UIView, UIScrollViewDelegate {
         perShiftHeading.spacing = 6
         perShiftHeading.addArrangedSubview(perShiftPeriodLabel)
         perShiftHeading.addArrangedSubview(perShiftTimeLabel)
-        for rule in [headerRule, periodRule, grossRule, bottomRule] {
+        for rule in [periodRule, grossRule, bottomRule] {
             rule.heightAnchor.constraint(equalToConstant: 1).isActive = true
         }
-        headerRule.accessibilityIdentifier = "overview.receipt.rule.header"
         bottomRule.accessibilityIdentifier = "overview.receipt.rule.bottom"
 
         contentCard.backgroundColor = .clear
@@ -479,7 +453,6 @@ final class OverviewView: UIView, UIScrollViewDelegate {
             mainStack,
             receiptPaper,
             receiptStack,
-            receiptHeader,
             periodRailContainer,
             periodRailViewport,
             periodRailScrollView,
@@ -499,10 +472,9 @@ final class OverviewView: UIView, UIScrollViewDelegate {
         [receiptPaper, checkPaycheckButton, addShiftButton, errorCard]
             .forEach(mainStack.addArrangedSubview)
         receiptPaper.addSubview(receiptStack)
-        [receiptHeader, headerRule, emptyCard, periodRailContainer, perShiftHeading, periodRule,
+        [emptyCard, periodRailContainer, perShiftHeading, periodRule,
          contentCard, grossRule, shiftHistoryStack, bottomRule]
             .forEach(receiptStack.addArrangedSubview)
-        [brandLabel, subtitleLabel].forEach(receiptHeader.addArrangedSubview)
 
         periodRailContainer.addArrangedSubview(periodLabel)
         periodRailContainer.addArrangedSubview(navigationStack)
@@ -643,6 +615,7 @@ final class OverviewView: UIView, UIScrollViewDelegate {
         configuration.cornerStyle = .large
         if isPrimary {
             configuration.baseBackgroundColor = ShiftLedgerColors.accentPrimary
+            configuration.baseForegroundColor = ShiftLedgerColors.onAccent
         } else {
             configuration.baseForegroundColor = ShiftLedgerColors.accentPrimary
             configuration.background.backgroundColor = ShiftLedgerColors.backgroundSecondary
@@ -872,18 +845,6 @@ final class OverviewView: UIView, UIScrollViewDelegate {
             font = preferred.withSize(lower)
         }
         if shiftCountLabel.font != font { shiftCountLabel.font = font }
-    }
-
-    private func updateReceiptHeaderFonts() {
-        let metrics = UIFontMetrics(forTextStyle: .caption1)
-        brandLabel.font = metrics.scaledFont(
-            for: .monospacedSystemFont(ofSize: 15, weight: .semibold),
-            maximumPointSize: 20, compatibleWith: traitCollection
-        )
-        subtitleLabel.font = metrics.scaledFont(
-            for: .monospacedSystemFont(ofSize: 13, weight: .medium),
-            maximumPointSize: 18, compatibleWith: traitCollection
-        )
     }
 
     private func updatePeriodRailForContentSizeCategory() {

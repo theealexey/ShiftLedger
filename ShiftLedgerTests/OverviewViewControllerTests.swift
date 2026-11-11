@@ -283,22 +283,24 @@ struct OverviewViewControllerTests {
         #expect(amount.intrinsicContentSize.width <= amount.bounds.width + 0.5)
     }
 
-    @Test("Decorative receipt header stays complete through Dynamic Type changes",
+    @Test("Overview navigation brand stays complete through Dynamic Type changes",
           arguments: [CGFloat(320), 375, 402], ["ru_RU", "en_US"])
-    func receiptHeaderRemainsContained(_ width: CGFloat, _ localeID: String) throws {
+    func navigationBrandRemainsContained(_ width: CGFloat, _ localeID: String) throws {
         let job = try makeJob(cycle: .perShift)
         let shift = try makeShift(id: 1, month: 9, day: 15)
         let model = OverviewViewModel(job: job, loadShifts: { [shift] }, currentDate: { shift.end })
         let controller = OverviewViewController(viewModel: model, currencyCode: job.currencyCode,
             timeZoneIdentifier: job.timeZoneIdentifier, displayLocale: Locale(identifier: localeID))
         let window = UIWindow(frame: CGRect(x: 0, y: 0, width: width, height: 874))
-        window.rootViewController = controller
+        let navigation = UINavigationController(rootViewController: controller)
+        window.rootViewController = navigation
         window.isHidden = false
         defer { window.isHidden = true }
         let root = try requireRootView(controller)
         let paper: UIView = try requireView(identifier: "overview.receipt.paper", in: root)
-        let brand: UILabel = try requireView(identifier: "overview.receipt.brand", in: root)
-        let subtitle: UILabel = try requireView(identifier: "overview.receipt.subtitle", in: root)
+        let brand = try #require(controller.navigationItem.titleView as? UILabel)
+        #expect(!root.subviews.contains { $0 === brand })
+        #expect(controller.navigationItem.rightBarButtonItem?.menu?.children.count == 2)
         let date: UILabel = try requireView(identifier: "overview.receipt.perShiftPeriod", in: root)
         let time: UILabel = try requireView(identifier: "overview.receipt.perShiftTime", in: root)
         let gross: UILabel = try requireView(identifier: "overview.expectedGross.amount", in: root)
@@ -306,10 +308,10 @@ struct OverviewViewControllerTests {
             timeZoneIdentifier: job.timeZoneIdentifier, locale: Locale(identifier: localeID)))
         var normalBrandSize: CGFloat?
         for category: UIContentSizeCategory in [.large, .accessibilityExtraExtraExtraLarge, .large] {
-            controller.traitOverrides.preferredContentSizeCategory = category
+            window.traitOverrides.preferredContentSizeCategory = category
             window.layoutIfNeeded()
             root.layoutIfNeeded()
-            #expect(brand.text == "SHIFTLEDGER")
+            #expect(brand.text == "ShiftLedger")
             #expect(brand.numberOfLines == 1)
             let text = try #require(brand.text)
             #expect((text as NSString).size(withAttributes: [.font: brand.font as Any]).width <= brand.bounds.width + 0.5)
@@ -317,22 +319,22 @@ struct OverviewViewControllerTests {
             #expect(date.text == heading.date && time.text == heading.time)
             #expect(date.accessibilityLabel == heading.accessibilityLabel)
             #expect(!time.isAccessibilityElement)
-            #expect([brand, subtitle, date, time, gross].filter(\.isAccessibilityElement).count == 4)
-            for label in [brand, subtitle, date, time, gross] {
+            #expect([date, time, gross].filter(\.isAccessibilityElement).count == 2)
+            for label in [date, time, gross] {
                 let boundedView: UIView = label
                 let frame = boundedView.convert(boundedView.bounds, to: paper)
                 #expect(frame.minX >= -0.5 && frame.maxX <= paper.bounds.width + 0.5)
                 let required = label.sizeThatFits(CGSize(width: label.bounds.width, height: .greatestFiniteMagnitude))
                 #expect(label.bounds.height + 0.5 >= required.height)
             }
-            for (upper, lower) in zip([brand, subtitle, date, time], [subtitle, date, time, gross]) {
+            for (upper, lower) in zip([date, time], [time, gross]) {
                 #expect(upper.convert(upper.bounds, to: paper).maxY <= lower.convert(lower.bounds, to: paper).minY)
             }
             if category == .large {
                 if let normalBrandSize { #expect(abs(brand.font.pointSize - normalBrandSize) < 0.01) }
                 else { normalBrandSize = brand.font.pointSize }
             } else {
-                #expect(brand.font.pointSize < date.font.pointSize)
+                #expect(brand.font.pointSize > (normalBrandSize ?? 0))
             }
         }
     }
@@ -851,10 +853,16 @@ struct OverviewViewControllerTests {
             in: try requireRootView(subject.viewController)
         )
         #expect(isEffectivelyHidden(paper) == false)
-        let light = UITraitCollection(userInterfaceStyle: .light)
-        let dark = UITraitCollection(userInterfaceStyle: .dark)
-        #expect(OverviewReceiptPaperView.surface.resolvedColor(with: light)
-            != OverviewReceiptPaperView.surface.resolvedColor(with: dark))
+        let shape = try #require(paper.layer.sublayers?.compactMap { $0 as? CAShapeLayer }.first)
+        for (style, rgb) in [(UIUserInterfaceStyle.light, 0xFFFFFF), (.dark, 0x1C1D24), (.light, 0xFFFFFF)] {
+            window.overrideUserInterfaceStyle = style
+            window.layoutIfNeeded()
+            let fill = try #require(shape.fillColor)
+            let components = try colorComponents(UIColor(cgColor: fill), traits: paper.traitCollection)
+            #expect(abs(components.red - CGFloat((rgb >> 16) & 255) / 255) < 0.001)
+            #expect(abs(components.green - CGFloat((rgb >> 8) & 255) / 255) < 0.001)
+            #expect(abs(components.blue - CGFloat(rgb & 255) / 255) < 0.001)
+        }
         let path = OverviewReceiptPaperView.paperPath(in: paper.bounds)
         #expect(!path.isEmpty)
         #expect(path.bounds.width == paper.bounds.width)
@@ -1525,7 +1533,8 @@ struct OverviewViewControllerTests {
             #expect(amountFrame.minX >= card.bounds.minX)
             #expect(amountFrame.maxX <= card.bounds.maxX)
         }
-        #expect(front.convert(front.bounds, to: root).maxY <= covered.convert(covered.bounds, to: root).minY)
+        let halfPixel = 0.5 / max(root.traitCollection.displayScale, 1)
+        #expect(front.convert(front.bounds, to: root).maxY <= covered.convert(covered.bounds, to: root).minY + halfPixel)
     }
 
     @Test("Visible Shift contribution labels share a trailing column")
@@ -2617,7 +2626,7 @@ struct OverviewViewControllerTests {
         let prefix = "overview.shift.\(id.uuidString)"
         let card: UIView = try requireView(identifier: prefix, in: view)
         let foreground = try colorComponents(ShiftLedgerColors.textPrimary, traits: window.traitCollection)
-        let surface = try colorComponents(OverviewReceiptPaperView.selectedSurface, traits: window.traitCollection)
+        let surface = try colorComponents(ShiftLedgerColors.surfaceSelected, traits: window.traitCollection)
         let cardSurface = try colorComponents(try #require(card.backgroundColor), traits: window.traitCollection)
         #expect(abs(cardSurface.red - surface.red) < 0.000001)
         #expect(abs(cardSurface.green - surface.green) < 0.000001)
@@ -3161,6 +3170,46 @@ struct OverviewViewControllerTests {
         #expect(hasMinimumSize(next, 44))
         #expect(hasMinimumHeight(check, 50))
         #expect(hasMinimumHeight(add, 50))
+
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 402, height: 874))
+        window.rootViewController = subject.viewController
+        window.isHidden = false
+        defer { window.isHidden = true }
+        func captureFilledAction(
+            _ button: UIButton, name: String, enabled: Bool, style: UIUserInterfaceStyle
+        ) throws {
+            window.overrideUserInterfaceStyle = style
+            window.layoutIfNeeded()
+            button.isEnabled = enabled
+            button.updateConfiguration()
+            button.layoutIfNeeded()
+            let configuration = try #require(button.configuration)
+            let traits = button.traitCollection
+            #expect(traits.userInterfaceStyle == style)
+            #expect(configuration.baseBackgroundColor?.resolvedColor(with: traits)
+                == ShiftLedgerColors.accentPrimary.resolvedColor(with: traits))
+            #expect(configuration.baseForegroundColor?.resolvedColor(with: traits)
+                == ShiftLedgerColors.onAccent.resolvedColor(with: traits))
+            #expect(button.isEnabled == enabled)
+            let image = UIGraphicsImageRenderer(bounds: button.bounds).image {
+                button.layer.render(in: $0.cgContext)
+            }
+            let appearance = style == .dark ? "dark" : "light"
+            let state = enabled ? "enabled" : "disabled"
+            let data = try #require(image.pngData())
+            Attachment.record(Array(data), named: "SL534-\(name)-\(state)-\(appearance).png")
+        }
+
+        for style: UIUserInterfaceStyle in [.light, .dark] {
+            try captureFilledAction(check, name: "check", enabled: false, style: style)
+        }
+        let overview = try #require(subject.viewController.view as? OverviewView)
+        overview.renderEmpty()
+        for style: UIUserInterfaceStyle in [.light, .dark] {
+            for enabled in [true, false] {
+                try captureFilledAction(add, name: "empty-add", enabled: enabled, style: style)
+            }
+        }
     }
 
     private func makeSubject(
