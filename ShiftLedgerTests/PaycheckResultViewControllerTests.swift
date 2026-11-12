@@ -816,6 +816,81 @@ struct PaycheckResultViewControllerTests {
         )
     }
 
+    @Test("Paid-time title preserves complete localized words", arguments: [320.0, 375.0, 402.0])
+    func paidTimeWords(_ width: Double) throws {
+        let fixture = try makeHostedResultViewController(contentSizeCategory: .large)
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: width, height: 874))
+        window.rootViewController = fixture.host
+        window.isHidden = false
+        defer { window.isHidden = true }
+        let row = try requireMetricRow(identifier: "duration", in: fixture.result.view)
+        let title = try #require(row.arrangedSubviews.first as? UILabel)
+        let value = try #require(row.arrangedSubviews.last as? UILabel)
+        let initialValue = value.text
+        for language in ["ru", "en"] {
+            let path = try #require(Bundle(for: PaycheckResultView.self).path(forResource: language, ofType: "lproj"))
+            let bundle = try #require(Bundle(path: path))
+            let text = bundle.localizedString(forKey: "paycheckResult.shift.paidTime", value: nil, table: "Localizable")
+            title.text = text
+            for appearance in [UIUserInterfaceStyle.light, .dark] {
+                fixture.result.overrideUserInterfaceStyle = appearance
+                for (step, category) in [UIContentSizeCategory.large, .accessibilityExtraExtraExtraLarge, .large].enumerated() {
+                    fixture.result.traitOverrides.preferredContentSizeCategory = category
+                    for _ in 0..<5 { fixture.result.view.setNeedsLayout(); window.layoutIfNeeded() }
+                    #expect(title.text == text && value.text == initialValue)
+                    #expect(title.font.pointSize >= 17 || category == .large)
+                    try assertPaidWords(title)
+                    #expect(!title.convert(title.bounds, to: row).intersects(value.convert(value.bounds, to: row)))
+                    let frame = title.frame
+                    let font = title.font
+                    for _ in 0..<3 { row.setNeedsLayout(); window.layoutIfNeeded() }
+                    #expect(title.frame == frame && title.font == font)
+                    if category == .large { #expect(title.font.pointSize == 16) }
+                    if step < 2 {
+                        let image = UIGraphicsImageRenderer(bounds: row.bounds).image { context in
+                            row.layer.render(in: context.cgContext)
+                        }
+                        let data = try #require(image.pngData())
+                        let style = appearance == .dark ? "dark" : "light"
+                        let size = step == 0 ? "normal" : "axxxl"
+                        Attachment.record(Array(data), named: "paid-time-\(language)-\(Int(width))-\(style)-\(size).png")
+                    }
+                }
+            }
+        }
+    }
+
+    private func assertPaidWords(_ label: UILabel) throws {
+        let text = try #require(label.text)
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.lineBreakMode = label.lineBreakMode
+        paragraph.lineBreakStrategy = label.lineBreakStrategy
+        let storage = NSTextStorage(attributedString: label.attributedText ?? NSAttributedString(
+            string: text, attributes: [.font: label.font as Any, .paragraphStyle: paragraph]))
+        let manager = NSLayoutManager()
+        let container = NSTextContainer(size: CGSize(width: label.bounds.width, height: .greatestFiniteMagnitude))
+        container.lineFragmentPadding = 0
+        manager.addTextContainer(container)
+        storage.addLayoutManager(manager)
+        manager.ensureLayout(for: container)
+        let probe = UILabel()
+        probe.font = label.font
+        var search = NSRange(location: 0, length: (text as NSString).length)
+        for word in text.split(whereSeparator: { $0.isWhitespace }) {
+            probe.text = String(word)
+            #expect(probe.sizeThatFits(CGSize(width: CGFloat.greatestFiniteMagnitude,
+                height: CGFloat.greatestFiniteMagnitude)).width <= label.bounds.width)
+            let range = (text as NSString).range(of: String(word), range: search)
+            let glyphs = manager.glyphRange(forCharacterRange: range, actualCharacterRange: nil)
+            var line = NSRange()
+            _ = manager.lineFragmentRect(forGlyphAt: glyphs.location, effectiveRange: &line)
+            #expect(NSMaxRange(glyphs) <= NSMaxRange(line))
+            search = NSRange(location: NSMaxRange(range), length: (text as NSString).length - NSMaxRange(range))
+        }
+        #expect(label.bounds.height + 0.5 >= label.sizeThatFits(
+            CGSize(width: label.bounds.width, height: .greatestFiniteMagnitude)).height)
+    }
+
     private func makeHostedResultViewController(
         contentSizeCategory: UIContentSizeCategory,
         workTypeName: String? = "Lectures"

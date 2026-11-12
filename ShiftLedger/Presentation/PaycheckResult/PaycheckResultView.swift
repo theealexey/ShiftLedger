@@ -337,7 +337,8 @@ final class PaycheckResultView: UIView {
                 title: metric.0,
                 value: metric.1,
                 valueFont: metric.2,
-                identifier: "paycheckResult.breakdown.row.\(index).\(metric.3)"
+                identifier: "paycheckResult.breakdown.row.\(index).\(metric.3)",
+                fitsTitleWords: metric.3 == "duration"
             ))
             if metricIndex < metrics.count - 1 {
                 stack.addArrangedSubview(makeSeparator())
@@ -358,13 +359,15 @@ final class PaycheckResultView: UIView {
         title: String,
         value: String,
         valueFont: UIFont,
-        identifier: String
+        identifier: String,
+        fitsTitleWords: Bool
     ) -> BreakdownMetricRow {
         BreakdownMetricRow(
             title: title,
             value: value,
             valueFont: valueFont,
-            identifier: identifier
+            identifier: identifier,
+            fitsTitleWords: fitsTitleWords
         )
     }
 
@@ -442,11 +445,19 @@ final class PaycheckResultView: UIView {
         private let titleLabel = UILabel()
         private let valueLabel = UILabel()
 
-        init(title: String, value: String, valueFont: UIFont, identifier: String) {
+        private let fitsTitleWords: Bool
+
+        init(title: String, value: String, valueFont: UIFont, identifier: String, fitsTitleWords: Bool) {
+            self.fitsTitleWords = fitsTitleWords
             super.init(frame: .zero)
 
             configureLabel(titleLabel, font: ShiftLedgerTypography.callout, color: ShiftLedgerColors.textSecondary)
             titleLabel.text = title
+            if fitsTitleWords {
+                titleLabel.adjustsFontForContentSizeCategory = false
+                titleLabel.lineBreakMode = .byWordWrapping
+                titleLabel.lineBreakStrategy = []
+            }
             titleLabel.setContentHuggingPriority(.required, for: .horizontal)
             titleLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
 
@@ -463,7 +474,42 @@ final class PaycheckResultView: UIView {
 
         @available(*, unavailable)
         required init(coder: NSCoder) {
+            fitsTitleWords = false
             super.init(coder: coder)
+        }
+
+        override func layoutSubviews() {
+            super.layoutSubviews()
+            guard fitsTitleWords, let text = titleLabel.text, titleLabel.bounds.width > 0 else { return }
+            let base = UIFont.preferredFont(forTextStyle: .callout, compatibleWith: traitCollection)
+            let width = max(1, titleLabel.bounds.width - 1 / max(traitCollection.displayScale, 1))
+            var font = base
+            if traitCollection.preferredContentSizeCategory.isAccessibilityCategory {
+                let words = text.split(whereSeparator: { $0.isWhitespace })
+                let probe = UILabel()
+                func fits(_ font: UIFont) -> Bool {
+                    probe.font = font
+                    return words.allSatisfy {
+                        probe.text = String($0)
+                        return probe.sizeThatFits(CGSize(width: CGFloat.greatestFiniteMagnitude,
+                                                        height: CGFloat.greatestFiniteMagnitude)).width <= width
+                    }
+                }
+                if !fits(base) {
+                    var lower = min(17, base.pointSize)
+                    var upper = base.pointSize
+                    for _ in 0..<12 {
+                        let middle = (lower + upper) / 2
+                        if fits(base.withSize(middle)) {
+                            lower = middle
+                        } else {
+                            upper = middle
+                        }
+                    }
+                    font = base.withSize(lower)
+                }
+            }
+            if titleLabel.font != font { titleLabel.font = font }
         }
 
         private func updateDynamicTypeLayout() {

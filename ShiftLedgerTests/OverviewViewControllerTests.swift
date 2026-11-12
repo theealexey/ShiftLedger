@@ -1919,6 +1919,7 @@ struct OverviewViewControllerTests {
                         Attachment.record(Array(data), named: "\(fixture)-\(localeID)-\(Int(width))-\(style)-\(size).png")
                     }
                     #expect(amount.text == initialMoney && duration.text == initialDuration)
+                    try assertPaidWords(duration)
                     #expect(duration.text == OverviewStrings.paidDuration(OverviewFormatting.duration(shift.paidDuration)))
                     for label in [date, time, amount, duration] {
                         #expect(label.bounds.width > 0)
@@ -1949,6 +1950,37 @@ struct OverviewViewControllerTests {
             row.sendActions(for: .touchUpInside)
             #expect(try requireContent(subject.viewModel.state).expandedShiftID == nil)
         }
+    }
+
+    private func assertPaidWords(_ label: UILabel) throws {
+        let text = try #require(label.text)
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.lineBreakMode = label.lineBreakMode
+        paragraph.lineBreakStrategy = label.lineBreakStrategy
+        let storage = NSTextStorage(attributedString: label.attributedText ?? NSAttributedString(
+            string: text, attributes: [.font: label.font as Any, .paragraphStyle: paragraph]))
+        let manager = NSLayoutManager()
+        let container = NSTextContainer(size: CGSize(width: label.bounds.width, height: .greatestFiniteMagnitude))
+        container.lineFragmentPadding = 0
+        manager.addTextContainer(container)
+        storage.addLayoutManager(manager)
+        manager.ensureLayout(for: container)
+        let probe = UILabel()
+        probe.font = label.font
+        var search = NSRange(location: 0, length: (text as NSString).length)
+        for word in text.split(whereSeparator: { $0.isWhitespace }) {
+            probe.text = String(word)
+            #expect(probe.sizeThatFits(CGSize(width: CGFloat.greatestFiniteMagnitude,
+                height: CGFloat.greatestFiniteMagnitude)).width <= label.bounds.width)
+            let range = (text as NSString).range(of: String(word), range: search)
+            let glyphs = manager.glyphRange(forCharacterRange: range, actualCharacterRange: nil)
+            var line = NSRange()
+            _ = manager.lineFragmentRect(forGlyphAt: glyphs.location, effectiveRange: &line)
+            #expect(NSMaxRange(glyphs) <= NSMaxRange(line))
+            search = NSRange(location: NSMaxRange(range), length: (text as NSString).length - NSMaxRange(range))
+        }
+        #expect(label.bounds.height + 0.5 >= label.sizeThatFits(
+            CGSize(width: label.bounds.width, height: .greatestFiniteMagnitude)).height)
     }
 
     @Test("Per-shift card selection drives payroll while retaining every persisted card")
