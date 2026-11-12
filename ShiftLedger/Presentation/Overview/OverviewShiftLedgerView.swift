@@ -60,7 +60,6 @@ final class OverviewShiftLedgerView: UIView {
 final class OverviewShiftLedgerRowView: UIControl {
     private let content = UIStackView()
     private let heading = UIStackView()
-    private let boundaryStack = UIStackView()
     private let dateLabel = UILabel()
     private let amountLabel = UILabel()
     private let timeLabel = UILabel()
@@ -105,7 +104,7 @@ final class OverviewShiftLedgerRowView: UIControl {
         if timeLabel.adjustsFontForContentSizeCategory == hasOffset {
             timeLabel.adjustsFontForContentSizeCategory = !hasOffset
         }
-        let lineBreak: NSLineBreakMode = hasOffset ? .byWordWrapping : .byTruncatingTail
+        let lineBreak: NSLineBreakMode = .byWordWrapping
         if timeLabel.lineBreakMode != lineBreak { timeLabel.lineBreakMode = lineBreak }
         guard hasOffset else {
             if timeLabel.font != base { timeLabel.font = base }
@@ -181,15 +180,6 @@ final class OverviewShiftLedgerRowView: UIControl {
         amountLabel.accessibilityIdentifier = "\(prefix).expected"
         timeLabel.text = card.timeRange
         timeLabel.accessibilityIdentifier = "\(prefix).time"
-        let boundaryContainer = card.endpoints.startDate == nil ? summary : boundaryStack
-        if timeLabel.superview !== boundaryContainer {
-            timeLabel.removeFromSuperview()
-            if boundaryContainer === summary {
-                summary.insertArrangedSubview(timeLabel, at: 0)
-            } else {
-                boundaryStack.addArrangedSubview(timeLabel)
-            }
-        }
         durationLabel.text = OverviewStrings.paidDuration(card.paidDuration)
         durationLabel.accessibilityIdentifier = "\(prefix).duration"
 
@@ -234,13 +224,11 @@ final class OverviewShiftLedgerRowView: UIControl {
         heading.spacing = 8
         amountLabel.textAlignment = .right
         amountLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
-        boundaryStack.axis = .vertical
-        boundaryStack.spacing = 4
-        boundaryStack.addArrangedSubview(dateLabel)
-        heading.addArrangedSubview(boundaryStack)
+        heading.addArrangedSubview(dateLabel)
         heading.addArrangedSubview(amountLabel)
 
         summary.axis = .horizontal
+        summary.alignment = .center
         summary.spacing = 12
         summary.addArrangedSubview(timeLabel)
         summary.addArrangedSubview(summarySpacer)
@@ -335,6 +323,8 @@ final class OverviewShiftLedgerRowView: UIControl {
         label.font = font
         label.textColor = color
         label.numberOfLines = 0
+        label.lineBreakMode = .byWordWrapping
+        label.lineBreakStrategy = []
         label.adjustsFontForContentSizeCategory = true
         label.isAccessibilityElement = false
     }
@@ -345,26 +335,29 @@ final class OverviewShiftLedgerRowView: UIControl {
         details.layoutMargins = UIEdgeInsets(top: 8,
             left: traitCollection.preferredContentSizeCategory.isAccessibilityCategory ? 0 : 12,
             bottom: 8, right: 0)
-        let boundaryWidth = max(dateLabel.intrinsicContentSize.width,
-            timeLabel.superview === boundaryStack ? timeLabel.intrinsicContentSize.width : 0)
         let vertical = traitCollection.preferredContentSizeCategory.isAccessibilityCategory
-            || boundaryWidth + amountLabel.intrinsicContentSize.width + 36 > available
+            || singleLineWidth(of: dateLabel) + singleLineWidth(of: amountLabel)
+                + heading.spacing > available
         let axis: NSLayoutConstraint.Axis = vertical ? .vertical : .horizontal
         if heading.axis != axis {
             heading.axis = axis
             heading.alignment = vertical ? .fill : .firstBaseline
             amountLabel.textAlignment = vertical ? .left : .right
         }
-        let timeWidth = (timeLabel.text ?? "").size(withAttributes: [.font: timeLabel.font as Any]).width
-        let durationWidth = (durationLabel.text ?? "").size(withAttributes: [.font: durationLabel.font as Any]).width
         let verticalSummary = traitCollection.preferredContentSizeCategory.isAccessibilityCategory
-            || timeWidth + durationWidth
-                + disclosure.intrinsicContentSize.width + 36 > available
-        summary.axis = verticalSummary ? .vertical : .horizontal
-        summary.alignment = verticalSummary ? .fill : .center
-        timeLabel.setContentCompressionResistancePriority(verticalSummary ? .defaultHigh : .required, for: .horizontal)
-        summary.spacing = verticalSummary ? 8 : 12
-        summarySpacer.isHidden = verticalSummary
+            || singleLineWidth(of: timeLabel) + singleLineWidth(of: durationLabel)
+                + disclosure.intrinsicContentSize.width + 3 * summary.spacing > available
+        let summaryAxis: NSLayoutConstraint.Axis = verticalSummary ? .vertical : .horizontal
+        if summary.axis != summaryAxis {
+            summary.axis = summaryAxis
+            summary.alignment = verticalSummary ? .fill : .center
+            summarySpacer.isHidden = verticalSummary
+        }
+    }
+
+    private func singleLineWidth(of label: UILabel) -> CGFloat {
+        guard let text = label.text, let font = label.font else { return 0 }
+        return ceil((text as NSString).size(withAttributes: [.font: font]).width)
     }
 
     private func updateEditButtonForContentSizeCategory() {
