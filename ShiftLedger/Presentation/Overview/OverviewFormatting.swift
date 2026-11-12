@@ -14,12 +14,14 @@ enum OverviewFormatting {
     ) -> PeriodHeading? {
         guard let zone = TimeZone(identifier: timeZoneIdentifier) else { return nil }
         let endpoint = DateFormatter()
-        endpoint.calendar = configuredCalendar(timeZone: zone)
+        let calendar = configuredCalendar(timeZone: zone)
+        endpoint.calendar = calendar
         endpoint.timeZone = zone
         endpoint.locale = locale
         endpoint.dateStyle = .medium
         endpoint.timeStyle = .short
-        if zone.secondsFromGMT(for: shift.start) != zone.secondsFromGMT(for: shift.end) {
+        let changesOffset = zone.secondsFromGMT(for: shift.start) != zone.secondsFromGMT(for: shift.end)
+        if changesOffset {
             endpoint.setLocalizedDateFormatFromTemplate("yMMMdjmOOOO")
         }
         let language = locale.language.languageCode?.identifier ?? "en"
@@ -29,7 +31,19 @@ enum OverviewFormatting {
         let endTitle = bundle.localizedString(forKey: "payrollPeriod.end", value: nil, table: "Localizable")
         let start = "\(startTitle): \(endpoint.string(from: shift.start))"
         let end = "\(endTitle): \(endpoint.string(from: shift.end))"
-        return PeriodHeading(date: start, time: end, accessibilityLabel: "\(start); \(end)")
+        let accessibilityLabel = "\(start); \(end)"
+        if calendar.isDate(shift.start, inSameDayAs: shift.end) {
+            endpoint.setLocalizedDateFormatFromTemplate("yMMMd")
+            let date = endpoint.string(from: shift.start)
+            endpoint.setLocalizedDateFormatFromTemplate(changesOffset ? "jmOOOO" : "jm")
+            let times = "\(endpoint.string(from: shift.start)) → \(endpoint.string(from: shift.end))"
+            return PeriodHeading(date: date, time: times, accessibilityLabel: accessibilityLabel)
+        }
+        return PeriodHeading(
+            date: endpoint.string(from: shift.start),
+            time: "→ \(endpoint.string(from: shift.end))",
+            accessibilityLabel: accessibilityLabel
+        )
     }
 
     struct ShiftEndpoints: Equatable {

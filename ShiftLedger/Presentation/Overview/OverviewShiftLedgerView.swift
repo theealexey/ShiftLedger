@@ -74,7 +74,7 @@ final class OverviewShiftLedgerRowView: UIControl {
     private let editButton = UIButton(type: .system)
     private let editChevron = UIImageView(image: UIImage(systemName: "chevron.right"))
     private let disclosure = UIImageView(image: UIImage(systemName: "chevron.right"))
-    private let divider = OverviewReceiptRuleView()
+    private let divider = UIView()
     private let selectedRule = UIView()
     private var onCardTapped: (() -> Void)?
     private var onEditTapped: (() -> Void)?
@@ -301,6 +301,7 @@ final class OverviewShiftLedgerRowView: UIControl {
         selectedRule.isUserInteractionEnabled = false
         selectedRule.translatesAutoresizingMaskIntoConstraints = false
         addSubview(selectedRule)
+        divider.backgroundColor = ShiftLedgerColors.separator
         divider.translatesAutoresizingMaskIntoConstraints = false
         addSubview(divider)
         NSLayoutConstraint.activate([

@@ -96,13 +96,24 @@ struct OverviewFormattingTests {
             let heading = try #require(OverviewFormatting.perShiftHeading(
                 shift, timeZoneIdentifier: "UTC", locale: locale))
             let end = try #require(heading.time)
-            #expect(heading.date.hasPrefix(ru ? "Начало: " : "Start: "))
-            #expect(end.hasPrefix(ru ? "Конец: " : "End: "))
+            let startTitle = ru ? "Начало: " : "Start: "
+            let endTitle = ru ? "Конец: " : "End: "
+            #expect(heading.accessibilityLabel.hasPrefix(startTitle))
+            #expect(heading.accessibilityLabel.contains("; " + endTitle))
+            #expect(!heading.date.contains(startTitle))
+            #expect(!end.contains(endTitle))
             #expect(heading.date.contains(String(year)))
-            #expect(end.contains(String(month == 12 && day == 31 ? year + 1 : year)))
-            #expect(heading.date.contains(ru ? "14:43" : "2:43"))
-            #expect(end.contains(duration == 3600 ? (ru ? "15:43" : "3:43") : (ru ? "14:43" : "2:43")))
-            #expect(heading.accessibilityLabel == "\(heading.date); \(end)")
+            if duration == 3600 {
+                #expect(!heading.date.contains(":"))
+                #expect(!end.contains(String(year)))
+                #expect(end.contains(ru ? "14:43" : "2:43"))
+                #expect(end.contains(ru ? "15:43" : "3:43"))
+            } else {
+                #expect(heading.date.contains(ru ? "14:43" : "2:43"))
+                #expect(end.contains(ru ? "14:43" : "2:43"))
+                #expect(end.contains(String(month == 12 && day == 31 ? year + 1 : year)))
+            }
+            #expect(end.contains("→"))
             #expect(shift.start == start)
             #expect(shift.end == start.addingTimeInterval(TimeInterval(duration)))
             if duration == 48 * 3600 {
@@ -115,15 +126,35 @@ struct OverviewFormattingTests {
     @Test("Document heading follows Job timezone and disambiguates repeated DST clocks", arguments: ["ru_RU", "en_US"])
     func documentPeriodJobTimezone(_ localeID: String) throws {
         let locale = Locale(identifier: localeID)
-        let shift = try makeShift(start: date(year: 2026, month: 11, day: 1, hour: 5, minute: 30), duration: 3600)
-        let heading = try #require(OverviewFormatting.perShiftHeading(shift, timeZoneIdentifier: "America/New_York", locale: locale))
-        #expect(heading.date.contains("GMT-04:00"))
-        #expect(heading.time?.contains("GMT-05:00") == true)
+        let russian = localeID == "ru_RU"
+        let startTitle = russian ? "Начало" : "Start"
+        let endTitle = russian ? "Конец" : "End"
+        let firstClock = russian ? "01:30" : "1:30\u{202F}AM"
+        for (month, day, hour, expectedDate, startOffset, endOffset, endClock) in [
+            (11, 1, 5, russian ? "1 нояб. 2026\u{202F}г." : "Nov 1, 2026", "GMT-04:00", "GMT-05:00", firstClock),
+            (3, 8, 6, russian ? "8 марта 2026\u{202F}г." : "Mar 8, 2026", "GMT-05:00", "GMT-04:00",
+             russian ? "03:30" : "3:30\u{202F}AM")
+        ] {
+            let shift = try makeShift(start: date(year: 2026, month: month, day: day, hour: hour, minute: 30), duration: 3600)
+            let heading = try #require(OverviewFormatting.perShiftHeading(shift, timeZoneIdentifier: "America/New_York", locale: locale))
+            let display = try #require(heading.time)
+            let start = "\(firstClock) \(startOffset)"
+            let end = "\(endClock) \(endOffset)"
+            let dateTimeSeparator = russian ? ", " : " at "
+            #expect(heading.date == expectedDate)
+            #expect(display == "\(start) → \(end)")
+            #expect(heading.accessibilityLabel ==
+                "\(startTitle): \(expectedDate)\(dateTimeSeparator)\(start); \(endTitle): \(expectedDate)\(dateTimeSeparator)\(end)")
+            for text in [heading.date, display, heading.accessibilityLabel] {
+                #expect(!text.unicodeScalars.contains { $0.properties.generalCategory == .format })
+                #expect(text.rangeOfCharacter(from: .newlines) == nil)
+            }
+        }
         let midnight = try makeShift(start: date(year: 2026, month: 11, day: 5, hour: 23, minute: 30), duration: 3600)
         let local = try #require(OverviewFormatting.perShiftHeading(midnight, timeZoneIdentifier: "Europe/Stockholm", locale: locale))
         #expect(local.date.contains("6"))
         #expect(local.date.contains("2026"))
-        #expect(local.date.contains( localeID == "ru_RU" ? "00:30" : "12:30"))
+        #expect(local.time?.contains(localeID == "ru_RU" ? "00:30" : "12:30") == true)
         #expect(local.time?.contains(localeID == "ru_RU" ? "01:30" : "1:30") == true)
     }
 

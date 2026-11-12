@@ -46,17 +46,7 @@ final class OverviewViewController: UIViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        let brand = UILabel()
-        brand.text = "ShiftLedger"
-        brand.textColor = ShiftLedgerColors.textPrimary
-        brand.accessibilityIdentifier = "overview.navigation.brand"
-        brand.accessibilityTraits = .header
-        brand.adjustsFontForContentSizeCategory = true
-        let base = UIFont.systemFont(ofSize: 20, weight: .semibold)
-        let serif = base.fontDescriptor.withDesign(.serif).map { UIFont(descriptor: $0, size: 20) } ?? base
-        brand.font = UIFontMetrics(forTextStyle: .title3).scaledFont(
-            for: serif, maximumPointSize: 28, compatibleWith: traitCollection
-        )
+        let brand = OverviewNavigationBrandLabel()
         title = brand.text
         navigationItem.titleView = brand
         configureNavigationItem()
@@ -325,5 +315,70 @@ final class OverviewViewController: UIViewController {
         }
 
         onCheckPaycheck?(period)
+    }
+}
+
+private final class OverviewNavigationBrandLabel: UILabel {
+    private static let baseFont: UIFont = {
+        let base = UIFont.systemFont(ofSize: 20, weight: .semibold)
+        guard let descriptor = base.fontDescriptor.withDesign(.serif) else { return base }
+        return UIFont(descriptor: descriptor, size: base.pointSize)
+    }()
+
+    init() {
+        super.init(frame: .zero)
+        text = "ShiftLedger"
+        textColor = ShiftLedgerColors.textPrimary
+        textAlignment = .center
+        accessibilityIdentifier = "overview.navigation.brand"
+        accessibilityTraits = .header
+        font = preferredBrandFont
+        registerForTraitChanges([UITraitPreferredContentSizeCategory.self]) { (label: Self, _) in
+            label.invalidateIntrinsicContentSize()
+            label.setNeedsLayout()
+        }
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        nil
+    }
+
+    override var intrinsicContentSize: CGSize {
+        let preferred = preferredBrandFont
+        return CGSize(width: ceil(textWidth(with: preferred)), height: ceil(preferred.lineHeight))
+    }
+
+    override func layoutSubviews() {
+        let preferred = preferredBrandFont
+        var fitted = preferred
+        let width = bounds.width
+        if width > 0, textWidth(with: preferred) > width {
+            var lower = min(Self.baseFont.pointSize, preferred.pointSize)
+            var upper = preferred.pointSize
+            for _ in 0..<14 {
+                let middle = (lower + upper) / 2
+                if textWidth(with: preferred.withSize(middle)) <= width {
+                    lower = middle
+                } else {
+                    upper = middle
+                }
+            }
+            fitted = preferred.withSize(lower)
+        }
+        if font != fitted {
+            font = fitted
+        }
+        super.layoutSubviews()
+    }
+
+    private var preferredBrandFont: UIFont {
+        UIFontMetrics(forTextStyle: .title3).scaledFont(
+            for: Self.baseFont, maximumPointSize: 28, compatibleWith: traitCollection
+        )
+    }
+
+    private func textWidth(with font: UIFont) -> CGFloat {
+        ((text ?? "") as NSString).size(withAttributes: [.font: font]).width
     }
 }

@@ -297,7 +297,8 @@ struct OverviewViewControllerTests {
         window.isHidden = false
         defer { window.isHidden = true }
         let root = try requireRootView(controller)
-        let paper: UIView = try requireView(identifier: "overview.receipt.paper", in: root)
+        let periodCard: UIView = try requireView(identifier: "overview.period.card", in: root)
+        let grossCard: UIView = try requireView(identifier: "overview.expectedGross.hero", in: root)
         let brand = try #require(controller.navigationItem.titleView as? UILabel)
         #expect(!root.subviews.contains { $0 === brand })
         #expect(controller.navigationItem.rightBarButtonItem?.menu?.children.count == 2)
@@ -315,26 +316,142 @@ struct OverviewViewControllerTests {
             #expect(brand.numberOfLines == 1)
             let text = try #require(brand.text)
             #expect((text as NSString).size(withAttributes: [.font: brand.font as Any]).width <= brand.bounds.width + 0.5)
+            #expect(brand.font.pointSize >= 20)
+            let fittedFont = brand.font
+            let fittedBounds = brand.bounds
+            for _ in 0..<3 {
+                brand.setNeedsLayout()
+                brand.layoutIfNeeded()
+                #expect(brand.font == fittedFont)
+                #expect(brand.bounds == fittedBounds)
+            }
             #expect(brand.bounds.height < brand.font.lineHeight * 1.5)
             #expect(date.text == heading.date && time.text == heading.time)
             #expect(date.accessibilityLabel == heading.accessibilityLabel)
             #expect(!time.isAccessibilityElement)
             #expect([date, time, gross].filter(\.isAccessibilityElement).count == 2)
             for label in [date, time, gross] {
-                let boundedView: UIView = label
-                let frame = boundedView.convert(boundedView.bounds, to: paper)
-                #expect(frame.minX >= -0.5 && frame.maxX <= paper.bounds.width + 0.5)
+                let card = label === gross ? grossCard : periodCard
+                let frame = label.convert(label.bounds, to: card)
+                #expect(frame.minX >= 15.5 && frame.maxX <= card.bounds.width - 15.5)
                 let required = label.sizeThatFits(CGSize(width: label.bounds.width, height: .greatestFiniteMagnitude))
                 #expect(label.bounds.height + 0.5 >= required.height)
             }
             for (upper, lower) in zip([date, time], [time, gross]) {
-                #expect(upper.convert(upper.bounds, to: paper).maxY <= lower.convert(lower.bounds, to: paper).minY)
+                #expect(upper.convert(upper.bounds, to: root).maxY <= lower.convert(lower.bounds, to: root).minY)
             }
             if category == .large {
                 if let normalBrandSize { #expect(abs(brand.font.pointSize - normalBrandSize) < 0.01) }
-                else { normalBrandSize = brand.font.pointSize }
+                else {
+                    normalBrandSize = brand.font.pointSize
+                    #expect(brand.font.pointSize == 20)
+                }
             } else {
                 #expect(brand.font.pointSize > (normalBrandSize ?? 0))
+            }
+        }
+    }
+
+    @Test("Hosted PerShift period keeps DST tokens whole and exposes both accessible endpoints",
+          arguments: [CGFloat(320), 375, 402], ["ru_RU", "en_US"])
+    func hostedPerShiftPeriod(_ width: CGFloat, _ localeID: String) throws {
+        let locale = Locale(identifier: localeID)
+        let job = try Job(id: testWorkTypeID, currencyCode: "EUR", timeZoneIdentifier: "America/New_York",
+                          basePayBasis: .hourly, payCalculationCycle: .perShift,
+                          payRates: [PayRate(amount: 100, effectiveFrom: nil)],
+                          createdAt: Date(timeIntervalSinceReferenceDate: 0))
+        var utc = Calendar(identifier: .gregorian)
+        utc.timeZone = try #require(TimeZone(secondsFromGMT: 0))
+        for (name, month, day, hour, duration) in [
+            ("overnight", 1, 1, 4, 7200), ("spring", 3, 8, 6, 3600), ("fall", 11, 1, 5, 3600)
+        ] {
+            let start = try #require(utc.date(from: DateComponents(year: 2026, month: month, day: day, hour: hour, minute: 30)))
+            let shift = try Shift(jobID: job.id, workTypeID: testWorkTypeID,
+                                  start: start, end: start.addingTimeInterval(TimeInterval(duration)), unpaidBreak: nil)
+            let model = OverviewViewModel(job: job, loadShifts: { [shift] }, currentDate: { shift.end })
+            let controller = OverviewViewController(viewModel: model, currencyCode: job.currencyCode,
+                timeZoneIdentifier: job.timeZoneIdentifier, displayLocale: locale)
+            let window = UIWindow(frame: CGRect(x: 0, y: 0, width: width, height: 874))
+            window.rootViewController = UINavigationController(rootViewController: controller)
+            window.isHidden = false
+            defer { window.isHidden = true }
+            let root = try requireRootView(controller)
+            let period: UILabel = try requireView(identifier: "overview.receipt.perShiftPeriod", in: root)
+            let time: UILabel = try requireView(identifier: "overview.receipt.perShiftTime", in: root)
+            let heading = try #require(OverviewFormatting.perShiftHeading(shift,
+                timeZoneIdentifier: job.timeZoneIdentifier, locale: locale))
+            var initialFont: UIFont?
+            for (category, style) in [(UIContentSizeCategory.large, UIUserInterfaceStyle.light),
+                                      (.large, .dark), (.accessibilityExtraExtraExtraLarge, .light),
+                                      (.accessibilityExtraExtraExtraLarge, .dark), (.large, .light)] {
+                window.traitOverrides.preferredContentSizeCategory = category
+                window.overrideUserInterfaceStyle = style
+                window.layoutIfNeeded()
+                root.layoutIfNeeded()
+                let font = try #require(time.font)
+                if category == .large {
+                    if let initialFont { #expect(font == initialFont) }
+                    else { initialFont = font }
+                    #expect(font == UIFont.preferredFont(forTextStyle: .callout, compatibleWith: time.traitCollection))
+                } else {
+                    #expect(font.pointSize >= 17)
+                }
+                let frame = time.frame
+                for _ in 0..<2 {
+                    root.setNeedsLayout()
+                    root.layoutIfNeeded()
+                    #expect(time.font == font)
+                    #expect(time.frame == frame)
+                }
+                #expect(period.text == heading.date)
+                #expect(time.text == heading.time)
+                #expect(period.accessibilityLabel == heading.accessibilityLabel)
+                if name != "overnight" {
+                    let offsets = (time.text ?? "").split(whereSeparator: \.isWhitespace)
+                        .filter { $0.contains("GMT") || $0.contains("UTC") }
+                    #expect(offsets.count == 2)
+                    let text = try #require(time.text)
+                    let paragraph = NSMutableParagraphStyle()
+                    paragraph.lineBreakMode = time.lineBreakMode
+                    paragraph.lineBreakStrategy = time.lineBreakStrategy
+                    paragraph.alignment = time.textAlignment
+                    let storage = NSTextStorage(string: text, attributes: [.font: font, .paragraphStyle: paragraph])
+                    let layout = NSLayoutManager()
+                    let container = NSTextContainer(size: CGSize(width: time.bounds.width, height: .greatestFiniteMagnitude))
+                    container.lineFragmentPadding = 0
+                    container.lineBreakMode = time.lineBreakMode
+                    storage.addLayoutManager(layout)
+                    layout.addTextContainer(container)
+                    layout.ensureLayout(for: container)
+                    var lines: [NSRange] = []
+                    layout.enumerateLineFragments(forGlyphRange: layout.glyphRange(for: container)) { _, _, _, glyphs, _ in
+                        lines.append(layout.characterRange(forGlyphRange: glyphs, actualGlyphRange: nil))
+                    }
+                    var remaining = NSRange(location: 0, length: storage.length)
+                    for offset in offsets {
+                        let range = (text as NSString).range(of: String(offset), options: [], range: remaining)
+                        try #require(range.location != NSNotFound)
+                        #expect(lines.contains { NSIntersectionRange($0, range) == range })
+                        remaining = NSRange(location: NSMaxRange(range), length: storage.length - NSMaxRange(range))
+                    }
+                }
+                for label in [period, time] {
+                    let size = label.sizeThatFits(CGSize(width: label.bounds.width, height: .greatestFiniteMagnitude))
+                    #expect(size.height <= label.bounds.height + 0.5)
+                    let tokens = (label.text ?? "").split(whereSeparator: \.isWhitespace)
+                    for token in tokens where token.contains("GMT") || token.contains("UTC") {
+                        let tokenWidth = (String(token) as NSString).size(withAttributes: [.font: label.font as Any]).width
+                        #expect(tokenWidth <= label.bounds.width)
+                    }
+                }
+                #expect(period.convert(period.bounds, to: root).maxY <= time.convert(time.bounds, to: root).minY)
+                if width == 320 {
+                    let image = UIGraphicsImageRenderer(bounds: root.bounds).image { context in
+                        root.layer.render(in: context.cgContext)
+                    }
+                    let data = try #require(image.pngData())
+                    Attachment.record(Array(data), named: "per-shift-\(name)-\(localeID)-\(category.rawValue)-\(style.rawValue).png")
+                }
             }
         }
     }
@@ -519,7 +636,7 @@ struct OverviewViewControllerTests {
             let element: UIView = try requireView(identifier: identifier, in: root)
             #expect(isEffectivelyHidden(element))
         }
-        let receipt: UIView = try requireView(identifier: "overview.receipt.paper", in: root)
+        let receipt: UIView = try requireView(identifier: "overview.period.card", in: root)
         let perShiftPeriod: UILabel = try requireView(identifier: "overview.receipt.perShiftPeriod", in: root)
         let time: UILabel = try requireView(identifier: "overview.receipt.perShiftTime", in: root)
         let heading = try #require(OverviewFormatting.perShiftHeading(
@@ -848,86 +965,21 @@ struct OverviewViewControllerTests {
         defer { window.isHidden = true }
         window.layoutIfNeeded()
 
-        let paper: OverviewReceiptPaperView = try requireView(
-            identifier: "overview.receipt.paper",
-            in: try requireRootView(subject.viewController)
-        )
-        #expect(isEffectivelyHidden(paper) == false)
-        let shape = try #require(paper.layer.sublayers?.compactMap { $0 as? CAShapeLayer }.first)
-        for (style, rgb) in [(UIUserInterfaceStyle.light, 0xFFFFFF), (.dark, 0x1C1D24), (.light, 0xFFFFFF)] {
-            window.overrideUserInterfaceStyle = style
-            window.layoutIfNeeded()
-            let fill = try #require(shape.fillColor)
-            let components = try colorComponents(UIColor(cgColor: fill), traits: paper.traitCollection)
-            #expect(abs(components.red - CGFloat((rgb >> 16) & 255) / 255) < 0.001)
-            #expect(abs(components.green - CGFloat((rgb >> 8) & 255) / 255) < 0.001)
-            #expect(abs(components.blue - CGFloat(rgb & 255) / 255) < 0.001)
-        }
-        let path = OverviewReceiptPaperView.paperPath(in: paper.bounds)
-        #expect(!path.isEmpty)
-        #expect(path.bounds.width == paper.bounds.width)
-    }
-
-    @Test("Receipt has regular bounded semicircular cutouts on both edges independent of height",
-          arguments: [CGFloat(335), CGFloat(362), CGFloat(390)])
-    func receiptPaperHasRegularSemicircularEdges(_ width: CGFloat) throws {
-        func elements(in rect: CGRect) -> [(CGPathElementType, [CGPoint])] {
-            var result: [(CGPathElementType, [CGPoint])] = []
-            OverviewReceiptPaperView.paperPath(in: rect)
-                .cgPath.applyWithBlock { element in
-                    let type = element.pointee.type
-                    switch type {
-                    case .moveToPoint, .addLineToPoint:
-                        result.append((type, [element.pointee.points[0]]))
-                    case .addCurveToPoint:
-                        result.append((type, Array(UnsafeBufferPointer(start: element.pointee.points, count: 3))))
-                    case .addQuadCurveToPoint, .closeSubpath:
-                        result.append((type, []))
-                    @unknown default:
-                        Issue.record("Unexpected receipt path element")
-                    }
-                }
-            return result
-        }
-        let rect = CGRect(x: 7, y: 11, width: width, height: 540)
-        let path = OverviewReceiptPaperView.paperPath(in: rect)
-        #expect(path.cgPath == OverviewReceiptPaperView.paperPath(in: rect).cgPath)
-        #expect(path.cgPath.boundingBoxOfPath == rect)
-        let original = elements(in: rect)
-        let points = original.flatMap { $0.1 }
-        #expect(points.allSatisfy {
-            (rect.minX - 0.001...rect.maxX + 0.001).contains($0.x)
-                && (rect.minY - 0.001...rect.maxY + 0.001).contains($0.y)
-        })
-        let curves = original.filter { $0.0 == .addCurveToPoint }.map { $0.1 }
-        let top = curves.filter { $0.allSatisfy { $0.y < rect.midY } }
-        let bottom = curves.filter { $0.allSatisfy { $0.y > rect.midY } }
-        try #require(top.count > 4 && top.count == bottom.count)
-        // Each half-circle consists of two quarter-circle curves. Its midpoint
-        // is inside the paper; its endpoint returns to the horizontal baseline.
-        for edge in [top, bottom] {
-            let baseline = edge[0][2].y < rect.midY ? rect.minY : rect.maxY
-            let midpoints = stride(from: 0, to: edge.count, by: 2).map { edge[$0][2] }
-            let depth = abs(midpoints[0].y - baseline)
-            #expect(depth > 0 && depth < 6)
-            #expect(midpoints.allSatisfy { abs(abs($0.y - baseline) - depth) < 0.001 })
-            for index in stride(from: 1, to: edge.count, by: 2) {
-                #expect(abs(edge[index][2].y - baseline) < 0.001)
-                #expect(abs(abs(edge[index][2].x - edge[index - 1][2].x) - depth) < 0.001)
+        let root = try requireRootView(subject.viewController)
+        for identifier in ["overview.period.card", "overview.expectedGross.hero", "overview.shiftHistory.section"] {
+            let card: UIView = try requireView(identifier: identifier, in: root)
+            #expect(isEffectivelyHidden(card) == false)
+            #expect(card.layer.cornerRadius == 16)
+            #expect(card.layer.sublayers?.contains { $0 is CAShapeLayer } != true)
+            for (style, rgb) in [(UIUserInterfaceStyle.light, 0xFFFFFF), (.dark, 0x1C1D24), (.light, 0xFFFFFF)] {
+                window.overrideUserInterfaceStyle = style
+                window.layoutIfNeeded()
+                let fill = try #require(card.backgroundColor)
+                let components = try colorComponents(fill, traits: card.traitCollection)
+                #expect(abs(components.red - CGFloat((rgb >> 16) & 255) / 255) < 0.001)
+                #expect(abs(components.green - CGFloat((rgb >> 8) & 255) / 255) < 0.001)
+                #expect(abs(components.blue - CGFloat(rgb & 255) / 255) < 0.001)
             }
-            let intervals = zip(midpoints, midpoints.dropFirst()).map { abs($1.x - $0.x) }
-            #expect(intervals.allSatisfy { abs($0 - intervals[0]) < 0.001 })
-        }
-        #expect(points.contains(CGPoint(x: rect.maxX, y: rect.minY)))
-        #expect(points.contains(CGPoint(x: rect.maxX, y: rect.maxY)))
-        #expect(points.contains(CGPoint(x: rect.minX, y: rect.maxY)))
-        let taller = CGRect(x: rect.minX, y: rect.minY, width: width, height: 1800)
-        let tallerPoints = elements(in: taller).flatMap { $0.1 }
-        #expect(points.count == tallerPoints.count)
-        for (shortPoint, tallPoint) in zip(points, tallerPoints) {
-            #expect(abs(shortPoint.x - tallPoint.x) < 0.001)
-            let offset = shortPoint.y < rect.midY ? 0 : taller.height - rect.height
-            #expect(abs(shortPoint.y + offset - tallPoint.y) < 0.001)
         }
     }
 
@@ -1178,36 +1230,15 @@ struct OverviewViewControllerTests {
         let count: UILabel = try requireView(identifier: "overview.shiftCount.value", in: root)
         #expect(heading.text == OverviewStrings.allShiftHistory)
         #expect(heading.text?.hasSuffix("·") == false)
-        #expect(heading.bounds.width <= width - 80 + 0.5)
+        #expect(heading.bounds.width <= width - 64 + 0.5)
         #expect(heading.lineBreakMode == .byWordWrapping)
         #expect(heading.bounds.height + 0.5 >= heading.sizeThatFits(
             CGSize(width: heading.bounds.width, height: .greatestFiniteMagnitude)).height)
         #expect(heading.convert(heading.bounds, to: root).maxY <= count.convert(count.bounds, to: root).minY)
     }
 
-    @Test("Receipt edge is one resizing silhouette with actions below the paper")
-    func receiptEdgeResizesWithoutAccumulatingLayers() throws {
-        func expectPaperBounds(_ shape: CAShapeLayer, in bounds: CGRect) throws {
-            let path = try #require(shape.path)
-            #expect(shape.shadowPath == path)
-            let rendered = path.boundingBoxOfPath
-            #expect(abs(rendered.minX - bounds.minX) < 0.001)
-            #expect(abs(rendered.minY - bounds.minY) < 0.001)
-            #expect(abs(rendered.maxX - bounds.maxX) < 0.001)
-            #expect(abs(rendered.maxY - bounds.maxY) < 0.001)
-        }
-        let paper = OverviewReceiptPaperView(frame: CGRect(x: 0, y: 0, width: 362, height: 540))
-        paper.layoutIfNeeded()
-        let shape = try #require(paper.layer.sublayers?.first as? CAShapeLayer)
-        #expect(paper.layer.sublayers?.count == 1)
-        try expectPaperBounds(shape, in: paper.bounds)
-        paper.frame.size = CGSize(width: 335, height: 860)
-        paper.layoutIfNeeded()
-        #expect(paper.layer.sublayers?.count == 1)
-        try expectPaperBounds(shape, in: paper.bounds)
-        #expect(shape.animationKeys()?.isEmpty != false)
-        #expect(paper.isAccessibilityElement == false)
-
+    @Test("Overview cards and actions remain in vertical reading order")
+    func overviewCardsPrecedeActions() throws {
         let subject = try makeSubject(
             job: makeJob(cycle: .scheduled(.calendarMonthly)),
             shifts: [makeShift(id: 1, month: 9, day: 10)]
@@ -1218,19 +1249,24 @@ struct OverviewViewControllerTests {
         defer { window.isHidden = true }
         window.layoutIfNeeded()
         let root = try requireRootView(subject.viewController)
-        let receipt: UIView = try requireView(identifier: "overview.receipt.paper", in: root)
+        let history: UIView = try requireView(identifier: "overview.shiftHistory.section", in: root)
         let check: UIButton = try requireView(identifier: "overview.checkPaycheck", in: root)
         let add: UIButton = try requireView(identifier: "overview.addShift", in: root)
-        let receiptFrame = receipt.convert(receipt.bounds, to: root)
+        let period: UIView = try requireView(identifier: "overview.period.card", in: root)
+        let gross: UIView = try requireView(identifier: "overview.expectedGross.hero", in: root)
+        let historyFrame = history.convert(history.bounds, to: root)
+        let grossFrame = gross.convert(gross.bounds, to: root)
+        #expect(period.convert(period.bounds, to: root).maxY + 15.5 <= grossFrame.minY)
+        #expect(grossFrame.maxY + 15.5 <= historyFrame.minY)
         let checkFrame = check.convert(check.bounds, to: root)
         let addFrame = add.convert(add.bounds, to: root)
-        #expect(receiptFrame.maxY <= checkFrame.minY)
+        #expect(historyFrame.maxY + 15.5 <= checkFrame.minY)
         #expect(checkFrame.maxY <= addFrame.minY)
     }
 
-    @Test("Receipt keeps its paper, columns and native actions inside wide and narrow viewports",
-          arguments: [CGFloat(402), CGFloat(375)])
-    func receiptMarginsMatchViewport(_ width: CGFloat) throws {
+    @Test("Overview keeps cards, columns and actions inside wide and narrow viewports",
+          arguments: [CGFloat(402), CGFloat(375), CGFloat(320)])
+    func cardMarginsMatchViewport(_ width: CGFloat) throws {
         let shift = try makeShift(id: 1, month: 9, day: 10)
         let subject = try makeSubject(job: makeJob(cycle: .scheduled(.calendarMonthly)), shifts: [shift])
         subject.viewController.traitOverrides.preferredContentSizeCategory = .large
@@ -1240,20 +1276,24 @@ struct OverviewViewControllerTests {
         defer { window.isHidden = true }
         window.layoutIfNeeded()
         let root = try requireRootView(subject.viewController)
-        let paper: UIView = try requireView(identifier: "overview.receipt.paper", in: root)
+        let paper: UIView = try requireView(identifier: "overview.shiftHistory.section", in: root)
         let row: UIView = try requireView(identifier: "overview.shift.\(shift.id.uuidString)", in: root)
         let paperFrame = paper.convert(paper.bounds, to: root)
         let rowFrame = row.convert(row.bounds, to: root)
-        #expect(abs(paperFrame.minX - 20) < 0.5)
-        #expect(abs(paperFrame.width - (width - 40)) < 0.5)
-        #expect(abs(rowFrame.minX - 40) < 0.5)
-        #expect(abs(rowFrame.width - (width - 80)) < 0.5)
-        #expect(rowFrame.height >= 92)
+        #expect(abs(paperFrame.minX - 16) < 0.5)
+        #expect(abs(paperFrame.width - (width - 32)) < 0.5)
+        #expect(abs(rowFrame.minX - 32) < 0.5)
+        #expect(abs(rowFrame.width - (width - 64)) < 0.5)
+        let halfPixel = 0.5 / row.traitCollection.displayScale
+        #expect(rowFrame.height + halfPixel >= 92)
+        let rowContent = try #require(row.subviews.compactMap { $0 as? UIStackView }.first)
+        #expect(abs(rowContent.frame.minY - 16) <= halfPixel)
+        #expect(abs(rowContent.frame.maxY - (row.bounds.height - 16)) <= halfPixel)
         for identifier in ["overview.checkPaycheck", "overview.addShift"] {
             let button: UIButton = try requireView(identifier: identifier, in: root)
             let frame = button.convert(button.bounds, to: root)
-            #expect(abs(frame.minX - 20) < 0.5)
-            #expect(abs(frame.width - (width - 40)) < 0.5)
+            #expect(abs(frame.minX - 16) < 0.5)
+            #expect(abs(frame.width - (width - 32)) < 0.5)
             #expect(frame.height >= 50)
         }
     }
@@ -2936,13 +2976,11 @@ struct OverviewViewControllerTests {
         #expect(title.text == OverviewStrings.emptyTitle)
         #expect(isEffectivelyHidden(addButton) == false)
         let root = try requireRootView(subject.viewController)
-        let paper: OverviewReceiptPaperView = try requireView(identifier: "overview.receipt.paper", in: root)
         let gross: UIView = try requireView(identifier: "overview.expectedGross.hero", in: root)
-        #expect(isEffectivelyHidden(paper) == false)
-        #expect(paper.bounds.height > 12)
-        #expect(paper.layer.sublayers?.compactMap { $0 as? CAShapeLayer }.count == 1)
+        #expect(container.layer.cornerRadius == 16)
+        #expect(container.bounds.height > 12)
         #expect(isEffectivelyHidden(gross)) // No fictional payroll amount without a PerShift selection.
-        #expect(paper.convert(paper.bounds, to: root).maxY < addButton.convert(addButton.bounds, to: root).minY)
+        #expect(container.convert(container.bounds, to: root).maxY < addButton.convert(addButton.bounds, to: root).minY)
     }
 
     @Test("Per-shift empty state gives Add Shift primary emphasis")
