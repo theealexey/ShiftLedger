@@ -1129,28 +1129,92 @@ struct OverviewViewControllerTests {
         #expect(card.paidDuration == OverviewFormatting.duration(shift.paidDuration))
     }
 
-    @Test("Receipt keeps a whole time range when the secondary fields need vertical reflow",
-          arguments: [CGFloat(375), CGFloat(402)], [8, 11])
-    func receiptTimeRangeReflowsAsAWhole(_ width: CGFloat, _ hour: Int) throws {
-        let job = try makeJob(cycle: .scheduled(.calendarMonthly))
-        let start = try date(year: 2026, month: 9, day: 10, hour: hour)
-        let shift = try Shift(id: UUID(), jobID: job.id, workTypeID: testWorkTypeID,
-                              start: start, end: start.addingTimeInterval(3600))
-        let subject = try makeSubject(job: job, shifts: [shift])
-        subject.viewController.traitOverrides.preferredContentSizeCategory = .large
-        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: width, height: 874))
-        window.rootViewController = subject.viewController
-        window.isHidden = false
-        defer { window.isHidden = true }
-        window.layoutIfNeeded()
-        let root = try requireRootView(subject.viewController)
-        let time: UILabel = try requireView(identifier: "overview.shift.\(shift.id.uuidString).time", in: root)
-        let duration: UILabel = try requireView(identifier: "overview.shift.\(shift.id.uuidString).duration", in: root)
-        #expect(time.bounds.height <= time.font.lineHeight + 1)
-        #expect(time.bounds.width + 0.5 >= (time.text ?? "").size(withAttributes: [.font: time.font as Any]).width)
-        let durationFrame = duration.convert(duration.bounds, to: time)
-        #expect(durationFrame.minY >= time.bounds.maxY - 0.5
-                || durationFrame.minX >= time.bounds.maxX - 0.5)
+    @Test("Shift time range remains readable when it wraps",
+          arguments: [CGFloat(320), CGFloat(375), CGFloat(402)], ["en_US", "ru_RU"])
+    func receiptTimeRangeReflowsAsAWhole(_ width: CGFloat, _ localeID: String) throws {
+        for hour in [8, 11] {
+            let job = try makeJob(cycle: .scheduled(.calendarMonthly))
+            let start = try date(year: 2026, month: 9, day: 10, hour: hour)
+            let shift = try Shift(id: UUID(), jobID: job.id, workTypeID: testWorkTypeID,
+                                  start: start, end: start.addingTimeInterval(3600))
+            let subject = try makeSubject(job: job, shifts: [shift])
+            let locale = Locale(identifier: localeID)
+            let controller = OverviewViewController(viewModel: subject.viewModel, currencyCode: job.currencyCode,
+                timeZoneIdentifier: job.timeZoneIdentifier, displayLocale: locale)
+            let window = UIWindow(frame: CGRect(x: 0, y: 0, width: width, height: 874))
+            window.rootViewController = controller
+            window.isHidden = false
+            defer { window.isHidden = true }
+            let root = try requireRootView(controller)
+            let prefix = "overview.shift.\(shift.id.uuidString)"
+            let row: UIControl = try requireView(identifier: prefix, in: root)
+            let time: UILabel = try requireView(identifier: "\(prefix).time", in: row)
+            let duration: UILabel = try requireView(identifier: "\(prefix).duration", in: row)
+            let amount: UILabel = try requireView(identifier: "\(prefix).expected", in: row)
+            let expected = try #require(OverviewFormatting.shiftRowHeading(shift,
+                timeZoneIdentifier: job.timeZoneIdentifier, locale: locale)).time
+            for style in [UIUserInterfaceStyle.light, .dark] {
+                controller.overrideUserInterfaceStyle = style
+                for category: UIContentSizeCategory in [.large, .accessibilityExtraExtraExtraLarge] {
+                    controller.traitOverrides.preferredContentSizeCategory = category
+                    for _ in 0..<5 { root.setNeedsLayout(); window.layoutIfNeeded() }
+                    let pixel = 1 / window.screen.scale
+                    #expect(time.text == expected)
+                    #expect(!expected.contains("…"))
+                    #expect(time.numberOfLines == 0 && time.lineBreakMode == .byWordWrapping)
+                    #expect(time.bounds.height + pixel >= time.sizeThatFits(
+                        CGSize(width: time.bounds.width, height: .greatestFiniteMagnitude)).height)
+                    let frames = [time, duration, amount].map { $0.convert($0.bounds, to: row) }
+                    #expect(!frames[0].intersects(frames[1]) && !frames[0].intersects(frames[2]))
+                    for frame in frames {
+                        #expect(frame.minX >= -pixel && frame.maxX <= row.bounds.maxX + pixel)
+                        #expect(frame.minY >= -pixel && frame.maxY <= row.bounds.maxY + pixel)
+                    }
+                    let paragraph = NSMutableParagraphStyle()
+                    paragraph.lineBreakMode = time.lineBreakMode
+                    paragraph.lineBreakStrategy = time.lineBreakStrategy
+                    let storage = NSTextStorage(string: expected, attributes: [.font: time.font as Any, .paragraphStyle: paragraph])
+                    let manager = NSLayoutManager()
+                    let container = NSTextContainer(size: CGSize(width: time.bounds.width, height: .greatestFiniteMagnitude))
+                    container.lineFragmentPadding = 0
+                    manager.addTextContainer(container)
+                    storage.addLayoutManager(manager)
+                    manager.ensureLayout(for: container)
+                    let glyphRange = manager.glyphRange(for: container)
+                    #expect(NSMaxRange(manager.characterRange(forGlyphRange: glyphRange, actualGlyphRange: nil)) == (expected as NSString).length)
+                    let clockPattern = try NSRegularExpression(pattern: #"\d{1,2}:\d{2}"#)
+                    let clockRanges = clockPattern.matches(in: expected, range: NSRange(location: 0, length: (expected as NSString).length))
+                    #expect(clockRanges.count == 2)
+                    for match in clockRanges {
+                        let glyphs = manager.glyphRange(forCharacterRange: match.range, actualCharacterRange: nil)
+                        var line = NSRange()
+                        _ = manager.lineFragmentRect(forGlyphAt: glyphs.location, effectiveRange: &line)
+                        #expect(NSMaxRange(glyphs) <= NSMaxRange(line))
+                    }
+                    manager.enumerateLineFragments(forGlyphRange: glyphRange) { _, used, _, _, _ in
+                        #expect(used.minX >= -pixel && used.maxX <= time.bounds.width + pixel)
+                    }
+                    let prior = [time.frame, duration.frame, amount.frame, row.frame]
+                    for _ in 0..<3 { root.setNeedsLayout(); window.layoutIfNeeded() }
+                    #expect(prior == [time.frame, duration.frame, amount.frame, row.frame])
+                    let image = UIGraphicsImageRenderer(bounds: row.bounds).image { context in
+                        row.layer.render(in: context.cgContext)
+                    }
+                    let appearance = style == .light ? "light" : "dark"
+                    let size = category == .large ? "normal" : "axxxl"
+                    Attachment.record(Array(try #require(image.pngData())),
+                        named: "SL538-\(localeID)-\(Int(width))-\(hour)-\(appearance)-\(size).png")
+                }
+            }
+            if try requireContent(subject.viewModel.state).selectedShiftID != shift.id {
+                row.sendActions(for: .touchUpInside)
+            }
+            #expect(try requireContent(subject.viewModel.state).selectedShiftID == shift.id)
+            row.sendActions(for: .touchUpInside)
+            #expect(try requireContent(subject.viewModel.state).expandedShiftID == shift.id)
+            row.sendActions(for: .touchUpInside)
+            #expect(try requireContent(subject.viewModel.state).expandedShiftID == nil)
+        }
     }
 
     @Test("Expanded details retain exact hourly and fixed rates without repeating the summary",
