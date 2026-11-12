@@ -1242,7 +1242,8 @@ struct OverviewViewControllerTests {
                 row.leadingAnchor.constraint(equalTo: host.view.leadingAnchor, constant: 20),
                 row.trailingAnchor.constraint(equalTo: host.view.trailingAnchor, constant: -20)
             ])
-            row.update(card, showsDivider: false, onCardTapped: nil, onEditTapped: nil)
+            var editedShiftIDs: [UUID] = []
+            row.update(card, showsDivider: false, onCardTapped: nil) { editedShiftIDs.append($0) }
             let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 402, height: 874))
             window.rootViewController = host
             window.isHidden = false
@@ -1275,6 +1276,14 @@ struct OverviewViewControllerTests {
             let edit: UIButton = try requireView(identifier: "\(prefix).edit", in: row)
             #expect(!edit.isHidden)
             #expect(row.accessibilityCustomActions?.map(\.name) == [OverviewStrings.editShift])
+            #expect(edit.isAccessibilityElement)
+            edit.sendActions(for: .touchUpInside)
+            #expect(editedShiftIDs == [shift.id])
+
+            row.update(card, showsDivider: false, onCardTapped: nil, onEditTapped: nil)
+            #expect(edit.isHidden)
+            #expect(!edit.isAccessibilityElement)
+            #expect(row.accessibilityCustomActions?.isEmpty ?? true)
         }
     }
 
@@ -2493,8 +2502,22 @@ struct OverviewViewControllerTests {
             try requireView(identifier: "overview.shift.\($0.id.uuidString)", in: root)
         }
 
-        func expectAccessibleRows() {
-            #expect((deck.accessibilityElements ?? []).count == cards.count)
+        let ordered = cards.sorted { $0.frame.minY < $1.frame.minY }
+        let edits: [UIButton] = try shifts.map {
+            try requireView(identifier: "overview.shift.\($0.id.uuidString).edit", in: root)
+        }
+
+        func expectAccessibleRows(expanded: UIControl? = nil) {
+            var expectedOrder: [UIView] = []
+            for row in ordered {
+                expectedOrder.append(row)
+                if row === expanded, let index = cards.firstIndex(where: { $0 === row }) {
+                    expectedOrder.append(edits[index])
+                }
+            }
+            #expect((deck.accessibilityElements ?? []).compactMap { ($0 as? UIView).map(ObjectIdentifier.init) }
+                    == expectedOrder.map(ObjectIdentifier.init))
+            #expect((deck.accessibilityElements ?? []).count == expectedOrder.count)
             for (index, card) in cards.enumerated() {
                 #expect(card.isAccessibilityElement)
                 #expect(card.accessibilityIdentifier == "overview.shift.\(shifts[index].id.uuidString)")
@@ -2503,17 +2526,23 @@ struct OverviewViewControllerTests {
                 #expect(card.bounds.width > 0)
                 #expect(card.bounds.height >= 92)
                 #expect(card.accessibilityTraits.contains(.button))
+                let isExpanded = card === expanded
+                #expect(edits[index].isHidden == !isExpanded)
+                #expect(edits[index].isAccessibilityElement == isExpanded)
+                #expect(edits[index].accessibilityTraits.contains(.button))
+                #expect(card.accessibilityValue == (isExpanded ? OverviewStrings.expanded : OverviewStrings.collapsed))
+                #expect((card.accessibilityCustomActions ?? []).map(\.name)
+                        == (isExpanded ? [OverviewStrings.editShift] : []))
             }
-            let ordered = cards.sorted { $0.frame.minY < $1.frame.minY }
             expectAccessibleDocumentOrder(ordered, in: window)
         }
 
         expectAccessibleRows()
         // Select another row, then expand and collapse it, retaining identity and order.
-        for _ in 0..<3 {
+        for isExpanded in [false, true, false] {
             cards[1].sendActions(for: .touchUpInside)
             window.layoutIfNeeded()
-            expectAccessibleRows()
+            expectAccessibleRows(expanded: isExpanded ? cards[1] : nil)
         }
 
         let before = cards.map { $0.convert($0.bounds, to: window) }
@@ -2690,11 +2719,16 @@ struct OverviewViewControllerTests {
         #expect(addFrame.maxY <= window.bounds.maxY)
         #expect(add.bounds.height >= 50)
 
+        var editedShiftIDs: [UUID] = []
+        view.onEditShiftTapped = { editedShiftIDs.append($0) }
         renderPresentationCards(ids: ids, selectedID: ids[7], isExpanded: true, in: view)
         window.layoutIfNeeded()
         let edit: UIButton = try requireView(identifier: "overview.shift.\(ids[7].uuidString).edit", in: view)
         #expect(isEffectivelyHidden(edit) == false)
         #expect(edit.bounds.height >= 44)
+        #expect(edit.isAccessibilityElement)
+        edit.sendActions(for: .touchUpInside)
+        #expect(editedShiftIDs == [ids[7]])
         expectLedgerRowsInOrder(rows, in: ledger)
     }
 
@@ -2795,6 +2829,8 @@ struct OverviewViewControllerTests {
         window.rootViewController = host
         window.isHidden = false
         defer { window.isHidden = true }
+        var editedShiftIDs: [UUID] = []
+        view.onEditShiftTapped = { editedShiftIDs.append($0) }
         renderPresentationCards(ids: [id], selectedID: id, isExpanded: true, in: view)
         window.layoutIfNeeded()
 
@@ -2820,6 +2856,9 @@ struct OverviewViewControllerTests {
         }
         let edit: UIButton = try requireView(identifier: "\(prefix).edit", in: card)
         #expect(edit.isHidden == false)
+        #expect(edit.isAccessibilityElement)
+        edit.sendActions(for: .touchUpInside)
+        #expect(editedShiftIDs == [id])
         let editColor = try colorComponents(
             try #require(edit.configuration?.baseForegroundColor),
             traits: window.traitCollection
