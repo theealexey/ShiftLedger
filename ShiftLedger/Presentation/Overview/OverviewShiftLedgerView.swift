@@ -51,7 +51,10 @@ final class OverviewShiftLedgerView: UIView {
             }
             rows.insertArrangedSubview(row, at: index)
         }
-        accessibilityElements = cards.compactMap { rowViews[$0.id] }
+        accessibilityElements = cards.flatMap { card -> [UIView] in
+            guard let row = rowViews[card.id] else { return [] }
+            return row.editButton.isAccessibilityElement ? [row, row.editButton] : [row]
+        }
     }
 
     func rowView(with id: UUID) -> UIView? { rowViews[id] }
@@ -70,7 +73,7 @@ final class OverviewShiftLedgerRowView: UIControl {
     private let details = UIStackView()
     private let unpaidBreak = OverviewReceiptFieldView()
     private let rate = OverviewReceiptFieldView()
-    private let editButton = UIButton(type: .system)
+    fileprivate let editButton = UIButton(type: .system)
     private let editChevron = UIImageView(image: UIImage(systemName: "chevron.right"))
     private let disclosure = UIImageView(image: UIImage(systemName: "chevron.right"))
     private let divider = UIView()
@@ -163,7 +166,8 @@ final class OverviewShiftLedgerRowView: UIControl {
             : card.isExpanded ? OverviewStrings.collapseShift : OverviewStrings.expandShift
         accessibilityValue = card.isExpanded ? OverviewStrings.expanded : OverviewStrings.collapsed
         accessibilityTraits = card.isSelected ? [.button, .selected] : .button
-        accessibilityCustomActions = card.isExpanded
+        let canEdit = card.isExpanded && onEditTapped != nil
+        accessibilityCustomActions = canEdit
             ? [UIAccessibilityCustomAction(
                 name: OverviewStrings.editShift,
                 target: self,
@@ -204,7 +208,8 @@ final class OverviewShiftLedgerRowView: UIControl {
                 .joined(separator: ", ")
         }
         details.isHidden = !card.isExpanded
-        editButton.isHidden = !card.isExpanded
+        editButton.isHidden = !canEdit
+        editButton.isAccessibilityElement = canEdit
         editButton.accessibilityIdentifier = "\(prefix).edit"
         editChevron.accessibilityIdentifier = "\(prefix).edit.chevron"
         disclosure.image = UIImage(systemName: card.isExpanded ? "chevron.up" : "chevron.right")
@@ -262,6 +267,7 @@ final class OverviewShiftLedgerRowView: UIControl {
         editButton.configuration = editConfiguration
         editButton.contentHorizontalAlignment = .leading
         editButton.isAccessibilityElement = false
+        editButton.accessibilityTraits.insert(.button)
         editButton.titleLabel?.adjustsFontForContentSizeCategory = true
         editButton.titleLabel?.numberOfLines = 0
         editButton.titleLabel?.lineBreakMode = .byWordWrapping

@@ -2180,14 +2180,14 @@ struct OverviewViewControllerTests {
             identifier: "overview.shift.\(shift.id.uuidString).edit",
             in: try requireRootView(subject.viewController)
         )
-        #expect(editButton.isHidden)
+        #expect(editButton.isHidden && !editButton.isAccessibilityElement)
         #expect(card.accessibilityCustomActions?.isEmpty != false)
         #expect(card.accessibilityTraits.contains(.button))
         #expect(card.accessibilityTraits.contains(.selected) == false)
         #expect(card.accessibilityHint == OverviewStrings.selectShift)
 
         card.sendActions(for: .touchUpInside)
-        #expect(editButton.isHidden)
+        #expect(editButton.isHidden && !editButton.isAccessibilityElement)
         #expect(card.accessibilityCustomActions?.isEmpty != false)
         #expect(card.accessibilityTraits.contains(.selected))
         #expect(card.accessibilityHint == OverviewStrings.expandShift)
@@ -2208,7 +2208,17 @@ struct OverviewViewControllerTests {
         window.layoutIfNeeded()
         #expect(editButton.bounds.height >= 50)
         #expect(editButton.configuration?.background.cornerRadius == 12)
-        #expect(editButton.isAccessibilityElement == false)
+        let ledger: OverviewShiftLedgerView = try #require(
+            card.superview?.superview as? OverviewShiftLedgerView
+        )
+        for category: UIContentSizeCategory in [.large, .accessibilityExtraExtraExtraLarge, .large] {
+            subject.viewController.traitOverrides.preferredContentSizeCategory = category
+            window.layoutIfNeeded()
+            #expect(card.isAccessibilityElement)
+            #expect(editButton.isAccessibilityElement)
+            #expect(editButton.accessibilityTraits.contains(.button))
+            #expect((ledger.accessibilityElements as? [UIView]) == [card, editButton])
+        }
         #expect(card.accessibilityCustomActions?.map(\.name) == [OverviewStrings.editShift])
         let chevron: UIImageView = try requireView(
             identifier: "overview.shift.\(shift.id.uuidString).edit.chevron", in: card)

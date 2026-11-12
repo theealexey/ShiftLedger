@@ -118,9 +118,24 @@ final class ShiftLedgerUITests: XCTestCase {
             from: relaunchedApp
         )
 
+        let selectedShiftIdentifier = try firstShiftCardIdentifier(in: relaunchedApp)
+        let shiftToCheck = try scrollToHittable(
+            requerying: { relaunchedApp.buttons[selectedShiftIdentifier] },
+            in: relaunchedApp,
+            direction: .towardTop,
+            message: "The Shift to check must be reachable"
+        )
+        if !shiftToCheck.isSelected { shiftToCheck.tap() }
+        XCTAssertTrue(shiftToCheck.isSelected)
         try verifyPaycheckResult(in: relaunchedApp)
+        let returnedShift = try requireElement(
+            relaunchedApp.buttons[selectedShiftIdentifier],
+            message: "The same Shift must be present after Result Done"
+        )
+        XCTAssertTrue(returnedShift.isSelected)
 
         let editedCardIdentifier = try editOneShift(
+            cardIdentifier: selectedShiftIdentifier,
             in: relaunchedApp,
             newStart: ShiftTime(
                 hour: 12,
@@ -542,16 +557,7 @@ final class ShiftLedgerUITests: XCTestCase {
             message: "Expanded last record must remain reachable for Edit"
         )
         XCTAssertEqual(expandedRecord.value as? String, "Expanded")
-        // The row is one accessibility element with a custom Edit action. XCTest
-        // does not expose its nested UIButton, so tap the visible button's
-        // center using the row's bottom inset and the button's 44-point height.
-        expandedRecord.coordinate(withNormalizedOffset: CGVector(dx: 0, dy: 1))
-            .withOffset(CGVector(dx: 64, dy: -38))
-            .tap()
-        _ = try requireElement(
-            app.scrollViews["editShift.screen"],
-            message: "Expanded ledger Edit action must open the persisted Shift"
-        )
+        try openEdit(forCardIdentifier: bottomRecordID, in: app)
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = .autoupdatingCurrent
         let oldestStart = calendar.startOfDay(for: Date())
@@ -1474,11 +1480,12 @@ final class ShiftLedgerUITests: XCTestCase {
 
     @MainActor
     private func editOneShift(
+        cardIdentifier: String,
         in app: XCUIApplication,
         newStart: ShiftTime,
         newEnd: ShiftTime
     ) throws -> String {
-        let identifier = try firstShiftCardIdentifier(in: app)
+        let identifier = cardIdentifier
 
         try openEdit(
             forCardIdentifier: identifier,
@@ -1737,6 +1744,7 @@ final class ShiftLedgerUITests: XCTestCase {
         )
 
         if String(describing: card.value).contains("Expanded") == false {
+            XCTAssertFalse(app.buttons[cardIdentifier + ".edit"].exists)
             _ = try requireHittable(
                 card,
                 message: "Collapsed Shift card must be hittable"
@@ -1817,51 +1825,26 @@ final class ShiftLedgerUITests: XCTestCase {
             from: app
         )
 
-        let checkPaycheck = try scrollToHittable(
-            requerying: {
-                app.buttons["overview.checkPaycheck"]
-            },
+        let editIdentifier = "\(cardIdentifier).edit"
+        let edit = try scrollToHittable(
+            requerying: { app.buttons[editIdentifier] },
             in: app,
             direction: .towardBottom,
-            message: "Check Paycheck must be reachable below the expanded Shift card"
+            message: "Edit Shift for \(cardIdentifier) must be reachable"
         )
-
-        let cardValueBeforeTap = String(describing: expandedCard.value)
-        let cardFrame = expandedCard.frame
-        let checkPaycheckFrame = checkPaycheck.frame
-        let editX = checkPaycheckFrame.midX
-        let editY = checkPaycheckFrame.minY - 24 - 30
-
-        try requireCondition(
-            !checkPaycheckFrame.isEmpty,
-            message: "Check Paycheck must have a non-empty frame"
-        )
-
-        try requireCondition(
-            app.frame.contains(CGPoint(x: editX, y: editY)),
-            message: "Calculated Edit point must be within the application frame"
-        )
-
-        try requireCondition(
-            cardValueBeforeTap.contains("Expanded"),
-            message: "Shift card \(cardIdentifier) must remain Expanded before tapping Edit"
-        )
-
-        let appOrigin = app.coordinate(
-            withNormalizedOffset: CGVector(dx: 0, dy: 0)
-        )
-
-        appOrigin.withOffset(
-            CGVector(dx: editX, dy: editY)
-        ).tap()
+        XCTAssertEqual(app.buttons.matching(identifier: editIdentifier).count, 1)
+        let hierarchy = XCTAttachment(string: app.debugDescription)
+        hierarchy.name = "Expanded Shift accessibility hierarchy"
+        hierarchy.lifetime = .keepAlways
+        add(hierarchy)
+        attachScreenshot(named: "03b-edit-action-hittable", from: app)
+        XCTAssertTrue(expandedCard.isSelected)
+        XCTAssertTrue(String(describing: expandedCard.value).contains("Expanded"))
+        edit.tap()
 
         _ = try requireElement(
             app.scrollViews["editShift.screen"],
-            message:
-                "Edit Shift screen must appear after tapping the expanded card Edit control. "
-                + "card=\(cardIdentifier), value=\(cardValueBeforeTap), "
-                + "cardFrame=\(cardFrame), checkPaycheckFrame=\(checkPaycheckFrame), "
-                + "editPoint=(\(editX), \(editY))"
+            message: "Edit Shift screen must appear after tapping \(editIdentifier)"
         )
 
         attachScreenshot(
