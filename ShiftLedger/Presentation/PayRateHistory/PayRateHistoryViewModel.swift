@@ -88,28 +88,21 @@ struct PayRateHistoryViewModel {
             )
         }
 
-        let mediumDate = formatted(
+        let date = formatted(
             effectiveFrom,
             timeZoneIdentifier: timeZoneIdentifier,
-            locale: locale,
-            dateStyle: .medium
-        )
-        let longDate = formatted(
-            effectiveFrom,
-            timeZoneIdentifier: timeZoneIdentifier,
-            locale: locale,
-            dateStyle: .long
+            locale: locale
         )
         return Row(
             id: payRate.id,
             amountAndBasis: amountAndBasis,
             effectiveDateDescription: PayRateHistoryStrings.effectiveFrom(
-                mediumDate,
+                date,
                 locale: locale
             ),
             accessibilityLabel: PayRateHistoryStrings.accessibilityEffectiveFrom(
                 rate: accessibleRate,
-                date: longDate,
+                date: date,
                 locale: locale
             ),
             kind: .effectiveFrom(effectiveFrom)
@@ -119,8 +112,7 @@ struct PayRateHistoryViewModel {
     private static func formatted(
         _ localDate: LocalDate,
         timeZoneIdentifier: String,
-        locale: Locale,
-        dateStyle: DateFormatter.Style
+        locale: Locale
     ) -> String {
         guard let timeZone = TimeZone(identifier: timeZoneIdentifier),
               let date = try? localDate.startOfDay(in: timeZone)
@@ -134,7 +126,7 @@ struct PayRateHistoryViewModel {
         formatter.calendar = calendar
         formatter.locale = locale
         formatter.timeZone = timeZone
-        formatter.dateStyle = dateStyle
+        formatter.dateStyle = .long
         formatter.timeStyle = .none
         return formatter.string(from: date)
     }

@@ -70,7 +70,7 @@ enum PaycheckResultFormatting {
         dateFormatter.calendar = calendar
         dateFormatter.locale = locale
         dateFormatter.timeZone = timeZone
-        dateFormatter.dateStyle = .medium
+        dateFormatter.dateStyle = .long
         dateFormatter.timeStyle = .none
 
         let timeFormatter = DateFormatter()

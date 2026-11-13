@@ -18,12 +18,8 @@ enum OverviewFormatting {
         endpoint.calendar = calendar
         endpoint.timeZone = zone
         endpoint.locale = locale
-        endpoint.dateStyle = .medium
-        endpoint.timeStyle = .short
         let changesOffset = zone.secondsFromGMT(for: shift.start) != zone.secondsFromGMT(for: shift.end)
-        if changesOffset {
-            endpoint.setLocalizedDateFormatFromTemplate("yMMMdjmOOOO")
-        }
+        endpoint.setLocalizedDateFormatFromTemplate(changesOffset ? "yMMMMdjmOOOO" : "yMMMMdjm")
         let language = locale.language.languageCode?.identifier ?? "en"
         let bundle = Bundle.main.path(forResource: language, ofType: "lproj")
             .flatMap(Bundle.init(path:)) ?? .main
@@ -33,7 +29,7 @@ enum OverviewFormatting {
         let end = "\(endTitle): \(endpoint.string(from: shift.end))"
         let accessibilityLabel = "\(start); \(end)"
         if calendar.isDate(shift.start, inSameDayAs: shift.end) {
-            endpoint.setLocalizedDateFormatFromTemplate("yMMMd")
+            endpoint.setLocalizedDateFormatFromTemplate("yMMMMd")
             let date = endpoint.string(from: shift.start)
             endpoint.setLocalizedDateFormatFromTemplate(changesOffset ? "jmOOOO" : "jm")
             let times = "\(endpoint.string(from: shift.start)) → \(endpoint.string(from: shift.end))"
@@ -89,7 +85,7 @@ enum OverviewFormatting {
         formatter.locale = locale
         formatter.calendar = calendar
         formatter.timeZone = timeZone
-        formatter.dateTemplate = "yMMMd"
+        formatter.dateTemplate = "yMMMMd"
         return formatter.string(from: startDate, to: endDate)
     }
 
@@ -107,7 +103,7 @@ enum OverviewFormatting {
         formatter.timeZone = timeZone
         let needsYear = calendar.component(.year, from: shift.start)
             != calendar.component(.year, from: referenceDate)
-        formatter.setLocalizedDateFormatFromTemplate(needsYear ? "yMMMdjm" : "MMMdjm")
+        formatter.setLocalizedDateFormatFromTemplate(needsYear ? "yMMMMdjm" : "MMMMdjm")
         return formatter.string(from: shift.start)
     }
 
@@ -214,7 +210,7 @@ enum OverviewFormatting {
         formatter.calendar = configuredCalendar(timeZone: timeZone)
         formatter.locale = locale
         formatter.timeZone = timeZone
-        formatter.dateStyle = .medium
+        formatter.dateStyle = .long
         formatter.timeStyle = .short
         return formatter.string(from: shift.start, to: shift.end)
     }
@@ -232,7 +228,7 @@ enum OverviewFormatting {
         formatter.calendar = configuredCalendar(timeZone: timeZone)
         formatter.locale = locale
         formatter.timeZone = timeZone
-        formatter.dateStyle = .medium
+        formatter.dateStyle = .long
         formatter.timeStyle = .none
         return formatter.string(from: shift.start)
     }
@@ -298,7 +294,7 @@ enum OverviewFormatting {
         formatter.locale = locale
         formatter.timeZone = zone
         let offset = zone.secondsFromGMT(for: shift.start) != zone.secondsFromGMT(for: shift.end)
-        formatter.setLocalizedDateFormatFromTemplate((needsYear ? "yMMMdjm" : "MMMdjm") + (offset ? "OOOO" : ""))
+        formatter.setLocalizedDateFormatFromTemplate((needsYear ? "yMMMMdjm" : "MMMMdjm") + (offset ? "OOOO" : ""))
         return (formatter.string(from: shift.start), "→ \(formatter.string(from: shift.end))")
     }
 
@@ -327,7 +323,7 @@ enum OverviewFormatting {
         let sameDay = calendar.isDate(shift.start, inSameDayAs: shift.end)
         let sameYear = calendar.component(.year, from: shift.start)
             == calendar.component(.year, from: shift.end)
-        formatter.setLocalizedDateFormatFromTemplate(sameYear ? "dMMM" : "dMMMy")
+        formatter.setLocalizedDateFormatFromTemplate(sameYear ? "dMMMM" : "dMMMMy")
 
         return ShiftEndpoints(
             startTime: startTime,
@@ -399,7 +395,7 @@ enum OverviewFormatting {
         formatter.locale = locale
         formatter.timeZone = timeZone
         formatter.dateStyle = includeDate || !calendar.isDate(unpaidBreak.start, inSameDayAs: unpaidBreak.end)
-            ? .medium : .none
+            ? .long : .none
         formatter.timeStyle = .short
         return formatter.string(from: unpaidBreak.start, to: unpaidBreak.end)
     }

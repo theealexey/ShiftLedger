@@ -42,7 +42,7 @@ struct AddShiftViewControllerTests {
             let row: UIControl = try requireView("addShift.\(field)", in: controller.view)
             formatter.dateStyle = .long
             #expect(row.accessibilityValue == formatter.string(from: date))
-            formatter.dateStyle = .medium
+            formatter.dateStyle = .long
             #expect(containsLabel(with: formatter.string(from: date), in: row))
         }
         let startRow: UIControl = try requireView("addShift.start", in: controller.view)

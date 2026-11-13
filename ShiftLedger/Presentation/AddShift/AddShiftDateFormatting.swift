@@ -10,7 +10,7 @@ enum AddShiftDateFormatting {
         formatter.calendar = Calendar(identifier: .gregorian)
         formatter.locale = locale
         formatter.timeZone = timeZone
-        formatter.dateStyle = .medium
+        formatter.dateStyle = .long
         formatter.timeStyle = .short
         return formatter.string(from: date)
     }

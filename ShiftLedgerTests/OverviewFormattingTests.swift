@@ -76,9 +76,9 @@ struct OverviewFormattingTests {
         let start = try date(year: 2026, month: 9, day: 12, hour: 21, minute: 36)
         let shift = try makeShift(start: start, duration: 12 * 3600)
         let text = try #require(OverviewFormatting.compactPerShiftPeriod(shift, timeZoneIdentifier: "UTC", locale: locale, referenceDate: start))
-        #expect(text.contains("Sep 12"))
+        #expect(text.contains("September 12"))
         #expect(text.contains("9:36"))
-        #expect(!text.contains("Sep 13"))
+        #expect(!text.contains("September 13"))
         #expect(!text.contains("2026"))
     }
 
@@ -116,6 +116,10 @@ struct OverviewFormattingTests {
             #expect(end.contains("→"))
             #expect(shift.start == start)
             #expect(shift.end == start.addingTimeInterval(TimeInterval(duration)))
+            if month == 12 && day == 31 {
+                #expect(heading.date.contains(ru ? "декабря" : "December"))
+                #expect(end.contains(ru ? "января" : "January"))
+            }
             if duration == 48 * 3600 {
                 #expect(heading.date.contains("5"))
                 #expect(end.contains("7"))
@@ -131,8 +135,8 @@ struct OverviewFormattingTests {
         let endTitle = russian ? "Конец" : "End"
         let firstClock = russian ? "01:30" : "1:30\u{202F}AM"
         for (month, day, hour, expectedDate, startOffset, endOffset, endClock) in [
-            (11, 1, 5, russian ? "1 нояб. 2026\u{202F}г." : "Nov 1, 2026", "GMT-04:00", "GMT-05:00", firstClock),
-            (3, 8, 6, russian ? "8 марта 2026\u{202F}г." : "Mar 8, 2026", "GMT-05:00", "GMT-04:00",
+            (11, 1, 5, russian ? "1 ноября 2026\u{202F}г." : "November 1, 2026", "GMT-04:00", "GMT-05:00", firstClock),
+            (3, 8, 6, russian ? "8 марта 2026\u{202F}г." : "March 8, 2026", "GMT-05:00", "GMT-04:00",
              russian ? "03:30" : "3:30\u{202F}AM")
         ] {
             let shift = try makeShift(start: date(year: 2026, month: month, day: day, hour: hour, minute: 30), duration: 3600)
@@ -140,7 +144,7 @@ struct OverviewFormattingTests {
             let display = try #require(heading.time)
             let start = "\(firstClock) \(startOffset)"
             let end = "\(endClock) \(endOffset)"
-            let dateTimeSeparator = russian ? ", " : " at "
+            let dateTimeSeparator = russian ? " в " : " at "
             #expect(heading.date == expectedDate)
             #expect(display == "\(start) → \(end)")
             #expect(heading.accessibilityLabel ==
@@ -292,7 +296,7 @@ struct OverviewFormattingTests {
             locale: locale
         ))
 
-        #expect(result.contains("Sep 20"))
+        #expect(result.contains("September 20"))
         #expect(result.contains("2:00"))
         #expect(result.contains("10:00"))
     }
@@ -315,8 +319,8 @@ struct OverviewFormattingTests {
             locale: locale
         ))
 
-        #expect(stockholm.contains("Sep 20"))
-        #expect(newYork.contains("Sep 19"))
+        #expect(stockholm.contains("September 20"))
+        #expect(newYork.contains("September 19"))
         #expect(stockholm != newYork)
     }
 
@@ -381,7 +385,7 @@ struct OverviewFormattingTests {
             locale: locale
         ))
 
-        #expect(date.contains("Sep 20"))
+        #expect(date.contains("September 20"))
         #expect(time.contains("2:30"))
         #expect(time.contains("4:00"))
     }
@@ -662,7 +666,7 @@ struct OverviewFormattingTests {
         let day = DateFormatter()
         day.locale = locale
         day.timeZone = zone
-        day.dateStyle = .medium
+        day.dateStyle = .long
         day.timeStyle = .none
         // UTC November 5 at 23:30 belongs to November 6 in the Job timezone.
         #expect(text.contains(day.string(from: start)))
@@ -673,7 +677,7 @@ struct OverviewFormattingTests {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = zone
         expected.calendar = calendar
-        expected.dateStyle = .medium
+        expected.dateStyle = .long
         expected.timeStyle = .short
         // Foundation may share AM/PM across endpoints; compare the complete interval.
         #expect(text == expected.string(from: start, to: end))

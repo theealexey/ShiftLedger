@@ -1118,10 +1118,10 @@ struct OverviewViewControllerTests {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = expected.timeZone
         expected.calendar = calendar
-        expected.dateStyle = scenario == 0 ? .none : .medium
+        expected.dateStyle = scenario == 0 ? .none : .long
         expected.timeStyle = .short
         #expect(interval == expected.string(from: unpaidBreak.start, to: unpaidBreak.end))
-        expected.dateStyle = .medium
+        expected.dateStyle = .long
         let fullInterval = expected.string(from: unpaidBreak.start, to: unpaidBreak.end)
         #expect(card.accessibilityLabel.contains(fullInterval))
         #expect(card.id == shift.id)

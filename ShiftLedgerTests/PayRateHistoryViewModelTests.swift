@@ -138,8 +138,8 @@ struct PayRateHistoryViewModelTests {
         ).rows.first)
 
         #expect(row.kind == .effectiveFrom(localDate))
-        #expect(row.effectiveDateDescription.contains("Jan 1, 2026"))
-        #expect(row.effectiveDateDescription.contains("Dec 31") == false)
+        #expect(row.effectiveDateDescription.contains("January 1, 2026"))
+        #expect(row.effectiveDateDescription.contains("December 31") == false)
     }
 
     @Test("Equal amounts on different dates remain distinct history entries")
