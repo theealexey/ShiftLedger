@@ -9,13 +9,15 @@ final class AppCoordinator {
         case jobSelection(UINavigationController)
     }
 
+    private let appLock: AppLockController?
     private let window: UIWindow
     private let resolveLaunch: @MainActor () async throws -> AppLaunchResolution
     private let makeNavigationController: @MainActor () -> UINavigationController
     private var initialFlowResolutionTask: Task<Void, Never>?
     private var activeFlow: ActiveFlow?
 
-    init(window: UIWindow) {
+    init(window: UIWindow, appLock: AppLockController? = nil) {
+        self.appLock = appLock
         self.window = window
         resolveLaunch = {
             try await AppLaunchResolver().resolve()
@@ -33,6 +35,7 @@ final class AppCoordinator {
         }
     ) {
         self.window = window
+        self.appLock = nil
         self.resolveLaunch = resolveLaunch
         self.makeNavigationController = makeNavigationController
     }
@@ -157,7 +160,8 @@ final class AppCoordinator {
         let coordinator = MainCoordinator(
             navigationController: navigationController,
             job: job,
-            dependencies: composition.makeMainDependencies()
+            dependencies: composition.makeMainDependencies(),
+            appLock: appLock
         )
 
         coordinator.start()
@@ -179,6 +183,7 @@ final class AppCoordinator {
             window.rootViewController = rootViewController
         }
 
+        appLock?.rootDidChange()
         if window.isHidden {
             window.makeKeyAndVisible()
         }

@@ -32,6 +32,7 @@ final class MainCoordinator {
         case paycheckResult(PaycheckComparison)
     }
 
+    private let appLock: AppLockController?
     private let navigationController: UINavigationController
     private var job: Job
     private let dependencies: Dependencies
@@ -40,11 +41,13 @@ final class MainCoordinator {
     init(
         navigationController: UINavigationController,
         job: Job,
-        dependencies: Dependencies
+        dependencies: Dependencies,
+        appLock: AppLockController? = nil
     ) {
         self.navigationController = navigationController
         self.job = job
         self.dependencies = dependencies
+        self.appLock = appLock
         overviewViewController = dependencies.makeOverview(job)
 
         configureOverviewCallbacks()
@@ -141,7 +144,7 @@ final class MainCoordinator {
             timeZone: job.timeZoneIdentifier,
             version: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String,
             rateActionTitle: workType == nil ? WorkTypesStrings.title : PayRateHistoryStrings.title
-        ))
+        ), appLock: appLock)
         controller.onWillAppear = { [weak self, weak controller] in
             guard let self, let controller else { return }
             let active = self.job.workTypes.filter { !$0.isArchived }

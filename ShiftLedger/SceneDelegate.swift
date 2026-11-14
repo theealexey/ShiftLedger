@@ -2,6 +2,7 @@ import UIKit
 
 final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     var window: UIWindow?
+    private var appLock: AppLockController?
     private var appCoordinator: AppCoordinator?
 
     func scene(
@@ -14,14 +15,24 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         }
 
         let window = UIWindow(windowScene: windowScene)
-        let coordinator = AppCoordinator(window: window)
+        let appLock = AppLockController(window: window)
+        self.appLock = appLock
+        appLock.rootDidChange()
+        let coordinator = AppCoordinator(window: window, appLock: appLock)
 
         self.window = window
         appCoordinator = coordinator
         coordinator.start()
     }
 
+    func sceneDidBecomeActive(_ scene: UIScene) { appLock?.didBecomeActive() }
+
+    func sceneWillResignActive(_ scene: UIScene) { appLock?.willResignActive() }
+
+    func sceneDidEnterBackground(_ scene: UIScene) { appLock?.didEnterBackground() }
+
     func sceneDidDisconnect(_ scene: UIScene) {
+        appLock?.didEnterBackground()
         appCoordinator?.stop()
         appCoordinator = nil
     }

@@ -22,6 +22,83 @@
         "ru" : { "stringUnit" : { "state" : "translated", "value" : "Конец" } }
       }
     },
+    "appLock.deviceOwner" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Lock with device authentication" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Блокировка с проверкой владельца" } }
+      }
+    },
+    "appLock.explanation" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Require device authentication when opening ShiftLedger. You can use your device passcode." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "При открытии ShiftLedger потребуется подтверждение личности. Можно использовать код-пароль устройства." } }
+      }
+    },
+    "appLock.faceID" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Lock with Face ID" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Блокировка с Face ID" } }
+      }
+    },
+    "appLock.failure" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Authentication failed. Try again." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Не удалось подтвердить личность. Повторите попытку." } }
+      }
+    },
+    "appLock.locked" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "ShiftLedger is locked." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "ShiftLedger заблокирован." } }
+      }
+    },
+    "appLock.ok" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "OK" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "ОК" } }
+      }
+    },
+    "appLock.reason" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Confirm access to your shift and pay information." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Подтвердите доступ к данным о сменах и оплате." } }
+      }
+    },
+    "appLock.retry" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Unlock" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Разблокировать" } }
+      }
+    },
+    "appLock.security" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Security" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Безопасность" } }
+      }
+    },
+    "appLock.touchID" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Lock with Touch ID" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Блокировка с Touch ID" } }
+      }
+    },
+    "appLock.unavailable" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Device authentication is unavailable. Set a device passcode in Settings and try again." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Проверка владельца недоступна. Установите код-пароль устройства в настройках и повторите попытку." } }
+      }
+    },
     "archive.jobs.loadFailed" : {
       "extractionState" : "manual",
       "localizations" : {
