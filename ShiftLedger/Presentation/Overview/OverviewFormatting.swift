@@ -317,6 +317,10 @@ enum OverviewFormatting {
         formatter.dateStyle = .none
         formatter.timeStyle = .short
 
+        if timeZone.secondsFromGMT(for: shift.start) != timeZone.secondsFromGMT(for: shift.end) {
+            formatter.setLocalizedDateFormatFromTemplate("jmOOOO")
+        }
+
         let startTime = formatter.string(from: shift.start)
         let endTime = formatter.string(from: shift.end)
         let calendar = configuredCalendar(timeZone: timeZone)

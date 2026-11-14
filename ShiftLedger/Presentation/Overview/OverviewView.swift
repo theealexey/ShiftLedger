@@ -487,6 +487,8 @@ final class OverviewView: UIView, UIScrollViewDelegate {
 
         [shiftCountStack, historyScopeLabel, shiftStack, shiftHistoryEmptyLabel]
             .forEach(shiftHistoryStack.addArrangedSubview)
+        shiftHistoryStack.setCustomSpacing(6, after: shiftCountStack)
+        shiftHistoryStack.setCustomSpacing(16, after: historyScopeLabel)
 
         emptyCard.addSubview(emptyStack)
         [emptyTitleLabel, emptyMessageLabel].forEach(emptyStack.addArrangedSubview)

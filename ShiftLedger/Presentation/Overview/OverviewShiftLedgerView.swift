@@ -66,6 +66,10 @@ final class OverviewShiftLedgerRowView: UIControl {
     private let dateLabel = UILabel()
     private let amountLabel = UILabel()
     private let timeLabel = UILabel()
+    private let endpointStack = UIStackView()
+    private let startTimeLabel = UILabel()
+    private let endDateLabel = UILabel()
+    private let endTimeLabel = UILabel()
     private let durationLabel = UILabel()
     private let summary = UIStackView()
     private let summarySpacer = UIView()
@@ -96,10 +100,14 @@ final class OverviewShiftLedgerRowView: UIControl {
     override func layoutSubviews() {
         updateHeadingAxis()
         super.layoutSubviews()
-        updateOffsetFont()
+        updateOffsetFont(for: timeLabel)
+        if !endpointStack.isHidden {
+            updateOffsetFont(for: startTimeLabel)
+            updateOffsetFont(for: endTimeLabel)
+        }
     }
 
-    private func updateOffsetFont() {
+    private func updateOffsetFont(for timeLabel: UILabel) {
         let base = UIFontMetrics(forTextStyle: .callout).scaledFont(
             for: .monospacedSystemFont(ofSize: 14, weight: .regular), compatibleWith: traitCollection)
         guard let text = timeLabel.text else { return }
@@ -178,12 +186,26 @@ final class OverviewShiftLedgerRowView: UIControl {
 
         backgroundColor = card.isSelected ? ShiftLedgerColors.surfaceSelected : .clear
         selectedRule.isHidden = !card.isSelected
-        dateLabel.text = card.frontDate
+        let multiDay = card.endpoints.startDate != nil && card.endpoints.endDate != nil
+        dateLabel.text = multiDay ? card.endpoints.startDate : card.frontDate
         dateLabel.accessibilityIdentifier = "\(prefix).date"
         amountLabel.text = card.expectedAmount
         amountLabel.accessibilityIdentifier = "\(prefix).expected"
-        timeLabel.text = card.timeRange
-        timeLabel.accessibilityIdentifier = "\(prefix).time"
+        startTimeLabel.text = multiDay ? card.endpoints.startTime : nil
+        startTimeLabel.accessibilityIdentifier = "\(prefix).startTime"
+        endpointStack.isHidden = !multiDay
+        endpointStack.accessibilityIdentifier = multiDay ? "\(prefix).time" : nil
+        endpointStack.accessibilityLabel = multiDay
+            ? [card.endpoints.startDate, card.endpoints.startTime,
+               card.endpoints.endDate, card.endpoints.endTime].compactMap { $0 }.joined(separator: " ")
+            : nil
+        endDateLabel.text = card.endpoints.endDate.map { "→ \($0)" }
+        endDateLabel.accessibilityIdentifier = "\(prefix).endDate"
+        endTimeLabel.text = multiDay ? card.endpoints.endTime : nil
+        endTimeLabel.accessibilityIdentifier = "\(prefix).endTime"
+        timeLabel.isHidden = multiDay
+        timeLabel.text = multiDay ? nil : card.timeRange
+        timeLabel.accessibilityIdentifier = multiDay ? nil : "\(prefix).time"
         durationLabel.text = OverviewStrings.paidDuration(card.paidDuration)
         durationLabel.accessibilityIdentifier = "\(prefix).duration"
 
@@ -234,7 +256,7 @@ final class OverviewShiftLedgerRowView: UIControl {
 
         summary.axis = .horizontal
         summary.alignment = .center
-        summary.spacing = 12
+        summary.spacing = 8
         summary.addArrangedSubview(timeLabel)
         summary.addArrangedSubview(summarySpacer)
         durationSummary.spacing = 12
@@ -287,7 +309,11 @@ final class OverviewShiftLedgerRowView: UIControl {
         ])
         addAction(UIAction { [weak self] _ in self?.onCardTapped?() }, for: .touchUpInside)
 
-        [heading, summary, details, editButton].forEach(content.addArrangedSubview)
+        endpointStack.axis = .vertical
+        endpointStack.spacing = 8
+        [startTimeLabel, endDateLabel, endTimeLabel].forEach(endpointStack.addArrangedSubview)
+        [heading, endpointStack, summary, details, editButton].forEach(content.addArrangedSubview)
+        content.setCustomSpacing(12, after: endpointStack)
         content.setCustomSpacing(20, after: summary)
         content.setCustomSpacing(20, after: details)
 
@@ -318,7 +344,7 @@ final class OverviewShiftLedgerRowView: UIControl {
             for: .monospacedSystemFont(ofSize: 16, weight: .semibold)), color: ShiftLedgerColors.textPrimary)
         configureLabel(amountLabel, font: UIFontMetrics(forTextStyle: .title2).scaledFont(
             for: .monospacedDigitSystemFont(ofSize: 19, weight: .semibold)), color: ShiftLedgerColors.textPrimary)
-        [timeLabel, durationLabel].forEach {
+        [timeLabel, startTimeLabel, endDateLabel, endTimeLabel, durationLabel].forEach {
             configureLabel($0, font: UIFontMetrics(forTextStyle: .callout).scaledFont(
                 for: .monospacedSystemFont(ofSize: 14, weight: .regular)
             ), color: ShiftLedgerColors.textSecondary)
@@ -348,16 +374,18 @@ final class OverviewShiftLedgerRowView: UIControl {
         if heading.axis != axis {
             heading.axis = axis
             heading.alignment = vertical ? .fill : .firstBaseline
-            amountLabel.textAlignment = vertical ? .left : .right
+            amountLabel.textAlignment = .right
         }
-        let verticalSummary = traitCollection.preferredContentSizeCategory.isAccessibilityCategory
+        let verticalSummary = !endpointStack.isHidden
+            || traitCollection.preferredContentSizeCategory.isAccessibilityCategory
             || singleLineWidth(of: timeLabel) + singleLineWidth(of: durationLabel)
-                + disclosure.intrinsicContentSize.width + 3 * summary.spacing > available
+                + disclosure.intrinsicContentSize.width + 28 > available
         let summaryAxis: NSLayoutConstraint.Axis = verticalSummary ? .vertical : .horizontal
         if summary.axis != summaryAxis {
             summary.axis = summaryAxis
             summary.alignment = verticalSummary ? .fill : .center
             summarySpacer.isHidden = verticalSummary
+            summary.spacing = verticalSummary ? 12 : 8
         }
     }
 

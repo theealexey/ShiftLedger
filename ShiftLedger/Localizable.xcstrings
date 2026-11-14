@@ -1132,8 +1132,8 @@
     "overview.ledgerHistory.title" : {
       "extractionState" : "manual",
       "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "All saved shifts" } },
-        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Все сохранённые смены" } }
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "All shifts" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Все смены" } }
       }
     },
     "overview.ledgerHistory.empty" : {
@@ -1160,8 +1160,8 @@
     "overview.receipt.historyScope" : {
       "extractionState" : "manual",
       "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "All saved shifts, regardless of pay period" } },
-        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Все сохранённые смены, независимо от периода" } }
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Across all pay periods" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "За все расчётные периоды" } }
       }
     },
     "overview.receipt.exactContribution" : {

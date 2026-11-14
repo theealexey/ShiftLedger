@@ -1830,9 +1830,18 @@ struct OverviewViewControllerTests {
         card.sendActions(for: .touchUpInside)
         card.sendActions(for: .touchUpInside)
 
-        let time: UILabel = try requireView(identifier: "overview.shift.\(overnight.id.uuidString).time", in: card)
-        #expect(time.text == OverviewFormatting.shiftRowHeading(overnight,
-            timeZoneIdentifier: job.timeZoneIdentifier, locale: displayLocale)?.time)
+        let prefix = "overview.shift.\(overnight.id.uuidString)"
+        let endpoints = try #require(OverviewFormatting.shiftEndpoints(overnight,
+            timeZoneIdentifier: job.timeZoneIdentifier, locale: displayLocale))
+        let startTime: UILabel = try requireView(identifier: "\(prefix).startTime", in: card)
+        let endTime: UILabel = try requireView(identifier: "\(prefix).endTime", in: card)
+        #expect(startTime.text == endpoints.startTime)
+        #expect(endTime.text == endpoints.endTime)
+        let interval: UIStackView = try requireView(identifier: "\(prefix).time", in: card)
+        #expect(startTime.isDescendant(of: interval))
+        #expect(endTime.isDescendant(of: interval))
+        #expect(interval.accessibilityLabel?.contains(endpoints.startTime) == true)
+        #expect(interval.accessibilityLabel?.contains(endpoints.endTime) == true)
         #expect(descendant(identifier: "overview.shift.\(overnight.id.uuidString).endpoints", in: card) == nil)
         let fullDate = try #require(OverviewFormatting.shiftDate(
             overnight,
@@ -1917,7 +1926,12 @@ struct OverviewViewControllerTests {
             let prefix = "overview.shift.\(shift.id.uuidString)"
             let row: UIControl = try requireView(identifier: prefix, in: root)
             let date: UILabel = try requireView(identifier: "\(prefix).date", in: row)
-            let time: UILabel = try requireView(identifier: "\(prefix).time", in: row)
+            let endpoints = try #require(OverviewFormatting.shiftEndpoints(shift,
+                timeZoneIdentifier: zone, locale: locale))
+            let multiDay = endpoints.endDate != nil
+            let time: UILabel = try requireView(identifier: "\(prefix).\(multiDay ? "endTime" : "time")", in: row)
+            let startTime: UILabel = try requireView(identifier: "\(prefix).startTime", in: row)
+            let endDate: UILabel = try requireView(identifier: "\(prefix).endDate", in: row)
             let amount: UILabel = try requireView(identifier: "\(prefix).expected", in: row)
             let duration: UILabel = try requireView(identifier: "\(prefix).duration", in: row)
             let initialMoney = amount.text
@@ -1929,7 +1943,27 @@ struct OverviewViewControllerTests {
                 for (step, category) in [UIContentSizeCategory.large, .accessibilityExtraExtraExtraLarge, .large].enumerated() {
                     controller.traitOverrides.preferredContentSizeCategory = category
                     for _ in 0..<5 { root.setNeedsLayout(); window.layoutIfNeeded() }
-                    #expect(date.text == expected.date && time.text == expected.time)
+                    #expect(date.text == (endpoints.startDate ?? expected.date))
+                    #expect(time.text == (multiDay ? endpoints.endTime : expected.time))
+                    let summary = try #require(duration.superview?.superview as? UIStackView)
+                    #expect(summary.spacing == (summary.axis == .vertical ? 12 : 8))
+                    #expect(isEffectivelyHidden(startTime) == !multiDay)
+                    #expect(isEffectivelyHidden(endDate) == !multiDay)
+                    if let end = endpoints.endDate {
+                        #expect(startTime.text == endpoints.startTime)
+                        #expect(endDate.text == "→ \(end)")
+                        let interval: UIStackView = try requireView(identifier: "\(prefix).time", in: row)
+                        #expect(interval.accessibilityLabel?.contains(end) == true)
+                        #expect(time.isDescendant(of: interval))
+                        #expect(startTime.isDescendant(of: interval))
+                        let startFrame = startTime.convert(startTime.bounds, to: row)
+                        let endDateFrame = endDate.convert(endDate.bounds, to: row)
+                        let endTimeFrame = time.convert(time.bounds, to: row)
+                        #expect(startFrame.minY >= date.convert(date.bounds, to: row).maxY + 7.5)
+                        #expect(endDateFrame.minY >= startFrame.maxY + 7.5)
+                        #expect(endTimeFrame.minY >= endDateFrame.maxY + 7.5)
+                        #expect(duration.convert(duration.bounds, to: row).minY >= endTimeFrame.maxY + 11.5)
+                    }
                     #expect(date.lineBreakMode == .byWordWrapping)
                     #expect(time.lineBreakMode == .byWordWrapping)
                     let headingFrames = [date, amount].map { $0.convert($0.bounds, to: row) }
@@ -1994,7 +2028,8 @@ struct OverviewViewControllerTests {
                     #expect(amount.text == initialMoney && duration.text == initialDuration)
                     try assertPaidWords(duration)
                     #expect(duration.text == OverviewStrings.paidDuration(OverviewFormatting.duration(shift.paidDuration)))
-                    for label in [date, time, amount, duration] {
+                    let visibleLabels = [date, time, amount, duration] + (multiDay ? [startTime, endDate] : [])
+                    for label in visibleLabels {
                         #expect(label.bounds.width > 0)
                         #expect(label.bounds.height + 0.5 >= label.sizeThatFits(
                             CGSize(width: label.bounds.width, height: .greatestFiniteMagnitude)).height)
