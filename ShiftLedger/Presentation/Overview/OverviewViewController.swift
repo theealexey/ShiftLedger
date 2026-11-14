@@ -4,7 +4,6 @@ final class OverviewViewController: UIViewController {
     var onAddShift: (() -> Void)?
     var onManageWorkTypes: (() -> Void)?
     var onSettings: (() -> Void)?
-    var onArchivedJobs: (() -> Void)?
     var onCheckPaycheck: ((PayCalculationPeriod) -> Void)?
     var onEditShift: ((Shift) -> Void)?
 
@@ -74,15 +73,12 @@ final class OverviewViewController: UIViewController {
         let workTypes = UIAction(title: OverviewStrings.workTypes) { [weak self] _ in
             self?.onManageWorkTypes?()
         }
-        let archivedJobs = UIAction(title: OverviewStrings.archivedJobs) { [weak self] _ in
-            self?.onArchivedJobs?()
-        }
         let settings = UIAction(title: SettingsStrings.title, image: UIImage(systemName: "gearshape")) { [weak self] _ in
             self?.onSettings?()
         }
         let item = UIBarButtonItem(
             image: UIImage(systemName: "ellipsis.circle"),
-            menu: UIMenu(children: [workTypes, archivedJobs, settings])
+            menu: UIMenu(children: [workTypes, settings])
         )
         item.accessibilityIdentifier = "overview.more"
         navigationItem.rightBarButtonItem = item

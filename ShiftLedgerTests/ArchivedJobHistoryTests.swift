@@ -296,13 +296,15 @@ struct ArchivedJobHistoryTests {
         defer { window.isHidden = true; window.rootViewController = nil }
         coordinator.start()
         let overview = try #require(navigation.topViewController as? OverviewViewController)
-        overview.onArchivedJobs?()
+        overview.onSettings?()
+        let settings = try #require(navigation.topViewController as? SettingsViewController)
+        settings.onArchivedJobs?()
         window.layoutIfNeeded()
         let list = try #require(navigation.topViewController as? ArchivedJobsViewController)
         let table = try #require(list.view as? JobSelectionView).tableView
         table.layoutIfNeeded()
         #expect(attempts == 1)
-        #expect(navigation.viewControllers.count == 2)
+        #expect(navigation.viewControllers.count == 3)
         #expect(navigation.viewControllers.first === overview)
         #expect(list.presentedViewController == nil)
         if outcome != "initialEmpty" {
@@ -321,7 +323,7 @@ struct ArchivedJobHistoryTests {
             #expect(attempts == 2)
         }
         #expect(navigation.topViewController === list)
-        #expect(navigation.viewControllers.count == 2)
+        #expect(navigation.viewControllers.count == 3)
         #expect(list.presentedViewController == nil)
         if outcome == "failed" {
             #expect(table.numberOfRows(inSection: 0) == 2)
@@ -340,6 +342,8 @@ struct ArchivedJobHistoryTests {
             #expect(table.numberOfRows(inSection: 0) == 0)
             #expect(list.tableView(table, titleForFooterInSection: 0) == ArchivedJobHistoryStrings.emptyJobs)
         }
+        _ = navigation.popViewController(animated: false)
+        #expect(navigation.topViewController === settings)
         _ = navigation.popViewController(animated: false)
         #expect(navigation.topViewController === overview)
         overview.onAddShift?()
@@ -390,7 +394,9 @@ struct ArchivedJobHistoryTests {
 
         coordinator.start()
         let overview = try #require(navigation.topViewController as? OverviewViewController)
-        overview.onArchivedJobs?()
+        overview.onSettings?()
+        let settings = try #require(navigation.topViewController as? SettingsViewController)
+        settings.onArchivedJobs?()
         window.layoutIfNeeded()
 
         let list = try #require(navigation.topViewController as? ArchivedJobsViewController)
@@ -402,7 +408,7 @@ struct ArchivedJobHistoryTests {
         let error = try #require(table.cellForRow(at: IndexPath(row: 0, section: 0)))
         let retry = try #require(table.cellForRow(at: IndexPath(row: 1, section: 0)))
         #expect(attempts == 1)
-        #expect(navigation.viewControllers.count == 2)
+        #expect(navigation.viewControllers.count == 3)
         #expect(navigation.viewControllers.first === overview)
         #expect(list.presentedViewController == nil)
         #expect(table.numberOfRows(inSection: 0) == 2)
@@ -459,13 +465,15 @@ struct ArchivedJobHistoryTests {
         defer { window.isHidden = true; window.rootViewController = nil }
         coordinator.start()
         let overview = try #require(navigation.topViewController as? OverviewViewController)
-        overview.onArchivedJobs?()
+        overview.onSettings?()
+        let settings = try #require(navigation.topViewController as? SettingsViewController)
+        settings.onArchivedJobs?()
         let list = try #require(navigation.topViewController as? ArchivedJobsViewController)
         archived.isArchived = false
         try fixture.stack.viewContext.save()
         list.onSelectJob?(archived.id)
         #expect(navigation.topViewController === list)
-        #expect(navigation.viewControllers.count == 2)
+        #expect(navigation.viewControllers.count == 3)
         let alert = try #require(list.presentedViewController as? UIAlertController)
         #expect(alert.title == ArchivedJobHistoryStrings.errorTitle)
         #expect(!fixture.stack.viewContext.hasChanges)
@@ -496,12 +504,16 @@ struct ArchivedJobHistoryTests {
         defer { window.isHidden = true; window.rootViewController = nil }
         coordinator.start()
         let overview = try #require(navigation.topViewController as? OverviewViewController)
-        overview.onArchivedJobs?()
+        overview.onSettings?()
+        let settings = try #require(navigation.topViewController as? SettingsViewController)
+        settings.onArchivedJobs?()
         let list = try #require(navigation.topViewController as? ArchivedJobsViewController)
         list.onSelectJob?(archived.id)
         #expect((navigation.topViewController as? ArchivedJobHistoryViewController)?.content.identity.id == archived.id)
         _ = navigation.popViewController(animated: false)
         #expect(navigation.topViewController === list)
+        _ = navigation.popViewController(animated: false)
+        #expect(navigation.topViewController === settings)
         _ = navigation.popViewController(animated: false)
         #expect(navigation.topViewController === overview)
         overview.onAddShift?()

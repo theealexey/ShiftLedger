@@ -32,8 +32,8 @@
     "archive.jobs.title" : {
       "extractionState" : "manual",
       "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Archived Jobs" } },
-        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Архивные работы" } }
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Archived jobs" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Архивированные работы" } }
       }
     },
     "archive.history.title" : {
@@ -1701,6 +1701,13 @@
       "localizations" : {
         "en" : { "stringUnit" : { "state" : "translated", "value" : "App information" } },
         "ru" : { "stringUnit" : { "state" : "translated", "value" : "О приложении" } }
+      }
+    },
+    "settings.archive" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Archive" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Архив" } }
       }
     },
     "settings.job" : {

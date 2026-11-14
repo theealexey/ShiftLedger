@@ -66,6 +66,57 @@ final class ShiftLedgerUITests: XCTestCase {
         XCTAssertTrue(more.waitForExistence(timeout: 5))
     }
 
+    @MainActor
+    func testArchiveFromSettingsEnglish() {
+        verifyArchiveFromSettings(language: "en", locale: "en_US", settings: "Settings",
+                                  section: "Archive", archive: "Archived jobs", size: "L")
+    }
+
+    @MainActor
+    func testArchiveFromSettingsRussian() {
+        verifyArchiveFromSettings(language: "ru", locale: "ru_RU", settings: "Настройки",
+                                  section: "Архив", archive: "Архивированные работы", size: "L")
+    }
+
+    @MainActor
+    func testArchiveFromSettingsRussianAXXXL() {
+        verifyArchiveFromSettings(language: "ru", locale: "ru_RU", settings: "Настройки",
+                                  section: "Архив", archive: "Архивированные работы", size: "AccessibilityXXXL")
+    }
+
+    @MainActor
+    private func verifyArchiveFromSettings(language: String, locale: String, settings: String,
+                                           section: String, archive: String, size: String) {
+        let app = XCUIApplication()
+        app.launchArguments = [
+            "-ui-testing-seed-job", "-AppleLanguages", "(\(language))",
+            "-AppleLocale", locale, "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategory\(size)"
+        ]
+        app.launch()
+        let more = app.buttons["overview.more"]
+        guard more.waitForExistence(timeout: 10) else { return XCTFail("Overview More is unavailable") }
+        more.tap()
+        XCTAssertFalse(app.buttons[archive].exists)
+        app.buttons[settings].tap()
+
+        let scroll = app.scrollViews["settings.scroll"]
+        let row = scroll.buttons["settings.archivedJobs"]
+        guard row.waitForExistence(timeout: 5) else { return XCTFail("Settings archive row is missing") }
+        for _ in 0..<4 where !row.isHittable { scroll.swipeUp() }
+        guard row.isHittable else { return XCTFail("Settings archive row is not hittable") }
+        XCTAssertEqual(row.label, archive)
+        XCTAssertTrue(scroll.staticTexts[section].exists)
+        XCTAssertGreaterThanOrEqual(row.frame.height, 44)
+        attachScreenshot(named: "SL544-\(language)-\(size)", from: app)
+        row.tap()
+
+        let archiveBar = app.navigationBars[archive]
+        XCTAssertTrue(app.tables["archive.jobs.list"].waitForExistence(timeout: 5))
+        archiveBar.buttons.firstMatch.tap()
+        XCTAssertTrue(app.navigationBars[settings].waitForExistence(timeout: 5))
+        XCTAssertTrue(row.exists)
+    }
+
     // MARK: - Existing coverage
 
     @MainActor

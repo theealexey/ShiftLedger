@@ -63,7 +63,6 @@ final class MainCoordinator {
             self?.navigate(to: .workTypes)
         }
         overviewViewController.onSettings = { [weak self] in self?.showSettings() }
-        overviewViewController.onArchivedJobs = { [weak self] in self?.showArchivedJobs() }
         overviewViewController.onEditShift = { [weak self] shift in
             self?.navigate(to: .editShift(shift))
         }
@@ -148,6 +147,7 @@ final class MainCoordinator {
             let active = self.job.workTypes.filter { !$0.isArchived }
             controller.updateRatesTitle(active.count == 1 ? PayRateHistoryStrings.title : WorkTypesStrings.title)
         }
+        controller.onArchivedJobs = { [weak self] in self?.showArchivedJobs() }
         controller.onRates = { [weak self] in
             guard let self else { return }
             let active = self.job.workTypes.filter { !$0.isArchived }

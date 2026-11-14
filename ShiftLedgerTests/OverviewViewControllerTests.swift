@@ -3121,8 +3121,7 @@ struct OverviewViewControllerTests {
         let menu = try #require(item.menu)
         #expect(menu.children.count == 2)
         #expect(menu.children.first?.title == OverviewStrings.workTypes)
-        #expect(menu.children.map(\.title).contains(OverviewStrings.workTypes))
-        #expect(menu.children.map(\.title).contains(OverviewStrings.archivedJobs))
+        #expect(menu.children.last?.title == SettingsStrings.title)
     }
 
     @Test("Check Paycheck forwards the selected Domain period")
