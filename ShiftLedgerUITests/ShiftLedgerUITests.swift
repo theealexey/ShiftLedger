@@ -13,6 +13,59 @@ final class ShiftLedgerUITests: XCTestCase {
         case towardBottom
     }
 
+    @MainActor
+    func testSettingsEnglish() throws {
+        try verifySettings(language: "en", locale: "en_US", title: "Settings", currency: "Currency",
+                           history: "Pay Rate History", size: "L", screenshot: "SL543-en-light")
+    }
+
+    @MainActor
+    func testSettingsRussian() throws {
+        try verifySettings(language: "ru", locale: "ru_RU", title: "Настройки", currency: "Валюта",
+                           history: "История ставок", size: "L", screenshot: "SL543-ru-dark")
+    }
+
+    @MainActor
+    func testSettingsRussianAXXXL() throws {
+        try verifySettings(language: "ru", locale: "ru_RU", title: "Настройки", currency: "Валюта",
+                           history: "История ставок", size: "AccessibilityXXXL", screenshot: "SL543-ru-dark-axxxl")
+    }
+
+    @MainActor
+    private func verifySettings(language: String, locale: String, title: String, currency: String,
+                                history: String, size: String, screenshot: String) throws {
+        let app = XCUIApplication()
+        app.launchArguments = [
+            "-ui-testing-seed-job", "-AppleLanguages", "(\(language))",
+            "-AppleLocale", locale, "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategory\(size)"
+        ]
+        app.launch()
+        let more = app.buttons["overview.more"]
+        XCTAssertTrue(more.waitForExistence(timeout: 10))
+        more.tap()
+        app.buttons[title].tap()
+        XCTAssertTrue(app.navigationBars[title].waitForExistence(timeout: 5))
+        let currencyRow = app.staticTexts["settings.currency"]
+        XCTAssertEqual(currencyRow.label, currency)
+        let code = try XCTUnwrap(currencyRow.value as? String)
+        XCTAssertEqual(code, "EUR")
+        let zone = try XCTUnwrap(app.staticTexts["settings.timeZone"].value as? String)
+        XCTAssertEqual(zone, "Europe/Moscow")
+        let scroll = app.scrollViews["settings.scroll"]
+        attachScreenshot(named: screenshot, from: app)
+        let rates = app.buttons["settings.rates"]
+        for _ in 0..<4 where !rates.isHittable { scroll.swipeUp() }
+        XCTAssertTrue(rates.isHittable)
+        XCTAssertGreaterThanOrEqual(rates.frame.height, 44)
+        rates.tap()
+        XCTAssertTrue(app.navigationBars[history].waitForExistence(timeout: 5))
+        if size == "AccessibilityXXXL" { attachScreenshot(named: "SL543-rate-history", from: app) }
+        app.navigationBars[history].buttons.firstMatch.tap()
+        XCTAssertTrue(app.navigationBars[title].waitForExistence(timeout: 5))
+        app.navigationBars[title].buttons.firstMatch.tap()
+        XCTAssertTrue(more.waitForExistence(timeout: 5))
+    }
+
     // MARK: - Existing coverage
 
     @MainActor

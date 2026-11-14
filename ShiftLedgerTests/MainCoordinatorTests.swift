@@ -477,6 +477,45 @@ struct MainCoordinatorTests {
         ))
     }
 
+    @Test("Settings updates rate routing after a work type is archived")
+    func settingsUpdatesRateRouting() throws {
+        let harness = try makeHarness(cycle: .perShift)
+        let twoTypes = try makeUpdatedJob(from: harness.job)
+        harness.coordinator.start()
+        harness.overview.onManageWorkTypes?()
+        let initialTypes = try #require(harness.navigationController.topViewController as? WorkTypesViewController)
+        initialTypes.onAddWorkType?()
+        let add = try #require(harness.navigationController.topViewController as? AddWorkTypeViewController)
+        add.onSaved?(twoTypes)
+        _ = harness.navigationController.popViewController(animated: false)
+
+        harness.overview.onSettings?()
+        let settings = try #require(harness.navigationController.topViewController as? SettingsViewController)
+        settings.loadViewIfNeeded()
+        settings.beginAppearanceTransition(true, animated: false)
+        settings.endAppearanceTransition()
+        let button: UIButton = try requireView("settings.rates", in: settings.view)
+        #expect(button.configuration?.title == WorkTypesStrings.title)
+        button.sendActions(for: .primaryActionTriggered)
+        let types = try #require(harness.navigationController.topViewController as? WorkTypesViewController)
+        let chosen = try #require(twoTypes.workTypes.first)
+        types.onPayRateHistory?(chosen)
+        #expect(harness.navigationController.topViewController is PayRateHistoryViewController)
+        #expect(harness.metrics.payRateHistoryInputs.last == chosen)
+        _ = harness.navigationController.popViewController(animated: false)
+
+        let archived = try twoTypes.archivingWorkType(id: chosen.id)
+        types.onArchived?(archived)
+        _ = harness.navigationController.popViewController(animated: false)
+        settings.beginAppearanceTransition(true, animated: false)
+        settings.endAppearanceTransition()
+        #expect(button.configuration?.title == PayRateHistoryStrings.title)
+        button.sendActions(for: .primaryActionTriggered)
+        let remaining = try #require(archived.workTypes.first { !$0.isArchived })
+        #expect(harness.navigationController.topViewController is PayRateHistoryViewController)
+        #expect(harness.metrics.payRateHistoryInputs.last == remaining)
+    }
+
     private func makeHarness(
         cycle: PayCalculationCycle = .scheduled(.calendarMonthly),
         displayLocale: Locale = Locale(identifier: "en_US"),

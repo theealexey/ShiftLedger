@@ -62,6 +62,7 @@ final class MainCoordinator {
         overviewViewController.onManageWorkTypes = { [weak self] in
             self?.navigate(to: .workTypes)
         }
+        overviewViewController.onSettings = { [weak self] in self?.showSettings() }
         overviewViewController.onArchivedJobs = { [weak self] in self?.showArchivedJobs() }
         overviewViewController.onEditShift = { [weak self] shift in
             self?.navigate(to: .editShift(shift))
@@ -131,6 +132,32 @@ final class MainCoordinator {
     private func completeAddShift(selectingShiftID: UUID) {
         overviewViewController.reload(selectingShiftID: selectingShiftID)
         navigationController.popToViewController(overviewViewController, animated: true)
+    }
+
+    private func showSettings() {
+        let activeWorkTypes = job.workTypes.filter { !$0.isArchived }
+        let workType = activeWorkTypes.count == 1 ? activeWorkTypes.first : nil
+        let controller = SettingsViewController(model: SettingsPresentation(
+            currency: job.currencyCode,
+            timeZone: job.timeZoneIdentifier,
+            version: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String,
+            rateActionTitle: workType == nil ? WorkTypesStrings.title : PayRateHistoryStrings.title
+        ))
+        controller.onWillAppear = { [weak self, weak controller] in
+            guard let self, let controller else { return }
+            let active = self.job.workTypes.filter { !$0.isArchived }
+            controller.updateRatesTitle(active.count == 1 ? PayRateHistoryStrings.title : WorkTypesStrings.title)
+        }
+        controller.onRates = { [weak self] in
+            guard let self else { return }
+            let active = self.job.workTypes.filter { !$0.isArchived }
+            if active.count == 1, let current = active.first {
+                self.navigate(to: .payRateHistory(current))
+            } else {
+                self.navigate(to: .workTypes)
+            }
+        }
+        navigationController.pushViewController(controller, animated: true)
     }
 
     private func showWorkTypes() {

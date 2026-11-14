@@ -1696,6 +1696,41 @@
         "ru" : { "stringUnit" : { "state" : "translated", "value" : "История ставок" } }
       }
     },
+    "settings.app" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "App information" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "О приложении" } }
+      }
+    },
+    "settings.job" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Job" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Работа" } }
+      }
+    },
+    "settings.rates" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Pay rates" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Ставки" } }
+      }
+    },
+    "settings.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Settings" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Настройки" } }
+      }
+    },
+    "settings.version" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Version" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Версия" } }
+      }
+    },
     "shiftForm.workType.archived" : {
       "extractionState" : "manual",
       "localizations" : {
