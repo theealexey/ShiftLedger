@@ -722,12 +722,26 @@ final class ShiftLedgerUITests: XCTestCase {
         XCTAssertEqual(precision.label, "Amounts rounded for display")
         XCTAssertEqual(normalizedWhitespace(app.otherElements["overview.receipt.precision.exactField"].label), "Exact total, €12.048")
         XCTAssertEqual(normalizedWhitespace(app.otherElements["overview.receipt.precision.displayedField"].label), "Displayed, €12.05")
+        let pageScroll = try requireElement(app.scrollViews["overview.pageScroll"],
+                                            message: "Home page must be scrollable")
         _ = try scrollToHittable(
             requerying: { app.scrollViews["overview.period.rail"] },
             in: app,
-            direction: .towardTop,
-            message: "Receipt heading and precision explanation must be reachable"
+            direction: .towardBottom,
+            scrollView: pageScroll,
+            message: "Receipt period selection must be reachable"
         )
+        for identifier in ["overview.receipt.precision.exactField",
+                           "overview.receipt.precision.displayedField",
+                           "overview.receipt.precision"] {
+            _ = try scrollToHittable(
+                requerying: { app.descendants(matching: .any)[identifier] },
+                in: app,
+                direction: .towardBottom,
+                scrollView: pageScroll,
+                message: "Receipt field \(identifier) must be reachable"
+            )
+        }
         attachScreenshot(named: "SL511-receipt-12-shifts-precision", from: app)
 
         try openFullShiftHistory(in: app)
@@ -2226,6 +2240,7 @@ final class ShiftLedgerUITests: XCTestCase {
         requerying query: () -> XCUIElement,
         in app: XCUIApplication,
         direction: ScrollDirection,
+        scrollView targetScrollView: XCUIElement? = nil,
         message: String
     ) throws -> XCUIElement {
         var element = try requireElement(query(), message: message)
@@ -2234,7 +2249,7 @@ final class ShiftLedgerUITests: XCTestCase {
             return element
         }
 
-        let scrollView = app.scrollViews.firstMatch
+        let scrollView = targetScrollView ?? app.scrollViews.firstMatch
 
         for _ in 0 ..< 6 {
             switch direction {
