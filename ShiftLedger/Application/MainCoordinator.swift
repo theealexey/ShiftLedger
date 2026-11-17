@@ -27,27 +27,35 @@ final class MainCoordinator {
         case renameWorkType(WorkType, returningTo: WorkTypesViewController)
         case changePayRate(WorkType, returningTo: WorkTypesViewController)
         case payRateHistory(WorkType)
-        case editShift(Shift)
+        case editShift(Shift, from: OverviewViewController)
         case actualGrossEntry(PayCalculationPeriod)
         case paycheckResult(PaycheckComparison)
     }
 
     private let appLock: AppLockController?
     private let navigationController: UINavigationController
+    private let makeNavigationController: () -> UINavigationController
+    let tabBarController = UITabBarController()
     private var job: Job
     private let dependencies: Dependencies
     private let overviewViewController: OverviewViewController
+    private lazy var shiftsViewController = dependencies.makeOverview(job)
+    private lazy var shiftsNavigation = makeNavigationController()
+    private lazy var archiveNavigation = makeNavigationController()
+    private lazy var settingsNavigation = makeNavigationController()
 
     init(
         navigationController: UINavigationController,
         job: Job,
         dependencies: Dependencies,
-        appLock: AppLockController? = nil
+        appLock: AppLockController? = nil,
+        makeNavigationController: @escaping () -> UINavigationController = { UINavigationController() }
     ) {
         self.navigationController = navigationController
         self.job = job
         self.dependencies = dependencies
         self.appLock = appLock
+        self.makeNavigationController = makeNavigationController
         overviewViewController = dependencies.makeOverview(job)
 
         configureOverviewCallbacks()
@@ -55,19 +63,50 @@ final class MainCoordinator {
 
     func start() {
         navigationController.setNavigationBarHidden(false, animated: false)
+        guard tabBarController.viewControllers == nil else { return }
         navigate(to: .overview)
+        shiftsViewController.showsShiftHistoryOnly = true
+        shiftsViewController.onEditShift = { [weak self] shift in
+            guard let self else { return }
+            self.navigate(to: .editShift(shift, from: self.shiftsViewController))
+        }
+        shiftsNavigation.setViewControllers([shiftsViewController], animated: false)
+        installArchivedJobs()
+        installSettings()
+
+        let tabs: [(UINavigationController, String, String, String)] = [
+            (navigationController, String(localized: "tabs.home"), "house.fill", "home"),
+            (shiftsNavigation, String(localized: "tabs.shifts"), "calendar", "shifts"),
+            (archiveNavigation, String(localized: "tabs.archive"), "archivebox", "archive"),
+            (settingsNavigation, String(localized: "settings.title"), "gearshape", "settings")
+        ]
+        for (stack, title, icon, id) in tabs {
+            stack.tabBarItem = UITabBarItem(title: title, image: UIImage(systemName: icon), selectedImage: nil)
+            stack.tabBarItem.accessibilityIdentifier = "tabs.\(id)"
+        }
+        let appearance = UITabBarAppearance()
+        appearance.configureWithOpaqueBackground()
+        appearance.backgroundColor = ShiftLedgerColors.surfacePrimary
+        for items in [appearance.stackedLayoutAppearance, appearance.inlineLayoutAppearance,
+                      appearance.compactInlineLayoutAppearance] {
+            items.normal.iconColor = ShiftLedgerColors.textSecondary
+            items.normal.titleTextAttributes = [.foregroundColor: ShiftLedgerColors.textSecondary]
+            items.selected.iconColor = ShiftLedgerColors.accentPrimary
+            items.selected.titleTextAttributes = [.foregroundColor: ShiftLedgerColors.accentPrimary]
+        }
+        tabBarController.tabBar.standardAppearance = appearance
+        tabBarController.tabBar.scrollEdgeAppearance = appearance
+        tabBarController.tabBar.tintColor = ShiftLedgerColors.accentPrimary
+        tabBarController.setViewControllers(tabs.map { $0.0 }, animated: false)
     }
 
     private func configureOverviewCallbacks() {
         overviewViewController.onAddShift = { [weak self] in
             self?.navigate(to: .addShift)
         }
-        overviewViewController.onManageWorkTypes = { [weak self] in
-            self?.navigate(to: .workTypes)
-        }
-        overviewViewController.onSettings = { [weak self] in self?.showSettings() }
         overviewViewController.onEditShift = { [weak self] shift in
-            self?.navigate(to: .editShift(shift))
+            guard let self else { return }
+            self.navigate(to: .editShift(shift, from: self.overviewViewController))
         }
         overviewViewController.onCheckPaycheck = { [weak self] period in
             self?.navigate(to: .actualGrossEntry(period))
@@ -90,8 +129,8 @@ final class MainCoordinator {
             showChangePayRate(workType, returningTo: returningTo)
         case let .payRateHistory(workType):
             showPayRateHistory(workType)
-        case let .editShift(shift):
-            showEditShift(shift)
+        case let .editShift(shift, origin):
+            showEditShift(shift, from: origin)
         case let .actualGrossEntry(period):
             showActualGrossEntry(for: period)
         case let .paycheckResult(comparison):
@@ -107,7 +146,7 @@ final class MainCoordinator {
         navigationController.pushViewController(viewController, animated: true)
     }
 
-    private func showArchivedJobs() {
+    private func installArchivedJobs() {
         let controller = ArchivedJobsViewController()
         controller.onReload = { [weak self, weak controller] in
             guard let self, let controller else { return }
@@ -119,48 +158,54 @@ final class MainCoordinator {
         }
         controller.onSelectJob = { [weak self, weak controller] id in
             guard let self, let controller,
-                  self.navigationController.topViewController === controller else { return }
+                  self.archiveNavigation.topViewController === controller else { return }
             do {
                 let history = try self.dependencies.makeArchivedJobHistory(id)
-                self.navigationController.pushViewController(history, animated: true)
+                self.archiveNavigation.pushViewController(history, animated: true)
             } catch {
                 controller.presentLoadError()
             }
         }
         controller.onReload?()
-        navigationController.pushViewController(controller, animated: true)
+        archiveNavigation.setViewControllers([controller], animated: false)
     }
 
     private func completeAddShift(selectingShiftID: UUID) {
         overviewViewController.reload(selectingShiftID: selectingShiftID)
+        reloadShifts()
         navigationController.popToViewController(overviewViewController, animated: true)
     }
 
-    private func showSettings() {
+    private func installSettings() {
         let activeWorkTypes = job.workTypes.filter { !$0.isArchived }
         let workType = activeWorkTypes.count == 1 ? activeWorkTypes.first : nil
         let controller = SettingsViewController(model: SettingsPresentation(
             currency: job.currencyCode,
             timeZone: job.timeZoneIdentifier,
             version: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String,
-            rateActionTitle: workType == nil ? WorkTypesStrings.title : PayRateHistoryStrings.title
+            rateActionTitle: PayRateHistoryStrings.title,
+            showsRates: workType != nil
         ), appLock: appLock)
         controller.onWillAppear = { [weak self, weak controller] in
             guard let self, let controller else { return }
             let active = self.job.workTypes.filter { !$0.isArchived }
-            controller.updateRatesTitle(active.count == 1 ? PayRateHistoryStrings.title : WorkTypesStrings.title)
+            controller.updateRates(title: PayRateHistoryStrings.title, visible: active.count == 1)
         }
-        controller.onArchivedJobs = { [weak self] in self?.showArchivedJobs() }
+        controller.onManageWorkTypes = { [weak self] in self?.navigate(to: .workTypes) }
         controller.onRates = { [weak self] in
             guard let self else { return }
             let active = self.job.workTypes.filter { !$0.isArchived }
-            if active.count == 1, let current = active.first {
-                self.navigate(to: .payRateHistory(current))
-            } else {
-                self.navigate(to: .workTypes)
-            }
+            guard active.count == 1, let current = active.first else { return }
+            self.navigate(to: .payRateHistory(current))
         }
-        navigationController.pushViewController(controller, animated: true)
+        settingsNavigation.setViewControllers([controller], animated: false)
+    }
+
+    private func refreshSettingsRates() {
+        guard let settings = settingsNavigation.viewControllers.first as? SettingsViewController,
+              settings.isViewLoaded else { return }
+        let active = job.workTypes.filter { !$0.isArchived }
+        settings.updateRates(title: PayRateHistoryStrings.title, visible: active.count == 1)
     }
 
     private func showWorkTypes() {
@@ -183,12 +228,14 @@ final class MainCoordinator {
         viewController.onPayRateHistory = { [weak self] workType in
             self?.navigate(to: .payRateHistory(workType))
         }
-        navigationController.pushViewController(viewController, animated: true)
+        settingsNavigation.pushViewController(viewController, animated: true)
     }
 
     private func applyWorkTypeArchive(_ updatedJob: Job) {
         job = updatedJob
         overviewViewController.reload(job: updatedJob)
+        reloadShifts(job: updatedJob)
+        refreshSettingsRates()
     }
 
     private func showAddWorkType(returningTo workTypesViewController: WorkTypesViewController) {
@@ -197,7 +244,7 @@ final class MainCoordinator {
             guard let workTypesViewController else { return }
             self?.completeWorkTypeMutation(with: updatedJob, returningTo: workTypesViewController)
         }
-        navigationController.pushViewController(viewController, animated: true)
+        settingsNavigation.pushViewController(viewController, animated: true)
     }
 
     private func showRenameWorkType(
@@ -209,7 +256,7 @@ final class MainCoordinator {
             guard let workTypesViewController else { return }
             self?.completeWorkTypeMutation(with: updatedJob, returningTo: workTypesViewController)
         }
-        navigationController.pushViewController(viewController, animated: true)
+        settingsNavigation.pushViewController(viewController, animated: true)
     }
 
     private func completeWorkTypeMutation(
@@ -218,8 +265,10 @@ final class MainCoordinator {
     ) {
         job = updatedJob
         overviewViewController.reload(job: updatedJob)
+        reloadShifts(job: updatedJob)
+        refreshSettingsRates()
         workTypesViewController.reload(workTypes: updatedJob.workTypes)
-        navigationController.popToViewController(workTypesViewController, animated: true)
+        settingsNavigation.popToViewController(workTypesViewController, animated: true)
     }
 
     private func showChangePayRate(
@@ -231,33 +280,47 @@ final class MainCoordinator {
             guard let workTypesViewController else { return }
             self?.completeWorkTypeMutation(with: updatedJob, returningTo: workTypesViewController)
         }
-        navigationController.pushViewController(viewController, animated: true)
+        settingsNavigation.pushViewController(viewController, animated: true)
     }
 
     private func showPayRateHistory(_ workType: WorkType) {
         let viewController = dependencies.makePayRateHistory(job, workType)
-        navigationController.pushViewController(viewController, animated: true)
+        settingsNavigation.pushViewController(viewController, animated: true)
     }
 
-    private func showEditShift(_ shift: Shift) {
+    private func showEditShift(_ shift: Shift, from origin: OverviewViewController) {
+        let stack = origin === overviewViewController ? navigationController : shiftsNavigation
         let viewController = dependencies.makeEditShift(job, shift)
-        viewController.onSaved = { [weak self] updatedShift in
-            self?.completeEditShift(updatedShift)
+        viewController.onSaved = { [weak self, weak origin] updatedShift in
+            guard let self, let origin else { return }
+            self.completeShiftMutation(from: origin, selecting: updatedShift.id)
         }
-        viewController.onDeleted = { [weak self] _ in
-            self?.completeDeleteShift()
+        viewController.onDeleted = { [weak self, weak origin] _ in
+            guard let self, let origin else { return }
+            self.completeShiftMutation(from: origin, selecting: nil)
         }
-        navigationController.pushViewController(viewController, animated: true)
+        stack.pushViewController(viewController, animated: true)
     }
 
-    private func completeEditShift(_ shift: Shift) {
-        overviewViewController.reload(selectingShiftID: shift.id)
-        navigationController.popToViewController(overviewViewController, animated: true)
+    private func completeShiftMutation(from origin: OverviewViewController, selecting id: UUID?) {
+        let isHome = origin === overviewViewController
+        if isHome {
+            overviewViewController.reload(selectingShiftID: id)
+            reloadShifts()
+        } else {
+            overviewViewController.reload()
+            shiftsViewController.reload(selectingShiftID: id)
+        }
+        let stack = isHome ? navigationController : shiftsNavigation
+        stack.popToViewController(origin, animated: true)
     }
 
-    private func completeDeleteShift() {
-        overviewViewController.reload()
-        navigationController.popToViewController(overviewViewController, animated: true)
+    private func reloadShifts(job: Job? = nil) {
+        if let job {
+            shiftsViewController.reload(job: job)
+        } else if shiftsViewController.isViewLoaded {
+            shiftsViewController.reload()
+        }
     }
 
     private func showActualGrossEntry(for period: PayCalculationPeriod) {

@@ -118,12 +118,12 @@ final class AppCoordinator {
     private func installJobSelection(catalog: [JobCatalogEntry], composition: AppFlowComposition) {
         let navigationController = makeNavigationController()
         let controller = JobSelectionAssembly.make(catalog: catalog)
-        controller.onSelectJob = { [weak self, weak controller, weak navigationController] id in
-            guard let self, let controller, let navigationController,
+        controller.onSelectJob = { [weak self, weak controller] id in
+            guard let self, let controller,
                   case .jobSelection = self.activeFlow else { return }
             do {
                 let job = try composition.resolveSelectedJob(id: id)
-                self.installMainFlow(job: job, composition: composition, navigationController: navigationController)
+                self.installMainFlow(job: job, composition: composition)
             } catch {
                 controller.presentSelectionError()
             }
@@ -153,20 +153,20 @@ final class AppCoordinator {
 
     private func installMainFlow(
         job: Job,
-        composition: AppFlowComposition,
-        navigationController: UINavigationController? = nil
+        composition: AppFlowComposition
     ) {
-        let navigationController = navigationController ?? makeNavigationController()
+        let navigationController = makeNavigationController()
         let coordinator = MainCoordinator(
             navigationController: navigationController,
             job: job,
             dependencies: composition.makeMainDependencies(),
-            appLock: appLock
+            appLock: appLock,
+            makeNavigationController: makeNavigationController
         )
 
         coordinator.start()
         activeFlow = .main(coordinator)
-        installRoot(navigationController)
+        installRoot(coordinator.tabBarController)
     }
 
     private func installStartupFailureState() {

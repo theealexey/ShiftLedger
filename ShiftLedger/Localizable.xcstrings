@@ -1773,18 +1773,32 @@
         "ru" : { "stringUnit" : { "state" : "translated", "value" : "История ставок" } }
       }
     },
+    "tabs.archive" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Archive" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Архив" } }
+      }
+    },
+    "tabs.home" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Home" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Главная" } }
+      }
+    },
+    "tabs.shifts" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Shifts" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Смены" } }
+      }
+    },
     "settings.app" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : { "stringUnit" : { "state" : "translated", "value" : "App information" } },
         "ru" : { "stringUnit" : { "state" : "translated", "value" : "О приложении" } }
-      }
-    },
-    "settings.archive" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Archive" } },
-        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Архив" } }
       }
     },
     "settings.job" : {

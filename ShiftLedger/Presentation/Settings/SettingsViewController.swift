@@ -4,8 +4,6 @@ enum SettingsStrings {
     static var title: String { String(localized: "settings.title") }
     static var job: String { String(localized: "settings.job") }
     static var rates: String { String(localized: "settings.rates") }
-    static var archive: String { String(localized: "settings.archive") }
-    static var archivedJobs: String { String(localized: "archive.jobs.title") }
     static var app: String { String(localized: "settings.app") }
     static var version: String { String(localized: "settings.version") }
 }
@@ -15,10 +13,11 @@ struct SettingsPresentation {
     let timeZone: String
     let version: String?
     let rateActionTitle: String
+    var showsRates: Bool = true
 }
 
 final class SettingsViewController: UIViewController {
-    var onArchivedJobs: (() -> Void)?
+    var onManageWorkTypes: (() -> Void)?
     var onRates: (() -> Void)?
     var onWillAppear: (() -> Void)?
     private let model: SettingsPresentation
@@ -51,8 +50,8 @@ final class SettingsViewController: UIViewController {
         settingsView.ratesButton.addAction(UIAction { [weak self] _ in
             self?.onRates?()
         }, for: .primaryActionTriggered)
-        settingsView.archivedJobsButton.addAction(UIAction { [weak self] _ in
-            self?.onArchivedJobs?()
+        settingsView.workTypesButton.addAction(UIAction { [weak self] _ in
+            self?.onManageWorkTypes?()
         }, for: .primaryActionTriggered)
         view = settingsView
     }
@@ -76,17 +75,19 @@ final class SettingsViewController: UIViewController {
         settingsView.protectionSwitch.isEnabled = !appLock.isAuthenticating && !appLock.isLocked
     }
 
-    func updateRatesTitle(_ title: String) {
+    func updateRates(title: String, visible: Bool) {
         guard let settingsView = view as? SettingsView,
               var configuration = settingsView.ratesButton.configuration else { return }
         configuration.title = title
         settingsView.ratesButton.configuration = configuration
+        settingsView.ratesSection.isHidden = !visible
     }
 }
 
 private final class SettingsView: UIView {
     let ratesButton = UIButton(type: .system)
-    let archivedJobsButton = UIButton(type: .system)
+    private(set) var ratesSection = UIView()
+    let workTypesButton = UIButton(type: .system)
     let protectionSwitch = UISwitch()
     private let sections = UIStackView()
 
@@ -119,9 +120,11 @@ private final class SettingsView: UIView {
         ])
 
         configureNavigationRow(ratesButton, title: model.rateActionTitle, identifier: "settings.rates")
-        addSection(SettingsStrings.rates, rows: [ratesButton])
-        configureNavigationRow(archivedJobsButton, title: SettingsStrings.archivedJobs, identifier: "settings.archivedJobs")
-        addSection(SettingsStrings.archive, rows: [archivedJobsButton])
+        ratesSection = addSection(SettingsStrings.rates, rows: [ratesButton])
+        ratesSection.accessibilityIdentifier = "settings.rates.section"
+        ratesSection.isHidden = !model.showsRates
+        configureNavigationRow(workTypesButton, title: WorkTypesStrings.title, identifier: "settings.workTypes")
+        addSection(WorkTypesStrings.title, rows: [workTypesButton])
 
         if let lockTitle {
             let caption = label(lockTitle, style: .body, color: ShiftLedgerColors.textPrimary)
@@ -167,7 +170,8 @@ private final class SettingsView: UIView {
         button.heightAnchor.constraint(greaterThanOrEqualToConstant: 44).isActive = true
     }
 
-    private func addSection(_ title: String, rows: [UIView]) {
+    @discardableResult
+    private func addSection(_ title: String, rows: [UIView]) -> UIView {
         let heading = label(title, style: .headline, color: ShiftLedgerColors.textPrimary)
         heading.accessibilityTraits.insert(.header)
         let card = UIStackView(arrangedSubviews: rows)
@@ -181,6 +185,7 @@ private final class SettingsView: UIView {
         group.axis = .vertical
         group.spacing = 8
         sections.addArrangedSubview(group)
+        return group
     }
 
     private func info(_ title: String, value: String, id: String) -> UIView {

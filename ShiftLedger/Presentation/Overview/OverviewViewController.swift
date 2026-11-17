@@ -2,8 +2,6 @@ import UIKit
 
 final class OverviewViewController: UIViewController {
     var onAddShift: (() -> Void)?
-    var onManageWorkTypes: (() -> Void)?
-    var onSettings: (() -> Void)?
     var onCheckPaycheck: ((PayCalculationPeriod) -> Void)?
     var onEditShift: ((Shift) -> Void)?
 
@@ -14,6 +12,7 @@ final class OverviewViewController: UIViewController {
     private let shiftCardMapper: OverviewShiftCardMapper
     private let displayedCurrencyValue: (Decimal, String, Locale) -> Decimal?
     private let overviewView = OverviewView(frame: .zero)
+    var showsShiftHistoryOnly = false
 
     init(
         viewModel: OverviewViewModel,
@@ -46,10 +45,15 @@ final class OverviewViewController: UIViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        let brand = OverviewNavigationBrandLabel()
-        title = brand.text
-        navigationItem.titleView = brand
-        configureNavigationItem()
+        if showsShiftHistoryOnly {
+            title = String(localized: "tabs.shifts")
+            overviewView.accessibilityIdentifier = "shifts.screen"
+            overviewView.showsShiftHistoryOnly = true
+        } else {
+            let brand = OverviewNavigationBrandLabel()
+            navigationItem.title = brand.text
+            navigationItem.titleView = brand
+        }
         bindView()
         viewModel.load()
         render()
@@ -67,21 +71,6 @@ final class OverviewViewController: UIViewController {
     func reload(job: Job) {
         viewModel.reload(job: job)
         render()
-    }
-
-    private func configureNavigationItem() {
-        let workTypes = UIAction(title: OverviewStrings.workTypes) { [weak self] _ in
-            self?.onManageWorkTypes?()
-        }
-        let settings = UIAction(title: SettingsStrings.title, image: UIImage(systemName: "gearshape")) { [weak self] _ in
-            self?.onSettings?()
-        }
-        let item = UIBarButtonItem(
-            image: UIImage(systemName: "ellipsis.circle"),
-            menu: UIMenu(children: [workTypes, settings])
-        )
-        item.accessibilityIdentifier = "overview.more"
-        navigationItem.rightBarButtonItem = item
     }
 
     private func bindView() {
@@ -137,6 +126,15 @@ final class OverviewViewController: UIViewController {
     }
 
     private func renderContent(_ content: OverviewViewModel.Content) {
+        if showsShiftHistoryOnly {
+            guard let cards = shiftCards(for: content) else { return }
+            overviewView.renderHistoryOnly(cards)
+            if let expandedShiftID = content.expandedShiftID {
+                overviewView.focusShiftCard(with: expandedShiftID)
+            }
+            return
+        }
+
         switch (content.selectedPeriod, content.expectedBreakdown) {
         case (nil, nil):
             overviewView.renderEmpty()
@@ -146,17 +144,7 @@ final class OverviewViewController: UIViewController {
                 return
             }
 
-            let cards: [OverviewView.ShiftCard]
-            do {
-                cards = try shiftCardMapper.map(
-                    content.shiftHistoryBreakdowns,
-                    selectedShiftID: content.selectedShiftID,
-                    expandedShiftID: content.expandedShiftID
-                )
-            } catch {
-                renderFailure(.calculation)
-                return
-            }
+            guard let cards = shiftCards(for: content) else { return }
 
             overviewView.renderContent(
                 expectedGross: OverviewFormatting.heroAmount(
@@ -185,6 +173,19 @@ final class OverviewViewController: UIViewController {
             }
         default:
             renderFailure(.calculation)
+        }
+    }
+
+    private func shiftCards(for content: OverviewViewModel.Content) -> [OverviewView.ShiftCard]? {
+        do {
+            return try shiftCardMapper.map(
+                content.shiftHistoryBreakdowns,
+                selectedShiftID: content.selectedShiftID,
+                expandedShiftID: content.expandedShiftID
+            )
+        } catch {
+            renderFailure(.calculation)
+            return nil
         }
     }
 

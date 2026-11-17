@@ -46,10 +46,11 @@ struct AppCoordinatorTests {
         #expect(resolutionCount == 1)
         #expect(navigation.viewControllers.count == 1)
         selection.onSelectJob?(jobB.id)
-        #expect(window.rootViewController === navigation)
-        let overview = try #require(navigation.topViewController as? OverviewViewController)
+        let home = try #require((window.rootViewController as? UITabBarController)?.selectedViewController as? UINavigationController)
+        #expect(home !== navigation)
+        let overview = try #require(home.topViewController as? OverviewViewController)
         overview.loadViewIfNeeded()
-        #expect(navigation.viewControllers.count == 1)
+        #expect(home.viewControllers.count == 1)
         let hero: UILabel = try requireView("overview.expectedGross.amount", in: overview.view)
         #expect(hero.text == OverviewFormatting.heroAmount(
             200, currencyCode: jobB.currencyCode, locale: CurrencySelectionItem.applicationDisplayLocale
@@ -57,11 +58,11 @@ struct AppCoordinatorTests {
         let selectedCard: UIControl = try requireView("overview.shift.\(distinctShiftB.id.uuidString)", in: overview.view)
         #expect(selectedCard.accessibilityTraits.contains(.selected))
         overview.onAddShift?()
-        let add = try #require(navigation.topViewController as? AddShiftViewController)
-        _ = navigation.popViewController(animated: false)
-        #expect(navigation.topViewController === overview)
+        let add = try #require(home.topViewController as? AddShiftViewController)
+        _ = home.popViewController(animated: false)
+        #expect(home.topViewController === overview)
         overview.onAddShift?()
-        let newAdd = try #require(navigation.topViewController as? AddShiftViewController)
+        let newAdd = try #require(home.topViewController as? AddShiftViewController)
         #expect(newAdd !== add)
         let addedDates = try makeShift(day: 22, workTypeID: distinctShiftB.workTypeID, jobID: jobB.id)
         newAdd.loadViewIfNeeded()
@@ -71,13 +72,13 @@ struct AppCoordinatorTests {
         let saved = try #require(try storage.loadAll(forJobID: jobB.id).first { $0.start == addedDates.start })
         #expect(saved.jobID == jobB.id)
         #expect(try storage.loadAll(forJobID: jobA.id) == [shiftA])
-        #expect(navigation.topViewController === overview)
+        #expect(home.topViewController === overview)
         let savedCard: UIControl = try requireView("overview.shift.\(saved.id.uuidString)", in: overview.view)
         #expect(savedCard.accessibilityTraits.contains(.selected))
         savedCard.sendActions(for: .touchUpInside)
         let editButton: UIButton = try requireView("overview.shift.\(saved.id.uuidString).edit", in: overview.view)
         editButton.sendActions(for: .touchUpInside)
-        let edit = try #require(navigation.topViewController as? EditShiftViewController)
+        let edit = try #require(home.topViewController as? EditShiftViewController)
         let editedDates = try makeShift(day: 23, workTypeID: saved.workTypeID, jobID: jobB.id)
         edit.loadViewIfNeeded()
         try await selectDate(editedDates.start, in: edit, rowWithAccessibilityLabel: AddShiftStrings.start)
@@ -88,20 +89,20 @@ struct AppCoordinatorTests {
         #expect(edited.start == editedDates.start)
         #expect(edited.end == editedDates.end)
         #expect(try storage.loadAll(forJobID: jobA.id) == [shiftA])
-        #expect(navigation.topViewController === overview)
+        #expect(home.topViewController === overview)
         let period = try jobB.payCalculationPeriod(for: distinctShiftB)
         overview.onCheckPaycheck?(period)
-        let entry = try #require(navigation.topViewController as? ActualGrossEntryViewController)
+        let entry = try #require(home.topViewController as? ActualGrossEntryViewController)
         let actual = try ActualGross(amount: 201)
         entry.onContinue?(actual)
-        let result = try #require(navigation.topViewController as? PaycheckResultViewController)
+        let result = try #require(home.topViewController as? PaycheckResultViewController)
         let expected = try jobB.paycheckComparison(for: period, actualGross: actual, from: [distinctShiftB])
         try expectSummary(result, comparison: expected, job: jobB)
         #expect(expected.expected.expectedGross == 200)
         coordinator.start()
         await Task.yield()
         #expect(resolutionCount == 1)
-        #expect(navigation.topViewController === result)
+        #expect(home.topViewController === result)
         #expect(!fixture.stack.viewContext.hasChanges)
     }
 
@@ -160,7 +161,10 @@ struct AppCoordinatorTests {
         }
         #expect(navigation.topViewController === selection)
         selection.onSelectJob?(try #require(catalog.first { $0.job.id != secondID && !$0.isArchived }).job.id)
-        try await waitUntil { navigation.topViewController is OverviewViewController }
+        try await waitUntil {
+            let home = (window.rootViewController as? UITabBarController)?.selectedViewController as? UINavigationController
+            return home?.topViewController is OverviewViewController
+        }
     }
 
     @Test("A fresh launch asks again and can choose a different Job")
@@ -179,7 +183,8 @@ struct AppCoordinatorTests {
             let navigation = try #require(window.rootViewController as? UINavigationController)
             let selection = try #require(navigation.topViewController as? JobSelectionViewController)
             selection.onSelectJob?(id)
-            #expect(navigation.topViewController is OverviewViewController)
+            let home = (window.rootViewController as? UITabBarController)?.selectedViewController as? UINavigationController
+            #expect(home?.topViewController is OverviewViewController)
             tearDown(window, coordinator: coordinator)
         }
         #expect(!fixture.stack.viewContext.hasChanges)
@@ -414,11 +419,11 @@ struct AppCoordinatorTests {
         defer { tearDown(window, coordinator: coordinator) }
 
         coordinator.start()
-        try await waitUntil { window.rootViewController is UINavigationController }
+        try await waitUntil { window.rootViewController is UITabBarController }
 
         #expect(loaderCallCount == 1)
         let navigationController = try #require(
-            window.rootViewController as? UINavigationController
+            (window.rootViewController as? UITabBarController)?.selectedViewController as? UINavigationController
         )
         #expect(navigationController.viewControllers.count == 1)
         #expect(navigationController.viewControllers.first is OverviewViewController)
@@ -485,7 +490,7 @@ struct AppCoordinatorTests {
         secondReviewViewController.start()
 
         let mainNavigationController = try #require(
-            window.rootViewController as? NonAnimatingNavigationController
+            (window.rootViewController as? UITabBarController)?.selectedViewController as? NonAnimatingNavigationController
         )
         #expect(mainNavigationController !== navigationController)
         #expect(mainNavigationController.viewControllers.count == 1)
@@ -512,12 +517,12 @@ struct AppCoordinatorTests {
             let count: UILabel = try requireView("overview.shiftCount.value", in: overview.view)
             #expect(count.text == "1")
             #expect(empty.isHidden)
-            let period: UILabel = try requireView("overview.period.label", in: overview.view)
-            #expect(period.text == OverviewFormatting.perShiftPeriod(
+            let period: UILabel = try requireView("overview.receipt.perShiftPeriod", in: overview.view)
+            #expect(period.text == OverviewFormatting.perShiftHeading(
                 persisted,
                 timeZoneIdentifier: "Europe/Stockholm",
                 locale: CurrencySelectionItem.applicationDisplayLocale
-            ))
+            )?.date)
         }
     }
 
@@ -555,12 +560,12 @@ struct AppCoordinatorTests {
 
             let count: UILabel = try requireView("overview.shiftCount.value", in: overview.view)
             #expect(count.text == "1")
-            let period: UILabel = try requireView("overview.period.label", in: overview.view)
-            #expect(period.text == OverviewFormatting.perShiftPeriod(
+            let period: UILabel = try requireView("overview.receipt.perShiftPeriod", in: overview.view)
+            #expect(period.text == OverviewFormatting.perShiftHeading(
                 persistedShift,
                 timeZoneIdentifier: job.timeZoneIdentifier,
                 locale: CurrencySelectionItem.applicationDisplayLocale
-            ))
+            )?.date)
             let card: UIView = try requireView(
                 "overview.shift.\(persistedShift.id.uuidString)",
                 in: overview.view
@@ -609,15 +614,17 @@ struct AppCoordinatorTests {
         let originalJob = try makeValidJob()
 
         try await withOverview(job: originalJob) { stack, navigation, overview in
-            overview.onManageWorkTypes?()
+            let settingsStack = try #require(navigation.tabBarController?.viewControllers?.last as? UINavigationController)
+            let settings = try #require(settingsStack.topViewController as? SettingsViewController)
+            settings.onManageWorkTypes?()
             let workTypes = try #require(
-                navigation.topViewController as? WorkTypesViewController
+                settingsStack.topViewController as? WorkTypesViewController
             )
             workTypes.loadViewIfNeeded()
             #expect(workTypes.tableView(workTypes.tableView, numberOfRowsInSection: 0) == 1)
             try tapBarButtonItem(workTypes.navigationItem.rightBarButtonItem)
             let addWorkType = try #require(
-                navigation.topViewController as? AddWorkTypeViewController
+                settingsStack.topViewController as? AddWorkTypeViewController
             )
             addWorkType.loadViewIfNeeded()
             let name: UITextField = try requireView("addWorkType.name", in: addWorkType.view)
@@ -642,8 +649,8 @@ struct AppCoordinatorTests {
             #expect(added.payRates.count == 1)
             #expect(added.payRates.first?.amount == Decimal(500))
             #expect(added.payRates.first?.effectiveFrom == nil)
-            #expect(navigation.topViewController === workTypes)
-            #expect(navigation.viewControllers.count == 2)
+            #expect(settingsStack.topViewController === workTypes)
+            #expect(settingsStack.viewControllers.count == 2)
             #expect(workTypes.tableView(workTypes.tableView, numberOfRowsInSection: 0) == 2)
             let displayedNames = (0..<2).compactMap { row in
                 let cell = workTypes.tableView(
@@ -653,8 +660,8 @@ struct AppCoordinatorTests {
                 return (cell.contentConfiguration as? UIListContentConfiguration)?.text
             }
             #expect(Set(displayedNames) == Set(["Lectures", "Exams"]))
-            _ = navigation.popViewController(animated: false)
-            #expect(navigation.topViewController === overview)
+            _ = settingsStack.popViewController(animated: false)
+            #expect(settingsStack.topViewController === settings)
             #expect(navigation.viewControllers.count == 1)
 
             overview.onAddShift?()
@@ -690,10 +697,12 @@ struct AppCoordinatorTests {
         let effectiveDate = try LocalDate(year: 2026, month: 6, day: 1)
 
         try await withOverview(job: originalJob) { stack, navigation, overview in
-            overview.onManageWorkTypes?()
-            let workTypes = try #require(navigation.topViewController as? WorkTypesViewController)
+            let settingsStack = try #require(navigation.tabBarController?.viewControllers?.last as? UINavigationController)
+            let settings = try #require(settingsStack.topViewController as? SettingsViewController)
+            settings.onManageWorkTypes?()
+            let workTypes = try #require(settingsStack.topViewController as? WorkTypesViewController)
             workTypes.onChangePayRate?(target)
-            let change = try #require(navigation.topViewController as? ChangePayRateViewController)
+            let change = try #require(settingsStack.topViewController as? ChangePayRateViewController)
             change.loadViewIfNeeded()
             let amount: UITextField = try requireView("changePayRate.amount", in: change.view)
             let picker: UIDatePicker = try requireView("changePayRate.effectiveDate", in: change.view)
@@ -703,9 +712,9 @@ struct AppCoordinatorTests {
             picker.sendActions(for: .valueChanged)
             try tapBarButtonItem(change.navigationItem.rightBarButtonItem)
 
-            #expect(navigation.topViewController === workTypes)
-            #expect(navigation.viewControllers.count == 2)
-            #expect(navigation.viewControllers[0] === overview)
+            #expect(settingsStack.topViewController === workTypes)
+            #expect(settingsStack.viewControllers.count == 2)
+            #expect(settingsStack.viewControllers[0] === settings)
             let persisted = try #require(try JobStorage(stack: stack).load())
             let updated = try #require(persisted.workType(id: target.id))
             #expect(updated.payRates.count == target.payRates.count + 1)
@@ -713,8 +722,8 @@ struct AppCoordinatorTests {
             #expect(updated.payRates.last?.amount == 175)
             #expect(updated.payRates.last?.effectiveFrom == effectiveDate)
             #expect(persisted.workType(id: other.id) == other)
-            _ = navigation.popViewController(animated: false)
-            #expect(navigation.topViewController === overview)
+            _ = settingsStack.popViewController(animated: false)
+            #expect(settingsStack.topViewController === settings)
         }
     }
 
@@ -724,11 +733,13 @@ struct AppCoordinatorTests {
         let original = try #require(originalJob.workTypes.first)
 
         try await withOverview(job: originalJob) { stack, navigation, overview in
-            overview.onManageWorkTypes?()
-            let workTypes = try #require(navigation.topViewController as? WorkTypesViewController)
+            let settingsStack = try #require(navigation.tabBarController?.viewControllers?.last as? UINavigationController)
+            let settings = try #require(settingsStack.topViewController as? SettingsViewController)
+            settings.onManageWorkTypes?()
+            let workTypes = try #require(settingsStack.topViewController as? WorkTypesViewController)
             workTypes.loadViewIfNeeded()
             workTypes.onRenameWorkType?(original)
-            let rename = try #require(navigation.topViewController as? RenameWorkTypeViewController)
+            let rename = try #require(settingsStack.topViewController as? RenameWorkTypeViewController)
             rename.loadViewIfNeeded()
             let field: UITextField = try requireView("renameWorkType.name", in: rename.view)
             #expect(field.text == "Lectures")
@@ -736,9 +747,9 @@ struct AppCoordinatorTests {
             field.sendActions(for: .editingChanged)
             try tapBarButtonItem(rename.navigationItem.rightBarButtonItem)
 
-            #expect(navigation.topViewController === workTypes)
-            #expect(navigation.viewControllers.count == 2)
-            #expect(navigation.viewControllers[0] === overview)
+            #expect(settingsStack.topViewController === workTypes)
+            #expect(settingsStack.viewControllers.count == 2)
+            #expect(settingsStack.viewControllers[0] === settings)
             let row = workTypes.tableView(workTypes.tableView, cellForRowAt: IndexPath(row: 0, section: 0))
             #expect((row.contentConfiguration as? UIListContentConfiguration)?.text == "Senior   Lectures")
             let persisted = try #require(try JobStorage(stack: stack).load())
@@ -750,8 +761,8 @@ struct AppCoordinatorTests {
             #expect(renamed.payRates == original.payRates)
             #expect(persisted.workTypes[1] == originalJob.workTypes[1])
 
-            _ = navigation.popViewController(animated: false)
-            #expect(navigation.topViewController === overview)
+            _ = settingsStack.popViewController(animated: false)
+            #expect(settingsStack.topViewController === settings)
             overview.onAddShift?()
             let addShift = try #require(navigation.topViewController as? AddShiftViewController)
             addShift.loadViewIfNeeded()
@@ -990,8 +1001,8 @@ struct AppCoordinatorTests {
         )
         defer { tearDown(window, coordinator: coordinator) }
         coordinator.start()
-        try await waitUntil { window.rootViewController is NonAnimatingNavigationController }
-        let navigation = try #require(window.rootViewController as? NonAnimatingNavigationController)
+        try await waitUntil { window.rootViewController is UITabBarController }
+        let navigation = try #require((window.rootViewController as? UITabBarController)?.selectedViewController as? NonAnimatingNavigationController)
         let overview = try #require(navigation.topViewController as? OverviewViewController)
         overview.loadViewIfNeeded()
         try await body(stack, navigation, overview)

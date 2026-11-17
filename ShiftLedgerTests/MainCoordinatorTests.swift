@@ -22,7 +22,7 @@ struct MainCoordinatorTests {
         if kind == "sameDay" || kind == "overnight" { harness.metrics.overviewShifts = [shift] }
         harness.coordinator.start()
         let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 320, height: 874))
-        window.rootViewController = harness.navigationController
+        window.rootViewController = harness.coordinator.tabBarController
         window.isHidden = false
         defer { window.isHidden = true }
         harness.overview.loadViewIfNeeded()
@@ -82,6 +82,48 @@ struct MainCoordinatorTests {
         #expect(harness.navigationController.viewControllers.count == 1)
         #expect(harness.navigationController.topViewController === harness.overview)
         #expect(harness.navigationController.isNavigationBarHidden == false)
+    }
+
+    @Test("Tabs retain distinct roots, Home actions and all saved shifts")
+    func tabRootsAndShiftNavigation() throws {
+        let harness = try makeHarness(cycle: .perShift)
+        let first = try makeShift()
+        let second = try Shift(id: UUID(), jobID: first.jobID, workTypeID: first.workTypeID,
+                               start: first.start.addingTimeInterval(86_400),
+                               end: first.end.addingTimeInterval(86_400))
+        harness.metrics.overviewShifts = [first, second]
+        harness.coordinator.start()
+        let tabs = harness.coordinator.tabBarController
+        let stacks = try #require(tabs.viewControllers as? [UINavigationController])
+        #expect(stacks.map { $0.tabBarItem.accessibilityIdentifier } == ["tabs.home", "tabs.shifts", "tabs.archive", "tabs.settings"])
+        #expect(Set(stacks.map(ObjectIdentifier.init)).count == 4)
+        #expect(tabs.selectedViewController === harness.navigationController)
+        #expect(stacks.map { $0.viewControllers.count } == [1, 1, 1, 1])
+        #expect(stacks[2].topViewController is ArchivedJobsViewController)
+        #expect(stacks[3].topViewController is SettingsViewController)
+        let home = harness.overview
+        home.loadViewIfNeeded()
+        #expect(home.navigationItem.rightBarButtonItem == nil)
+        for id in ["overview.checkPaycheck", "overview.addShift"] {
+            let button: UIButton = try requireView(id, in: home.view)
+            #expect(!button.isHidden && button.isEnabled)
+        }
+        tabs.selectedIndex = 1
+        let shifts = try #require(stacks[1].topViewController as? OverviewViewController)
+        shifts.loadViewIfNeeded()
+        for shift in [first, second] {
+            let _: UIView = try requireView("overview.shift.\(shift.id.uuidString)", in: shifts.view)
+        }
+        shifts.onEditShift?(second)
+        let editor = try #require(stacks[1].topViewController as? EditShiftViewController)
+        #expect(harness.metrics.editedShifts.last?.id == second.id)
+        tabs.selectedIndex = 0
+        tabs.selectedIndex = 1
+        harness.coordinator.start()
+        #expect(stacks[1].topViewController === editor)
+        _ = stacks[1].popViewController(animated: false)
+        #expect(stacks[1].topViewController === shifts)
+        #expect(stacks[0].topViewController === home)
     }
 
     @Test("Add Shift completion reloads the persisted saved ID and returns to the same Overview")
@@ -156,21 +198,23 @@ struct MainCoordinatorTests {
         _ = harness.navigationController.popViewController(animated: false)
         #expect(harness.navigationController.topViewController === harness.overview)
 
-        harness.overview.onManageWorkTypes?()
+        let settingsStack = try #require(harness.coordinator.tabBarController.viewControllers?.last as? UINavigationController)
+        let settings = try #require(settingsStack.topViewController as? SettingsViewController)
+        settings.onManageWorkTypes?()
         let workTypes = try #require(
-            harness.navigationController.topViewController as? WorkTypesViewController
+            settingsStack.topViewController as? WorkTypesViewController
         )
         workTypes.onAddWorkType?()
-        #expect(harness.navigationController.topViewController is AddWorkTypeViewController)
-        _ = harness.navigationController.popViewController(animated: false)
-        #expect(harness.navigationController.topViewController === workTypes)
+        #expect(settingsStack.topViewController is AddWorkTypeViewController)
+        _ = settingsStack.popViewController(animated: false)
+        #expect(settingsStack.topViewController === workTypes)
         let selected = try #require(harness.job.workTypes.first)
         workTypes.onRenameWorkType?(selected)
-        #expect(harness.navigationController.topViewController is RenameWorkTypeViewController)
-        _ = harness.navigationController.popViewController(animated: false)
-        #expect(harness.navigationController.topViewController === workTypes)
-        _ = harness.navigationController.popViewController(animated: false)
-        #expect(harness.navigationController.topViewController === harness.overview)
+        #expect(settingsStack.topViewController is RenameWorkTypeViewController)
+        _ = settingsStack.popViewController(animated: false)
+        #expect(settingsStack.topViewController === workTypes)
+        _ = settingsStack.popViewController(animated: false)
+        #expect(settingsStack.topViewController === settings)
 
         let period = try harness.job.payCalculationPeriod(for: makeShift())
         harness.overview.onCheckPaycheck?(period)
@@ -184,31 +228,33 @@ struct MainCoordinatorTests {
         let harness = try makeHarness(cycle: .perShift)
         harness.coordinator.start()
         harness.overview.loadViewIfNeeded()
-        harness.overview.onManageWorkTypes?()
-        let workTypes = try #require(harness.navigationController.topViewController as? WorkTypesViewController)
+        let settingsStack = try #require(harness.coordinator.tabBarController.viewControllers?.last as? UINavigationController)
+        let settings = try #require(settingsStack.topViewController as? SettingsViewController)
+        settings.onManageWorkTypes?()
+        let workTypes = try #require(settingsStack.topViewController as? WorkTypesViewController)
         workTypes.loadViewIfNeeded()
         let selected = try #require(harness.job.workTypes.first)
         workTypes.onRenameWorkType?(selected)
-        let rename = try #require(harness.navigationController.topViewController as? RenameWorkTypeViewController)
+        let rename = try #require(settingsStack.topViewController as? RenameWorkTypeViewController)
         #expect(harness.metrics.renameInputs == [selected])
         #expect(harness.metrics.renameJobs == [harness.job])
         let updatedJob = try harness.job.renamingWorkType(id: selected.id, to: "Senior Lectures")
         rename.onSaved?(updatedJob)
 
-        #expect(harness.navigationController.topViewController === workTypes)
-        #expect(harness.navigationController.viewControllers.count == 2)
-        #expect(harness.navigationController.viewControllers[0] === harness.overview)
+        #expect(settingsStack.topViewController === workTypes)
+        #expect(settingsStack.viewControllers.count == 2)
+        #expect(settingsStack.viewControllers[0] === settings)
         let renamedCell = workTypes.tableView(workTypes.tableView, cellForRowAt: IndexPath(row: 0, section: 0))
         #expect((renamedCell.contentConfiguration as? UIListContentConfiguration)?.text == "Senior Lectures")
-        _ = harness.navigationController.popViewController(animated: false)
-        #expect(harness.navigationController.topViewController === harness.overview)
+        _ = settingsStack.popViewController(animated: false)
+        #expect(settingsStack.topViewController === settings)
         harness.overview.onAddShift?()
         #expect(harness.metrics.addShiftJobs.last == updatedJob)
         _ = harness.navigationController.popViewController(animated: false)
         harness.overview.onEditShift?(try makeShift())
         #expect(harness.metrics.editShiftJobs.last == updatedJob)
         _ = harness.navigationController.popViewController(animated: false)
-        harness.overview.onManageWorkTypes?()
+        settings.onManageWorkTypes?()
         #expect(harness.metrics.workTypesInputs.last == updatedJob.workTypes)
         #expect(harness.metrics.workTypesJobs.last == updatedJob)
     }
@@ -218,18 +264,20 @@ struct MainCoordinatorTests {
         let harness = try makeHarness(cycle: .perShift)
         harness.coordinator.start()
         harness.overview.loadViewIfNeeded()
-        harness.overview.onManageWorkTypes?()
-        let workTypes = try #require(harness.navigationController.topViewController as? WorkTypesViewController)
+        let settingsStack = try #require(harness.coordinator.tabBarController.viewControllers?.last as? UINavigationController)
+        let settings = try #require(settingsStack.topViewController as? SettingsViewController)
+        settings.onManageWorkTypes?()
+        let workTypes = try #require(settingsStack.topViewController as? WorkTypesViewController)
         workTypes.loadViewIfNeeded()
         let selected = try #require(harness.job.workTypes.first)
 
         workTypes.archive(selected)
 
-        #expect(harness.navigationController.topViewController === workTypes)
-        #expect(harness.navigationController.viewControllers.first === harness.overview)
+        #expect(settingsStack.topViewController === workTypes)
+        #expect(settingsStack.viewControllers.first === settings)
         #expect(workTypes.tableView(workTypes.tableView, titleForHeaderInSection: 0) == WorkTypesStrings.archivedSection)
         #expect(harness.metrics.overviewLoadCount == 2)
-        _ = harness.navigationController.popViewController(animated: false)
+        _ = settingsStack.popViewController(animated: false)
         harness.overview.onAddShift?()
         #expect(harness.metrics.addShiftJobs.last?.workTypes.first?.isArchived == true)
         let addShift = try #require(harness.navigationController.topViewController as? AddShiftViewController)
@@ -242,23 +290,25 @@ struct MainCoordinatorTests {
         let harness = try makeHarness(cycle: .perShift)
         harness.coordinator.start()
         harness.overview.loadViewIfNeeded()
-        harness.overview.onManageWorkTypes?()
+        let settingsStack = try #require(harness.coordinator.tabBarController.viewControllers?.last as? UINavigationController)
+        let settings = try #require(settingsStack.topViewController as? SettingsViewController)
+        settings.onManageWorkTypes?()
         let workTypes = try #require(
-            harness.navigationController.topViewController as? WorkTypesViewController
+            settingsStack.topViewController as? WorkTypesViewController
         )
         let selected = try #require(harness.job.workTypes.first)
         workTypes.onChangePayRate?(selected)
         _ = try #require(
-            harness.navigationController.topViewController as? ChangePayRateViewController
+            settingsStack.topViewController as? ChangePayRateViewController
         )
         #expect(harness.metrics.changePayRateInputs == [selected])
         #expect(harness.metrics.changePayRateJobs == [harness.job])
-        _ = harness.navigationController.popViewController(animated: false)
-        #expect(harness.navigationController.topViewController === workTypes)
+        _ = settingsStack.popViewController(animated: false)
+        #expect(settingsStack.topViewController === workTypes)
 
         workTypes.onChangePayRate?(selected)
         let saving = try #require(
-            harness.navigationController.topViewController as? ChangePayRateViewController
+            settingsStack.topViewController as? ChangePayRateViewController
         )
         let added = try PayRate(
             id: UUID(uuid: (0x78, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1)),
@@ -270,24 +320,24 @@ struct MainCoordinatorTests {
             preservingHistoricalPayrollFor: [], asOf: Date(timeIntervalSinceReferenceDate: 0)
         )
         saving.onSaved?(updated)
-        #expect(harness.navigationController.topViewController === workTypes)
-        #expect(harness.navigationController.viewControllers.count == 2)
-        #expect(harness.navigationController.viewControllers[0] === harness.overview)
-        _ = harness.navigationController.popViewController(animated: false)
+        #expect(settingsStack.topViewController === workTypes)
+        #expect(settingsStack.viewControllers.count == 2)
+        #expect(settingsStack.viewControllers[0] === settings)
+        _ = settingsStack.popViewController(animated: false)
         harness.overview.onAddShift?()
         #expect(harness.metrics.addShiftJobs.last == updated)
         _ = harness.navigationController.popViewController(animated: false)
         harness.overview.onEditShift?(try makeShift())
         #expect(harness.metrics.editShiftJobs.last == updated)
         _ = harness.navigationController.popViewController(animated: false)
-        harness.overview.onManageWorkTypes?()
+        settings.onManageWorkTypes?()
         #expect(harness.metrics.workTypesInputs.last == updated.workTypes)
         let reopened = try #require(
-            harness.navigationController.topViewController as? WorkTypesViewController
+            settingsStack.topViewController as? WorkTypesViewController
         )
         reopened.onChangePayRate?(try #require(updated.workType(id: selected.id)))
         #expect(harness.metrics.changePayRateJobs.last == updated)
-        _ = harness.navigationController.popViewController(animated: false)
+        _ = settingsStack.popViewController(animated: false)
         let currentWorkType = try #require(updated.workType(id: selected.id))
         reopened.onPayRateHistory?(currentWorkType)
         #expect(harness.metrics.payRateHistoryJobs.last == updated)
@@ -298,23 +348,25 @@ struct MainCoordinatorTests {
     func payRateHistoryUsesCurrentWorkType() throws {
         let harness = try makeHarness(cycle: .perShift)
         harness.coordinator.start()
-        harness.overview.onManageWorkTypes?()
+        let settingsStack = try #require(harness.coordinator.tabBarController.viewControllers?.last as? UINavigationController)
+        let settings = try #require(settingsStack.topViewController as? SettingsViewController)
+        settings.onManageWorkTypes?()
         let workTypes = try #require(
-            harness.navigationController.topViewController as? WorkTypesViewController
+            settingsStack.topViewController as? WorkTypesViewController
         )
         let selected = try #require(harness.job.workTypes.first)
 
         workTypes.onPayRateHistory?(selected)
 
         let history = try #require(
-            harness.navigationController.topViewController as? PayRateHistoryViewController
+            settingsStack.topViewController as? PayRateHistoryViewController
         )
         #expect(harness.metrics.payRateHistoryJobs == [harness.job])
         #expect(harness.metrics.payRateHistoryInputs == [selected])
-        #expect(harness.navigationController.viewControllers.count == 3)
-        #expect(harness.navigationController.viewControllers[1] === workTypes)
-        _ = harness.navigationController.popViewController(animated: false)
-        #expect(harness.navigationController.topViewController === workTypes)
+        #expect(settingsStack.viewControllers.count == 3)
+        #expect(settingsStack.viewControllers[1] === workTypes)
+        _ = settingsStack.popViewController(animated: false)
+        #expect(settingsStack.topViewController === workTypes)
         #expect(history.presentedViewController == nil)
     }
 
@@ -323,27 +375,28 @@ struct MainCoordinatorTests {
         let harness = try makeHarness(cycle: .perShift)
         harness.coordinator.start()
         harness.overview.loadViewIfNeeded()
-        let originalOverview = harness.overview
 
-        harness.overview.onManageWorkTypes?()
+        let settingsStack = try #require(harness.coordinator.tabBarController.viewControllers?.last as? UINavigationController)
+        let settings = try #require(settingsStack.topViewController as? SettingsViewController)
+        settings.onManageWorkTypes?()
         let workTypes = try #require(
-            harness.navigationController.topViewController as? WorkTypesViewController
+            settingsStack.topViewController as? WorkTypesViewController
         )
         #expect(workTypes.tableView(workTypes.tableView, numberOfRowsInSection: 0) == 1)
         workTypes.onAddWorkType?()
         let addWorkType = try #require(
-            harness.navigationController.topViewController as? AddWorkTypeViewController
+            settingsStack.topViewController as? AddWorkTypeViewController
         )
         let updatedJob = try makeUpdatedJob(from: harness.job)
         addWorkType.onSaved?(updatedJob)
 
-        #expect(harness.navigationController.topViewController === workTypes)
-        #expect(harness.navigationController.viewControllers.count == 2)
-        #expect(harness.navigationController.viewControllers[0] === originalOverview)
+        #expect(settingsStack.topViewController === workTypes)
+        #expect(settingsStack.viewControllers.count == 2)
+        #expect(settingsStack.viewControllers[0] === settings)
         #expect(workTypes.tableView(workTypes.tableView, numberOfRowsInSection: 0) == 2)
         #expect(harness.metrics.workTypesInputs == [harness.job.workTypes])
-        _ = harness.navigationController.popViewController(animated: false)
-        #expect(harness.navigationController.topViewController === originalOverview)
+        _ = settingsStack.popViewController(animated: false)
+        #expect(settingsStack.topViewController === settings)
         harness.overview.onAddShift?()
         let suppliedJob = try #require(harness.metrics.addShiftJobs.last)
         #expect(suppliedJob == updatedJob)
@@ -453,7 +506,7 @@ struct MainCoordinatorTests {
             throw MainCoordinatorTestError.comparisonFailed
         })
         let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
-        window.rootViewController = harness.navigationController
+        window.rootViewController = harness.coordinator.tabBarController
         window.makeKeyAndVisible()
         defer { window.isHidden = true }
         harness.coordinator.start()
@@ -482,38 +535,52 @@ struct MainCoordinatorTests {
         let harness = try makeHarness(cycle: .perShift)
         let twoTypes = try makeUpdatedJob(from: harness.job)
         harness.coordinator.start()
-        harness.overview.onManageWorkTypes?()
-        let initialTypes = try #require(harness.navigationController.topViewController as? WorkTypesViewController)
+        let settingsStack = try #require(harness.coordinator.tabBarController.viewControllers?.last as? UINavigationController)
+        let settings = try #require(settingsStack.topViewController as? SettingsViewController)
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+        window.rootViewController = harness.coordinator.tabBarController
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true; window.rootViewController = nil }
+        harness.coordinator.tabBarController.selectedIndex = 3
+        window.layoutIfNeeded()
+        settings.onManageWorkTypes?()
+        let initialTypes = try #require(settingsStack.topViewController as? WorkTypesViewController)
         initialTypes.onAddWorkType?()
-        let add = try #require(harness.navigationController.topViewController as? AddWorkTypeViewController)
+        let add = try #require(settingsStack.topViewController as? AddWorkTypeViewController)
         add.onSaved?(twoTypes)
-        _ = harness.navigationController.popViewController(animated: false)
+        _ = settingsStack.popViewController(animated: false)
 
-        harness.overview.onSettings?()
-        let settings = try #require(harness.navigationController.topViewController as? SettingsViewController)
-        settings.loadViewIfNeeded()
-        settings.beginAppearanceTransition(true, animated: false)
-        settings.endAppearanceTransition()
         let button: UIButton = try requireView("settings.rates", in: settings.view)
-        #expect(button.configuration?.title == WorkTypesStrings.title)
-        button.sendActions(for: .primaryActionTriggered)
-        let types = try #require(harness.navigationController.topViewController as? WorkTypesViewController)
+        let ratesSection: UIView = try requireView("settings.rates.section", in: settings.view)
+        let workTypesButton: UIButton = try requireView("settings.workTypes", in: settings.view)
+        #expect(ratesSection.isHidden == true)
+        #expect(!workTypesButton.isHidden)
+        workTypesButton.sendActions(for: .primaryActionTriggered)
+        let types = try #require(settingsStack.topViewController as? WorkTypesViewController)
         let chosen = try #require(twoTypes.workTypes.first)
         types.onPayRateHistory?(chosen)
-        #expect(harness.navigationController.topViewController is PayRateHistoryViewController)
+        #expect(settingsStack.topViewController is PayRateHistoryViewController)
         #expect(harness.metrics.payRateHistoryInputs.last == chosen)
-        _ = harness.navigationController.popViewController(animated: false)
+        _ = settingsStack.popViewController(animated: false)
 
         let archived = try twoTypes.archivingWorkType(id: chosen.id)
         types.onArchived?(archived)
-        _ = harness.navigationController.popViewController(animated: false)
-        settings.beginAppearanceTransition(true, animated: false)
-        settings.endAppearanceTransition()
+        _ = settingsStack.popViewController(animated: false)
+        #expect(ratesSection.isHidden == false)
         #expect(button.configuration?.title == PayRateHistoryStrings.title)
         button.sendActions(for: .primaryActionTriggered)
         let remaining = try #require(archived.workTypes.first { !$0.isArchived })
-        #expect(harness.navigationController.topViewController is PayRateHistoryViewController)
+        #expect(settingsStack.topViewController is PayRateHistoryViewController)
         #expect(harness.metrics.payRateHistoryInputs.last == remaining)
+        _ = settingsStack.popViewController(animated: false)
+        workTypesButton.sendActions(for: .primaryActionTriggered)
+        let remainingTypes = try #require(settingsStack.topViewController as? WorkTypesViewController)
+        let zero = try archived.archivingWorkType(id: remaining.id)
+        remainingTypes.onArchived?(zero)
+        _ = settingsStack.popViewController(animated: false)
+        #expect(ratesSection.isHidden == true)
+        workTypesButton.sendActions(for: .primaryActionTriggered)
+        #expect(settingsStack.topViewController is WorkTypesViewController)
     }
 
     private func makeHarness(
@@ -525,11 +592,12 @@ struct MainCoordinatorTests {
     ) throws -> Harness {
         let job = try makeJob(cycle: cycle)
         let metrics = Metrics()
-        let overview = OverviewViewController(
+        func makeOverview(_ job: Job, countsOverviewLoads: Bool) -> OverviewViewController {
+            OverviewViewController(
             viewModel: OverviewViewModel(
                 job: job,
                 loadShifts: {
-                    metrics.overviewLoadCount += 1
+                    if countsOverviewLoads { metrics.overviewLoadCount += 1 }
                     return metrics.overviewShifts
                 },
                 currentDate: { Date(timeIntervalSinceReferenceDate: 0) }
@@ -537,12 +605,19 @@ struct MainCoordinatorTests {
             currencyCode: job.currencyCode,
             timeZoneIdentifier: job.timeZoneIdentifier,
             displayLocale: displayLocale
-        )
+            )
+        }
+        let overview = makeOverview(job, countsOverviewLoads: true)
+        var madeHome = false
         let navigationController = NonAnimatingNavigationController()
         let dependencies = MainCoordinator.Dependencies(
             loadArchivedJobs: { [] },
             makeArchivedJobHistory: { id in throw ArchivedJobHistoryError.jobNotFound(jobID: id) },
-            makeOverview: { _ in overview },
+            makeOverview: { job in
+                if madeHome { return makeOverview(job, countsOverviewLoads: false) }
+                madeHome = true
+                return overview
+            },
             makeAddShift: { job in
                 metrics.addShiftJobs.append(job)
                 return AddShiftViewController(
@@ -635,7 +710,8 @@ struct MainCoordinatorTests {
         let coordinator = MainCoordinator(
             navigationController: navigationController,
             job: job,
-            dependencies: dependencies
+            dependencies: dependencies,
+            makeNavigationController: { NonAnimatingNavigationController() }
         )
 
         return Harness(

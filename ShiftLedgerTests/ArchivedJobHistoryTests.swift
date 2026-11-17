@@ -231,12 +231,13 @@ struct ArchivedJobHistoryTests {
         #expect(navigation.topViewController === selection)
         if !archivedOnly {
             selection.onSelectJob?(active.id)
-            #expect(navigation.topViewController is OverviewViewController)
+            let home = try #require((window.rootViewController as? UITabBarController)?.selectedViewController as? UINavigationController)
+            #expect(home.topViewController is OverviewViewController)
         } else {
             coordinator.start()
             #expect(navigation.topViewController === selection)
+            #expect(window.rootViewController === navigation)
         }
-        #expect(window.rootViewController === navigation)
     }
 
     @Test("Archived-only list filters active entries and has a truthful empty state")
@@ -288,24 +289,23 @@ struct ArchivedJobHistoryTests {
             preparePaycheckComparison: original.preparePaycheckComparison,
             makePaycheckResult: original.makePaycheckResult
         )
-        let navigation = ArchivedHistoryTestNavigationController()
-        let coordinator = MainCoordinator(navigationController: navigation, job: job, dependencies: dependencies)
+        let home = ArchivedHistoryTestNavigationController()
+        let coordinator = MainCoordinator(navigationController: home, job: job, dependencies: dependencies,
+                                          makeNavigationController: { ArchivedHistoryTestNavigationController() })
         let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
-        window.rootViewController = navigation
+        coordinator.start()
+        window.rootViewController = coordinator.tabBarController
+        coordinator.tabBarController.selectedIndex = 2
         window.makeKeyAndVisible()
         defer { window.isHidden = true; window.rootViewController = nil }
-        coordinator.start()
-        let overview = try #require(navigation.topViewController as? OverviewViewController)
-        overview.onSettings?()
-        let settings = try #require(navigation.topViewController as? SettingsViewController)
-        settings.onArchivedJobs?()
+        let navigation = try #require(coordinator.tabBarController.selectedViewController as? UINavigationController)
         window.layoutIfNeeded()
         let list = try #require(navigation.topViewController as? ArchivedJobsViewController)
         let table = try #require(list.view as? JobSelectionView).tableView
         table.layoutIfNeeded()
         #expect(attempts == 1)
-        #expect(navigation.viewControllers.count == 3)
-        #expect(navigation.viewControllers.first === overview)
+        #expect(navigation.viewControllers.count == 1)
+        #expect(navigation.viewControllers.first === list)
         #expect(list.presentedViewController == nil)
         if outcome != "initialEmpty" {
             let error = try #require(table.cellForRow(at: IndexPath(row: 0, section: 0)))
@@ -323,7 +323,7 @@ struct ArchivedJobHistoryTests {
             #expect(attempts == 2)
         }
         #expect(navigation.topViewController === list)
-        #expect(navigation.viewControllers.count == 3)
+        #expect(navigation.viewControllers.count == 1)
         #expect(list.presentedViewController == nil)
         if outcome == "failed" {
             #expect(table.numberOfRows(inSection: 0) == 2)
@@ -342,12 +342,10 @@ struct ArchivedJobHistoryTests {
             #expect(table.numberOfRows(inSection: 0) == 0)
             #expect(list.tableView(table, titleForFooterInSection: 0) == ArchivedJobHistoryStrings.emptyJobs)
         }
-        _ = navigation.popViewController(animated: false)
-        #expect(navigation.topViewController === settings)
-        _ = navigation.popViewController(animated: false)
-        #expect(navigation.topViewController === overview)
+        coordinator.tabBarController.selectedIndex = 0
+        let overview = try #require(home.topViewController as? OverviewViewController)
         overview.onAddShift?()
-        #expect(navigation.topViewController is AddShiftViewController)
+        #expect(home.topViewController is AddShiftViewController)
         #expect(!fixture.stack.viewContext.hasChanges)
         #expect(try JobStorage(stack: fixture.stack).load(forJobID: active.id) == job)
     }
@@ -381,22 +379,19 @@ struct ArchivedJobHistoryTests {
         )
         let isDark = configuration == "dark-xxl"
         let contentSizeCategory: UIContentSizeCategory = isDark ? .accessibilityExtraExtraLarge : .large
-        let navigation = ArchivedHistoryTestNavigationController()
-        navigation.overrideUserInterfaceStyle = isDark ? .dark : .light
-        navigation.traitOverrides.preferredContentSizeCategory = contentSizeCategory
-        let coordinator = MainCoordinator(navigationController: navigation, job: job, dependencies: dependencies)
+        let home = ArchivedHistoryTestNavigationController()
+        let coordinator = MainCoordinator(navigationController: home, job: job, dependencies: dependencies,
+                                          makeNavigationController: { ArchivedHistoryTestNavigationController() })
         let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
         window.overrideUserInterfaceStyle = isDark ? .dark : .light
         window.traitOverrides.preferredContentSizeCategory = contentSizeCategory
-        window.rootViewController = navigation
+        coordinator.start()
+        window.rootViewController = coordinator.tabBarController
+        coordinator.tabBarController.selectedIndex = 2
         window.makeKeyAndVisible()
         defer { window.isHidden = true; window.rootViewController = nil }
 
-        coordinator.start()
-        let overview = try #require(navigation.topViewController as? OverviewViewController)
-        overview.onSettings?()
-        let settings = try #require(navigation.topViewController as? SettingsViewController)
-        settings.onArchivedJobs?()
+        let navigation = try #require(coordinator.tabBarController.selectedViewController as? UINavigationController)
         window.layoutIfNeeded()
 
         let list = try #require(navigation.topViewController as? ArchivedJobsViewController)
@@ -408,8 +403,8 @@ struct ArchivedJobHistoryTests {
         let error = try #require(table.cellForRow(at: IndexPath(row: 0, section: 0)))
         let retry = try #require(table.cellForRow(at: IndexPath(row: 1, section: 0)))
         #expect(attempts == 1)
-        #expect(navigation.viewControllers.count == 3)
-        #expect(navigation.viewControllers.first === overview)
+        #expect(navigation.viewControllers.count == 1)
+        #expect(navigation.viewControllers.first === list)
         #expect(list.presentedViewController == nil)
         #expect(table.numberOfRows(inSection: 0) == 2)
         #expect(error.accessibilityLabel == String(localized: "archive.jobs.loadFailed", table: "Localizable"))
@@ -457,23 +452,22 @@ struct ArchivedJobHistoryTests {
         let archived = try fixture.insertJob(index: 2, archived: true)
         let composition = AppFlowComposition(stack: fixture.stack)
         let job = try JobStorage(stack: fixture.stack).load(forJobID: active.id)
-        let navigation = ArchivedHistoryTestNavigationController()
-        let coordinator = MainCoordinator(navigationController: navigation, job: job, dependencies: composition.makeMainDependencies())
+        let home = ArchivedHistoryTestNavigationController()
+        let coordinator = MainCoordinator(navigationController: home, job: job, dependencies: composition.makeMainDependencies(),
+                                          makeNavigationController: { ArchivedHistoryTestNavigationController() })
         let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
-        window.rootViewController = navigation
+        coordinator.start()
+        window.rootViewController = coordinator.tabBarController
+        coordinator.tabBarController.selectedIndex = 2
         window.makeKeyAndVisible()
         defer { window.isHidden = true; window.rootViewController = nil }
-        coordinator.start()
-        let overview = try #require(navigation.topViewController as? OverviewViewController)
-        overview.onSettings?()
-        let settings = try #require(navigation.topViewController as? SettingsViewController)
-        settings.onArchivedJobs?()
+        let navigation = try #require(coordinator.tabBarController.selectedViewController as? UINavigationController)
         let list = try #require(navigation.topViewController as? ArchivedJobsViewController)
         archived.isArchived = false
         try fixture.stack.viewContext.save()
         list.onSelectJob?(archived.id)
         #expect(navigation.topViewController === list)
-        #expect(navigation.viewControllers.count == 3)
+        #expect(navigation.viewControllers.count == 1)
         let alert = try #require(list.presentedViewController as? UIAlertController)
         #expect(alert.title == ArchivedJobHistoryStrings.errorTitle)
         #expect(!fixture.stack.viewContext.hasChanges)
@@ -484,7 +478,7 @@ struct ArchivedJobHistoryTests {
         list.onReload?()
         list.onSelectJob?(archived.id)
         #expect((navigation.topViewController as? ArchivedJobHistoryViewController)?.content.identity.id == archived.id)
-        #expect(navigation.viewControllers.first === overview)
+        #expect(navigation.viewControllers.first === list)
         #expect(!fixture.stack.viewContext.hasChanges)
     }
 
@@ -496,28 +490,25 @@ struct ArchivedJobHistoryTests {
         let archived = try fixture.insertJob(index: 2, archived: true)
         let composition = AppFlowComposition(stack: fixture.stack)
         let job = try JobStorage(stack: fixture.stack).load(forJobID: active.id)
-        let navigation = ArchivedHistoryTestNavigationController()
-        let coordinator = MainCoordinator(navigationController: navigation, job: job, dependencies: composition.makeMainDependencies())
+        let home = ArchivedHistoryTestNavigationController()
+        let coordinator = MainCoordinator(navigationController: home, job: job, dependencies: composition.makeMainDependencies(),
+                                          makeNavigationController: { ArchivedHistoryTestNavigationController() })
         let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
-        window.rootViewController = navigation
+        coordinator.start()
+        window.rootViewController = coordinator.tabBarController
+        coordinator.tabBarController.selectedIndex = 2
         window.makeKeyAndVisible()
         defer { window.isHidden = true; window.rootViewController = nil }
-        coordinator.start()
-        let overview = try #require(navigation.topViewController as? OverviewViewController)
-        overview.onSettings?()
-        let settings = try #require(navigation.topViewController as? SettingsViewController)
-        settings.onArchivedJobs?()
+        let navigation = try #require(coordinator.tabBarController.selectedViewController as? UINavigationController)
         let list = try #require(navigation.topViewController as? ArchivedJobsViewController)
         list.onSelectJob?(archived.id)
         #expect((navigation.topViewController as? ArchivedJobHistoryViewController)?.content.identity.id == archived.id)
         _ = navigation.popViewController(animated: false)
         #expect(navigation.topViewController === list)
-        _ = navigation.popViewController(animated: false)
-        #expect(navigation.topViewController === settings)
-        _ = navigation.popViewController(animated: false)
-        #expect(navigation.topViewController === overview)
+        coordinator.tabBarController.selectedIndex = 0
+        let overview = try #require(home.topViewController as? OverviewViewController)
         overview.onAddShift?()
-        #expect(navigation.topViewController is AddShiftViewController)
+        #expect(home.topViewController is AddShiftViewController)
         #expect(!fixture.stack.viewContext.hasChanges)
     }
 

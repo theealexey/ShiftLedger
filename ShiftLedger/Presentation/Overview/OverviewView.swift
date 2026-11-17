@@ -227,6 +227,17 @@ final class OverviewView: UIView, UIScrollViewDelegate {
         }
     }
 
+    var showsShiftHistoryOnly = false
+
+    func renderHistoryOnly(_ cards: [ShiftCard]) {
+        shiftCountValueLabel.text = String(cards.count)
+        shiftCountStack.accessibilityLabel = "\(OverviewStrings.allShiftHistory) \(cards.count)"
+        renderShiftHistory(cards)
+        setVisible(content: false, shiftHistory: true, checkPaycheck: false,
+                   addShift: false, empty: false, error: false)
+        setNeedsLayout()
+    }
+
     func renderEmpty() {
         renderShiftHistory([])
         applyAddShiftEmphasis(isPrimary: true)
@@ -705,7 +716,7 @@ final class OverviewView: UIView, UIScrollViewDelegate {
         contentCard.isHidden = !content
         shiftHistoryStack.isHidden = !shiftHistory
         checkPaycheckButton.isHidden = !checkPaycheck
-        addShiftButton.isHidden = !addShift
+        addShiftButton.isHidden = !addShift || showsShiftHistoryOnly
         emptyCard.isHidden = !empty
         errorCard.isHidden = !error
     }

@@ -15,6 +15,7 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         }
 
         let window = UIWindow(windowScene: windowScene)
+        window.overrideUserInterfaceStyle = .dark
         let appLock = AppLockController(window: window)
         self.appLock = appLock
         appLock.rootDidChange()

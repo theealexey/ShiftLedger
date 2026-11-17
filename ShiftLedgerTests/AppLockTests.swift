@@ -70,6 +70,45 @@ struct AppLockTests {
         #expect(fixture.window.rootViewController?.view.accessibilityElementsHidden == false)
     }
 
+    @Test func shieldCoversTabBarOnColdLaunchAndBackground() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanUp() }
+        fixture.defaults.set(true, forKey: "appLock.enabled")
+        let tabs = UITabBarController()
+        tabs.setViewControllers((0..<4).map { _ in UINavigationController(rootViewController: UIViewController()) },
+                                animated: false)
+        let lock = AppLockController(window: fixture.window, defaults: fixture.defaults,
+                                     preferenceDomain: fixture.name, makeAuthentication: { fixture.authentication })
+        fixture.window.rootViewController = tabs
+        fixture.window.isHidden = false
+        defer { fixture.window.isHidden = true }
+        fixture.window.layoutIfNeeded()
+        tabs.view.layoutIfNeeded()
+        lock.rootDidChange()
+        let shield = try #require(fixture.window.subviews.last as? AppLockShieldView)
+        #expect(shield.frame == fixture.window.bounds)
+        #expect(tabs.view.accessibilityElementsHidden)
+        let tabPoint = tabs.tabBar.convert(CGPoint(x: tabs.tabBar.bounds.midX, y: tabs.tabBar.bounds.midY),
+                                          to: fixture.window)
+        #expect(shield.hitTest(fixture.window.convert(tabPoint, to: shield), with: nil) != nil)
+        lock.didBecomeActive()
+        await fixture.authentication.complete(.success(true))
+        for _ in 0..<100 where lock.isAuthenticating { await Task.yield() }
+        #expect(!lock.isLocked)
+        #expect(!tabs.view.accessibilityElementsHidden)
+        tabs.selectedIndex = 2
+        lock.willResignActive()
+        lock.didEnterBackground()
+        #expect(fixture.window.subviews.last === shield)
+        #expect(tabs.view.accessibilityElementsHidden)
+        #expect(tabs.selectedIndex == 2)
+        lock.didBecomeActive()
+        await fixture.authentication.complete(.failure(LAError(.userCancel)))
+        for _ in 0..<100 where lock.isAuthenticating { await Task.yield() }
+        #expect(lock.isLocked)
+        #expect(shield.retry.isEnabled)
+    }
+
     @Test func argumentDomainCannotOverrideSavedProtection() throws {
         let fixture = try Fixture()
         defer { fixture.cleanUp() }

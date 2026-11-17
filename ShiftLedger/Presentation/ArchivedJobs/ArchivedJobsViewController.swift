@@ -27,7 +27,7 @@ final class ArchivedJobsViewController: UIViewController, UITableViewDataSource,
     override func loadView() { view = listView }
     override func viewDidLoad() {
         super.viewDidLoad()
-        title = ArchivedJobHistoryStrings.jobsTitle
+        navigationItem.title = ArchivedJobHistoryStrings.jobsTitle
         listView.tableView.accessibilityIdentifier = "archive.jobs.list"
         listView.tableView.dataSource = self
         listView.tableView.delegate = self

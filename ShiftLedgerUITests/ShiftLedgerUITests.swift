@@ -40,10 +40,9 @@ final class ShiftLedgerUITests: XCTestCase {
             "-AppleLocale", locale, "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategory\(size)"
         ]
         app.launch()
-        let more = app.buttons["overview.more"]
-        XCTAssertTrue(more.waitForExistence(timeout: 10))
-        more.tap()
-        app.buttons[title].tap()
+        let tab = app.tabBars.buttons[title]
+        XCTAssertTrue(tab.waitForExistence(timeout: 10))
+        tab.tap()
         XCTAssertTrue(app.navigationBars[title].waitForExistence(timeout: 5))
         let currencyRow = app.staticTexts["settings.currency"]
         XCTAssertEqual(currencyRow.label, currency)
@@ -62,59 +61,109 @@ final class ShiftLedgerUITests: XCTestCase {
         if size == "AccessibilityXXXL" { attachScreenshot(named: "SL543-rate-history", from: app) }
         app.navigationBars[history].buttons.firstMatch.tap()
         XCTAssertTrue(app.navigationBars[title].waitForExistence(timeout: 5))
-        app.navigationBars[title].buttons.firstMatch.tap()
-        XCTAssertTrue(more.waitForExistence(timeout: 5))
+        XCTAssertTrue(tab.isSelected)
     }
 
     @MainActor
-    func testArchiveFromSettingsEnglish() {
-        verifyArchiveFromSettings(language: "en", locale: "en_US", settings: "Settings",
-                                  section: "Archive", archive: "Archived jobs", size: "L")
+    func testBottomNavigationRussian() {
+        let app = launchRussianTabs(size: "L")
+        let tabs = app.tabBars.firstMatch
+        guard tabs.waitForExistence(timeout: 10) else { return XCTFail("Tab bar unavailable") }
+        XCTAssertEqual(tabs.buttons.allElementsBoundByIndex.map(\.label), ["Главная", "Смены", "Архив", "Настройки"])
+        XCTAssertFalse(app.buttons["overview.more"].exists)
+        let actions = app.scrollViews["overview.pageScroll"]
+        let add = app.buttons["overview.addShift"]
+        let check = app.buttons["overview.checkPaycheck"]
+        for _ in 0..<8 where !add.isHittable || !check.isHittable { actions.swipeUp() }
+        XCTAssertTrue(add.isHittable)
+        XCTAssertTrue(check.isHittable)
+        XCTAssertLessThanOrEqual(add.frame.maxY, tabs.frame.minY + 1)
+        attachScreenshot(named: "SL546-home", from: app)
+
+        tabs.buttons["Смены"].tap()
+        XCTAssertTrue(tabs.buttons["Смены"].isSelected)
+        let rows = app.descendants(matching: .any).matching(NSPredicate(format:
+            "identifier MATCHES %@", "overview[.]shift[.][0-9A-Fa-f-]{36}"))
+        XCTAssertGreaterThan(rows.count, 0)
+        attachScreenshot(named: "SL546-shifts", from: app)
+        tabs.buttons["Архив"].tap()
+        XCTAssertTrue(app.tables["archive.jobs.list"].waitForExistence(timeout: 5))
+        attachScreenshot(named: "SL546-archive", from: app)
+        tabs.buttons["Настройки"].tap()
+        XCTAssertTrue(app.buttons["settings.workTypes"].exists)
+        XCTAssertTrue(app.switches["settings.appLock"].exists)
+        XCTAssertFalse(app.buttons["settings.archivedJobs"].exists)
+        attachScreenshot(named: "SL546-settings", from: app)
+        tabs.buttons["Смены"].tap()
+        XCTAssertGreaterThan(rows.count, 0)
+        XCTAssertEqual(tabs.buttons.allElementsBoundByIndex.map(\.label), ["Главная", "Смены", "Архив", "Настройки"])
     }
 
     @MainActor
-    func testArchiveFromSettingsRussian() {
-        verifyArchiveFromSettings(language: "ru", locale: "ru_RU", settings: "Настройки",
-                                  section: "Архив", archive: "Архивированные работы", size: "L")
+    func testBottomNavigationRussianAXXXL() {
+        let app = launchRussianTabs(size: "AccessibilityXXXL")
+        let tabs = app.tabBars.firstMatch
+        guard tabs.waitForExistence(timeout: 10) else { return XCTFail("Tab bar unavailable") }
+        for title in ["Смены", "Архив", "Настройки", "Главная"] {
+            let item = tabs.buttons[title]
+            XCTAssertTrue(item.isHittable)
+            item.tap()
+            XCTAssertTrue(item.isSelected)
+        }
+        attachScreenshot(named: "SL546-AXXXL", from: app)
     }
 
     @MainActor
-    func testArchiveFromSettingsRussianAXXXL() {
-        verifyArchiveFromSettings(language: "ru", locale: "ru_RU", settings: "Настройки",
-                                  section: "Архив", archive: "Архивированные работы", size: "AccessibilityXXXL")
+    func testHomeAndSettingsAccessibilityAtBottom() {
+        let app = launchRussianTabs(size: "AccessibilityXXXL")
+        let tabs = app.tabBars.firstMatch
+        guard tabs.waitForExistence(timeout: 10) else { return XCTFail("Tab bar unavailable") }
+        let scroll = app.scrollViews["overview.pageScroll"]
+        let add = app.buttons["overview.addShift"]
+        for _ in 0..<10 where !add.isHittable || add.frame.maxY > tabs.frame.minY { scroll.swipeUp() }
+        XCTAssertTrue(add.isHittable)
+        XCTAssertLessThanOrEqual(add.frame.maxY, tabs.frame.minY + 1)
+        add.tap()
+        XCTAssertTrue(app.scrollViews["addShift.screen"].waitForExistence(timeout: 5))
+        app.navigationBars.buttons.firstMatch.tap()
+        let check = app.buttons["overview.checkPaycheck"]
+        for _ in 0..<6 where !check.isHittable || check.frame.maxY > tabs.frame.minY { scroll.swipeUp() }
+        XCTAssertTrue(check.isHittable)
+        XCTAssertLessThanOrEqual(check.frame.maxY, tabs.frame.minY + 1)
+        attachScreenshot(named: "SL546-review-home-ax", from: app)
+        check.tap()
+        XCTAssertTrue(app.otherElements["actualGrossEntry.screen"].waitForExistence(timeout: 5))
+        app.navigationBars.buttons.firstMatch.tap()
+
+        tabs.buttons["Настройки"].tap()
+        let settingsScroll = app.scrollViews["settings.scroll"]
+        let version = app.staticTexts["settings.version"]
+        for _ in 0..<10 where !version.isHittable || version.frame.maxY > tabs.frame.minY { settingsScroll.swipeUp() }
+        XCTAssertTrue(version.isHittable)
+        XCTAssertLessThanOrEqual(version.frame.maxY, tabs.frame.minY + 1)
+        attachScreenshot(named: "SL546-review-settings-ax", from: app)
     }
 
     @MainActor
-    private func verifyArchiveFromSettings(language: String, locale: String, settings: String,
-                                           section: String, archive: String, size: String) {
+    func testEnglishTabsStayDarkWhenSystemIsLight() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-ui-testing-seed-job", "-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
+        app.launch()
+        let tabs = app.tabBars.firstMatch
+        guard tabs.waitForExistence(timeout: 10) else { return XCTFail("Tab bar unavailable") }
+        XCTAssertEqual(tabs.buttons.allElementsBoundByIndex.map(\.label), ["Home", "Shifts", "Archive", "Settings"])
+        attachScreenshot(named: "SL546-review-en-light-system", from: app)
+    }
+
+    @MainActor
+    private func launchRussianTabs(size: String) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments = [
-            "-ui-testing-seed-job", "-AppleLanguages", "(\(language))",
-            "-AppleLocale", locale, "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategory\(size)"
+            "-ui-testing-seed-job", "-AppleLanguages", "(ru)", "-AppleLocale", "ru_RU",
+            "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategory\(size)"
         ]
         app.launch()
-        let more = app.buttons["overview.more"]
-        guard more.waitForExistence(timeout: 10) else { return XCTFail("Overview More is unavailable") }
-        more.tap()
-        XCTAssertFalse(app.buttons[archive].exists)
-        app.buttons[settings].tap()
-
-        let scroll = app.scrollViews["settings.scroll"]
-        let row = scroll.buttons["settings.archivedJobs"]
-        guard row.waitForExistence(timeout: 5) else { return XCTFail("Settings archive row is missing") }
-        for _ in 0..<4 where !row.isHittable { scroll.swipeUp() }
-        guard row.isHittable else { return XCTFail("Settings archive row is not hittable") }
-        XCTAssertEqual(row.label, archive)
-        XCTAssertTrue(scroll.staticTexts[section].exists)
-        XCTAssertGreaterThanOrEqual(row.frame.height, 44)
-        attachScreenshot(named: "SL544-\(language)-\(size)", from: app)
-        row.tap()
-
-        let archiveBar = app.navigationBars[archive]
-        XCTAssertTrue(app.tables["archive.jobs.list"].waitForExistence(timeout: 5))
-        archiveBar.buttons.firstMatch.tap()
-        XCTAssertTrue(app.navigationBars[settings].waitForExistence(timeout: 5))
-        XCTAssertTrue(row.exists)
+        return app
     }
 
     // MARK: - Existing coverage

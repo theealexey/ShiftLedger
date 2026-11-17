@@ -3115,13 +3115,7 @@ struct OverviewViewControllerTests {
 
         subject.viewController.loadViewIfNeeded()
 
-        let item = try #require(subject.viewController.navigationItem.rightBarButtonItem)
-        #expect(item.accessibilityIdentifier == "overview.more")
-        #expect(item.image == UIImage(systemName: "ellipsis.circle"))
-        let menu = try #require(item.menu)
-        #expect(menu.children.count == 2)
-        #expect(menu.children.first?.title == OverviewStrings.workTypes)
-        #expect(menu.children.last?.title == SettingsStrings.title)
+        #expect(subject.viewController.navigationItem.rightBarButtonItem == nil)
     }
 
     @Test("Check Paycheck forwards the selected Domain period")
