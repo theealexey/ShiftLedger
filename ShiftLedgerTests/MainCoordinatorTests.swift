@@ -126,6 +126,104 @@ struct MainCoordinatorTests {
         #expect(stacks[0].topViewController === home)
     }
 
+    @Test("Home counts all saved shifts and lists the four newest", arguments: [0, 1, 6])
+    func homeRecentShiftCount(_ count: Int) throws {
+        let harness = try makeHarness(cycle: .perShift)
+        let sample = try makeShift()
+        let shifts = try (0..<count).map { index in
+            let start = sample.start.addingTimeInterval(Double(index) * 86_400)
+            return try Shift(jobID: sample.jobID, workTypeID: sample.workTypeID,
+                             start: start, end: start.addingTimeInterval(3_600))
+        }
+        harness.metrics.overviewShifts = Array(shifts.reversed())
+        harness.coordinator.start()
+        let view = try #require(harness.overview.view)
+        let shortcut: UIButton = try requireView("home.savedShifts", in: view)
+        #expect(shortcut.accessibilityValue == count.formatted())
+        func recentIDs(in view: UIView) -> [String] {
+            if let id = view.accessibilityIdentifier, id.hasPrefix("home.recentShift.") { return [id] }
+            return view.subviews.flatMap { recentIDs(in: $0) }
+        }
+        #expect(recentIDs(in: view) == shifts.reversed().prefix(4).map { "home.recentShift.\($0.id.uuidString)" })
+        let check: UIButton = try requireView("overview.checkPaycheck", in: view)
+        #expect(check.isEnabled == (count > 0))
+        if let latest = shifts.last {
+            let card: UIButton = try requireView("home.recentShift.\(latest.id.uuidString)", in: view)
+            card.sendActions(for: .touchUpInside)
+            #expect(harness.metrics.editedShifts.last?.id == latest.id)
+            let edit = try #require(harness.navigationController.topViewController as? EditShiftViewController)
+            harness.metrics.overviewShifts.removeAll { $0.id == latest.id }
+            edit.onDeleted?(latest.id)
+            #expect(shortcut.accessibilityValue == (count - 1).formatted())
+        }
+        shortcut.sendActions(for: .touchUpInside)
+        let tabs = harness.coordinator.tabBarController
+        let stack = try #require(tabs.selectedViewController as? UINavigationController)
+        #expect(stack.tabBarItem.accessibilityIdentifier == "tabs.shifts")
+        let shiftsView = try #require(stack.topViewController?.view)
+        for shift in harness.metrics.overviewShifts {
+            let _: UIView = try requireView("overview.shift.\(shift.id.uuidString)", in: shiftsView)
+        }
+    }
+
+    @Test("Home recent card shows full localized overnight endpoints", arguments: ["en_US", "ru_RU"])
+    func homeOvernightFormatting(_ locale: String) throws {
+        let harness = try makeHarness(cycle: .perShift, displayLocale: Locale(identifier: locale))
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try #require(TimeZone(identifier: harness.job.timeZoneIdentifier))
+        let start = try #require(calendar.date(from: DateComponents(year: 2026, month: 12, day: 31, hour: 22)))
+        let sample = try makeShift()
+        let shift = try Shift(jobID: sample.jobID, workTypeID: sample.workTypeID, start: start,
+                              end: start.addingTimeInterval(8 * 3_600))
+        harness.metrics.overviewShifts = [shift]
+        harness.coordinator.start()
+        let row: UIButton = try requireView("home.recentShift.\(shift.id.uuidString)", in: harness.overview.view)
+        func renderedLabels(in view: UIView) -> [String] {
+            if let text = (view as? UILabel)?.text { return [text] }
+            return view.subviews.flatMap { renderedLabels(in: $0) }
+        }
+        let text = renderedLabels(in: row).joined(separator: " ")
+        for token in locale == "ru_RU" ? ["декабря", "января", "22:00", "06:00"] : ["December", "January", "10:00", "6:00"] {
+            #expect(text.localizedStandardContains(token))
+        }
+        #expect(text.contains("2026"))
+        #expect(text.contains("2027"))
+        #expect(row.accessibilityLabel?.contains("2027") == true)
+    }
+
+    @Test("Home overnight card fits narrow-to-wide layouts", arguments: [320.0, 375.0, 402.0])
+    func homeCardGeometry(_ width: CGFloat) throws {
+        let harness = try makeHarness(cycle: .perShift, displayLocale: Locale(identifier: "ru_RU"))
+        let sample = try makeShift()
+        let start = try #require(ISO8601DateFormatter().date(from: "2026-10-24T22:30:00Z"))
+        let shift = try Shift(jobID: sample.jobID, workTypeID: sample.workTypeID,
+                              start: start, end: start.addingTimeInterval(8 * 3_600))
+        harness.metrics.overviewShifts = [shift]
+        harness.coordinator.start()
+        let home = harness.overview
+        let root = try #require(home.view)
+        root.frame = CGRect(x: 0, y: 0, width: width, height: 844)
+        let row: UIButton = try requireView("home.recentShift.\(shift.id.uuidString)", in: root)
+        func labels(in view: UIView) -> [UILabel] {
+            if let label = view as? UILabel, label.text?.isEmpty == false { return [label] }
+            return view.subviews.flatMap { labels(in: $0) }
+        }
+        for size in [UIContentSizeCategory.large, .accessibilityExtraExtraExtraLarge, .large] {
+            home.traitOverrides.preferredContentSizeCategory = size
+            for _ in 0..<3 { root.setNeedsLayout(); root.layoutIfNeeded() }
+            let content = labels(in: row)
+            let frames = content.map { $0.convert($0.bounds, to: row) }
+            #expect(row.bounds.height >= 44)
+            #expect(content.contains { $0.text?.contains("GMT+02:00") == true })
+            #expect(content.contains { $0.text?.contains("GMT+01:00") == true })
+            for (index, frame) in frames.enumerated() {
+                #expect(!frame.isEmpty)
+                #expect(row.bounds.insetBy(dx: -1, dy: -1).contains(frame))
+                #expect(!frames.dropFirst(index + 1).contains { $0.intersects(frame) })
+            }
+        }
+    }
+
     @Test("Add Shift completion reloads the persisted saved ID and returns to the same Overview")
     func addShiftCompletionReturnsToSameOverview() throws {
         let harness = try makeHarness(cycle: .perShift)
@@ -143,11 +241,13 @@ struct MainCoordinatorTests {
         #expect(harness.metrics.overviewLoadCount == 2)
         #expect(harness.navigationController.topViewController === harness.overview)
         #expect(harness.navigationController.viewControllers.count == 1)
-        let card: UIView = try requireView(
-            "overview.shift.\(callbackShift.id.uuidString)",
+        let card: UIButton = try requireView(
+            "home.recentShift.\(callbackShift.id.uuidString)",
             in: harness.overview.view
         )
-        #expect(card.accessibilityTraits.contains(.selected))
+        #expect(card.accessibilityTraits.contains(.button))
+        let period = try harness.job.payCalculationPeriod(for: callbackShift)
+        #expect(harness.overview.paycheckPeriodHeading(for: period) != nil)
     }
 
     @Test("Actual Gross uses the comparison dependency and opens Result")
@@ -465,11 +565,11 @@ struct MainCoordinatorTests {
         #expect(harness.navigationController.viewControllers.first === originalOverview)
         #expect(harness.metrics.overviewLoadCount == 3)
         #expect(findView(
-            "overview.shift.\(deletedShift.id.uuidString)",
+            "home.recentShift.\(deletedShift.id.uuidString)",
             in: originalOverview.view
         ) == nil)
         #expect(findView(
-            "overview.shift.\(remainingShift.id.uuidString)",
+            "home.recentShift.\(remainingShift.id.uuidString)",
             in: originalOverview.view
         ) != nil)
     }
@@ -493,9 +593,10 @@ struct MainCoordinatorTests {
 
         #expect(harness.navigationController.topViewController === originalOverview)
         #expect(harness.navigationController.viewControllers.count == 1)
-        #expect(findView("overview.empty.container", in: originalOverview.view) != nil)
+        let shortcut: UIButton = try requireView("home.savedShifts", in: originalOverview.view)
+        #expect(shortcut.accessibilityValue == 0.formatted())
         #expect(findView(
-            "overview.shift.\(shift.id.uuidString)",
+            "home.recentShift.\(shift.id.uuidString)",
             in: originalOverview.view
         ) == nil)
     }

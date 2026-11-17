@@ -143,6 +143,10 @@ final class OverviewViewModel {
             case let (.scheduled, .scheduled(payPeriod)):
                 guard let currentPayPeriod = try currentScheduledPayPeriod(), payPeriod.start <= currentPayPeriod.start else { return }
                 try publishScheduledContent(selectedPayPeriod: payPeriod, currentPayPeriod: currentPayPeriod)
+            case let (.perShift, .perShift(id)):
+                guard let shift = shifts.first(where: { $0.id == id }),
+                      let content = try perShiftContent(for: shift) else { return }
+                publish(content.replacingSelection(selectedShiftID: id, expandedShiftID: nil))
             default:
                 return
             }

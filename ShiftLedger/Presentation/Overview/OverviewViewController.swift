@@ -2,6 +2,8 @@ import UIKit
 
 final class OverviewViewController: UIViewController {
     var onAddShift: (() -> Void)?
+    var onShowSavedShifts: (() -> Void)?
+    var usesHomeComposition = false
     var onCheckPaycheck: ((PayCalculationPeriod) -> Void)?
     var onEditShift: ((Shift) -> Void)?
 
@@ -40,6 +42,9 @@ final class OverviewViewController: UIViewController {
     }
 
     override func loadView() {
+        if usesHomeComposition {
+            overviewView.installHomeComposition()
+        }
         view = overviewView
     }
 
@@ -74,6 +79,7 @@ final class OverviewViewController: UIViewController {
     }
 
     private func bindView() {
+        overviewView.onShowSavedShifts = { [weak self] in self?.onShowSavedShifts?() }
         overviewView.onPreviousPeriodTapped = { [weak self] in
             self?.viewModel.navigateToPreviousPeriod()
             self?.render()
@@ -164,10 +170,11 @@ final class OverviewViewController: UIViewController {
                 shiftCards: cards,
                 canNavigatePrevious: content.canNavigatePrevious,
                 canNavigateNext: content.canNavigateNext,
-                canCheckPaycheck: true
+                canCheckPaycheck: true,
+                perShiftSelection: content.showPeriodNavigation ? nil : content.selectedShiftID
             )
 
-            if let selectedShiftID = content.selectedShiftID,
+            if !usesHomeComposition, let selectedShiftID = content.selectedShiftID,
                content.expandedShiftID != nil {
                 overviewView.focusShiftCard(with: selectedShiftID)
             }

@@ -37,10 +37,14 @@ final class OverviewView: UIView, UIScrollViewDelegate {
     var onCheckPaycheckTapped: (() -> Void)?
     var onAddShiftTapped: (() -> Void)?
     var onRetryTapped: (() -> Void)?
+    var onShowSavedShifts: (() -> Void)?
 
     private let scrollView = UIScrollView()
     private let contentView = UIView()
     private let mainStack = UIStackView()
+    private var homeShifts: HomeShiftsView?
+    private let calculationTitle = UILabel()
+    private let calculationShiftPicker = UIButton(type: .system)
     private let periodCard = UIView()
     private let periodStack = UIStackView()
     private let periodCaption = UILabel()
@@ -129,7 +133,8 @@ final class OverviewView: UIView, UIScrollViewDelegate {
         shiftCards: [ShiftCard],
         canNavigatePrevious: Bool,
         canNavigateNext: Bool,
-        canCheckPaycheck: Bool
+        canCheckPaycheck: Bool,
+        perShiftSelection: UUID? = nil
     ) {
         showsPeriodNavigation = showPeriodNavigation
         periodRailContainer.accessibilityElementsHidden = !showPeriodNavigation
@@ -165,7 +170,19 @@ final class OverviewView: UIView, UIScrollViewDelegate {
         previousButton.isEnabled = canNavigatePrevious
         nextButton.isEnabled = canNavigateNext
         checkPaycheckButton.isEnabled = canCheckPaycheck
-        renderShiftHistory(shiftCards)
+        if let homeShifts {
+            homeShifts.render(count: shiftCount, recent: Array(shiftCards.prefix(4)))
+            calculationShiftPicker.menu = perShiftSelection.map { selected in
+                UIMenu(children: shiftCards.map { card in
+                    UIAction(title: "\(card.frontDate) · \(card.timeRange)",
+                             state: card.id == selected ? .on : .off) { [weak self] _ in
+                        self?.onPeriodTapped?(.perShift(shiftID: card.id))
+                    }
+                })
+            }
+        } else {
+            renderShiftHistory(shiftCards)
+        }
         applyAddShiftEmphasis(isPrimary: false)
         setVisible(
             content: true,
@@ -229,6 +246,32 @@ final class OverviewView: UIView, UIScrollViewDelegate {
 
     var showsShiftHistoryOnly = false
 
+    func installHomeComposition() {
+        guard homeShifts == nil else { return }
+        let section = HomeShiftsView()
+        section.onShowSavedShifts = { [weak self] in self?.onShowSavedShifts?() }
+        section.onEditShift = { [weak self] in self?.onEditShiftTapped?($0) }
+        homeShifts = section
+
+        calculationTitle.text = String(localized: "home.calculation")
+        configureLabel(calculationTitle, font: ShiftLedgerTypography.headline, color: ShiftLedgerColors.textPrimary)
+        calculationTitle.accessibilityTraits.insert(.header)
+        configureActionButton(calculationShiftPicker, title: String(localized: "home.chooseShift"),
+                              identifier: "home.calculation.chooseShift", isPrimary: false)
+        calculationShiftPicker.showsMenuAsPrimaryAction = true
+        let minimumPickerHeight = calculationShiftPicker.heightAnchor.constraint(greaterThanOrEqualToConstant: 44)
+        minimumPickerHeight.priority = UILayoutPriority(999)
+        minimumPickerHeight.isActive = true
+
+        mainStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
+        [section, checkPaycheckButton, addShiftButton, calculationTitle, periodCard,
+         calculationShiftPicker, contentCard, emptyCard, historyCard, errorCard]
+            .forEach(mainStack.addArrangedSubview)
+        mainStack.setCustomSpacing(8, after: checkPaycheckButton)
+        mainStack.setCustomSpacing(28, after: addShiftButton)
+        renderIdle()
+    }
+
     func renderHistoryOnly(_ cards: [ShiftCard]) {
         shiftCountValueLabel.text = String(cards.count)
         shiftCountStack.accessibilityLabel = "\(OverviewStrings.allShiftHistory) \(cards.count)"
@@ -239,8 +282,10 @@ final class OverviewView: UIView, UIScrollViewDelegate {
     }
 
     func renderEmpty() {
-        renderShiftHistory([])
-        applyAddShiftEmphasis(isPrimary: true)
+        homeShifts?.render(count: 0, recent: [])
+        if homeShifts == nil { renderShiftHistory([]) }
+        checkPaycheckButton.isEnabled = false
+        applyAddShiftEmphasis(isPrimary: homeShifts == nil)
         setVisible(
             content: false,
             shiftHistory: false,
@@ -710,14 +755,17 @@ final class OverviewView: UIView, UIScrollViewDelegate {
         error: Bool
     ) {
         periodCard.isHidden = !content
-        historyCard.isHidden = !shiftHistory
+        homeShifts?.isHidden = !(shiftHistory || empty)
+        calculationTitle.isHidden = homeShifts == nil || !content
+        calculationShiftPicker.isHidden = homeShifts == nil || !content || calculationShiftPicker.menu == nil
+        historyCard.isHidden = !shiftHistory || homeShifts != nil
         periodRailContainer.isHidden = !content || !showsPeriodNavigation
         perShiftHeading.isHidden = !content || showsPeriodNavigation
         contentCard.isHidden = !content
         shiftHistoryStack.isHidden = !shiftHistory
-        checkPaycheckButton.isHidden = !checkPaycheck
+        checkPaycheckButton.isHidden = !checkPaycheck && !(empty && homeShifts != nil)
         addShiftButton.isHidden = !addShift || showsShiftHistoryOnly
-        emptyCard.isHidden = !empty
+        emptyCard.isHidden = !empty || homeShifts != nil
         errorCard.isHidden = !error
     }
 

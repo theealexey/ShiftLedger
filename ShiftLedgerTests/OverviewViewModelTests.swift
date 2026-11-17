@@ -297,8 +297,8 @@ struct OverviewViewModelTests {
         #expect(content.expectedBreakdown?.shiftBreakdowns.map(\.shift) == [older])
     }
 
-    @Test("Per-shift selectPeriod cannot override the selected card")
-    func perShiftSelectPeriodDoesNotChangeSelection() throws {
+    @Test("Per-shift selectPeriod accepts persisted shifts and rejects other identities")
+    func perShiftSelectPeriodAcceptsPersistedShift() throws {
         let job = try makeJob(cycle: .perShift)
         let oldest = try makeShift(id: 1, day: 10)
         let latest = try makeShift(id: 2, day: 20)
@@ -308,18 +308,23 @@ struct OverviewViewModelTests {
             now: Date(timeIntervalSinceReferenceDate: 0)
         )
         viewModel.load()
-        let latestState = viewModel.state
 
         viewModel.selectPeriod(.perShift(shiftID: oldest.id))
-        #expect(viewModel.state == latestState)
+        let selectedState = viewModel.state
+        let content = try requireContent(selectedState)
+        #expect(content.selectedPeriod == .perShift(shiftID: oldest.id))
+        #expect(content.selectedShiftID == oldest.id)
+        #expect(content.expectedBreakdown?.shiftBreakdowns.map(\.shift) == [oldest])
+        viewModel.selectPeriod(.perShift(shiftID: UUID()))
+        #expect(viewModel.state == selectedState)
 
         viewModel.selectPeriod(.scheduled(PayPeriod(
             start: try localDate(year: 2026, month: 9, day: 1),
             endExclusive: try localDate(year: 2026, month: 10, day: 1)
         )))
-        #expect(viewModel.state == latestState)
-        let content = try requireContent(viewModel.state)
-        #expect(content.selectedShiftID == latest.id)
+        #expect(viewModel.state == selectedState)
+        viewModel.reload()
+        #expect(viewModel.state == selectedState)
         #expect(content.canNavigatePrevious == false)
         #expect(content.canNavigateNext == false)
     }

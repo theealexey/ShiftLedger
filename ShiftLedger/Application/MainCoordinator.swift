@@ -58,6 +58,7 @@ final class MainCoordinator {
         self.makeNavigationController = makeNavigationController
         overviewViewController = dependencies.makeOverview(job)
 
+        overviewViewController.usesHomeComposition = true
         configureOverviewCallbacks()
     }
 
@@ -101,6 +102,10 @@ final class MainCoordinator {
     }
 
     private func configureOverviewCallbacks() {
+        overviewViewController.onShowSavedShifts = { [weak self] in
+            guard let self else { return }
+            self.tabBarController.selectedViewController = self.shiftsNavigation
+        }
         overviewViewController.onAddShift = { [weak self] in
             self?.navigate(to: .addShift)
         }

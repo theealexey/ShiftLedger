@@ -199,6 +199,56 @@ final class ShiftLedgerUITests: XCTestCase {
         secondLaunch.terminate()
     }
 
+    @MainActor
+    func testHomeCompositionRuntime() throws {
+        let app = makeApplication(resetStore: true)
+        app.launchArguments.append("-ui-testing-seed-job")
+        app.launch()
+        let shortcut = app.buttons["home.savedShifts"]
+        XCTAssertTrue(shortcut.waitForExistence(timeout: 10))
+        XCTAssertEqual(shortcut.value as? String, "0")
+        XCTAssertFalse(app.buttons["overview.checkPaycheck"].isEnabled)
+        attachScreenshot(named: "SL547-en-empty", from: app)
+
+        try addShift(start: ShiftTime(hour: 8, minute: 0, meridiem: "AM"),
+                     end: ShiftTime(hour: 11, minute: 0, meridiem: "AM"), in: app)
+        XCTAssertEqual(shortcut.value as? String, "1")
+        let recent = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "home.recentShift.")).firstMatch
+        XCTAssertTrue(recent.waitForExistence(timeout: 5))
+        let id = recent.identifier.replacingOccurrences(of: "home.recentShift.", with: "")
+        attachScreenshot(named: "SL547-en-populated", from: app)
+        shortcut.tap()
+        XCTAssertTrue(app.tabBars.buttons["Shifts"].isSelected)
+        XCTAssertTrue(app.buttons["overview.shift.\(id)"].exists)
+        app.tabBars.buttons["Home"].tap()
+        recent.tap()
+        XCTAssertTrue(app.scrollViews["editShift.screen"].waitForExistence(timeout: 5))
+        app.terminate()
+
+        for size in ["L", "AccessibilityXXXL"] {
+            let ru = launchRussianTabs(size: size)
+            let scroll = ru.scrollViews["overview.pageScroll"]
+            let tabBar = ru.tabBars.firstMatch
+            XCTAssertTrue(ru.buttons["home.recentShift.\(id)"].waitForExistence(timeout: 10))
+            attachScreenshot(named: "SL547-ru-\(size)-home", from: ru)
+            let add = ru.buttons["overview.addShift"]
+            let check = ru.buttons["overview.checkPaycheck"]
+            for _ in 0..<8 where !add.isHittable || add.frame.maxY > tabBar.frame.minY { scroll.swipeUp() }
+            XCTAssertTrue(add.isHittable)
+            XCTAssertLessThanOrEqual(add.frame.maxY, tabBar.frame.minY + 1)
+            attachScreenshot(named: "SL547-ru-\(size)-actions", from: ru)
+            add.tap()
+            XCTAssertTrue(ru.scrollViews["addShift.screen"].waitForExistence(timeout: 5))
+            ru.navigationBars.buttons.firstMatch.tap()
+            for _ in 0..<8 where !check.isHittable || check.frame.maxY > tabBar.frame.minY { scroll.swipeUp() }
+            XCTAssertTrue(check.isHittable)
+            XCTAssertLessThanOrEqual(check.frame.maxY, tabBar.frame.minY + 1)
+            check.tap()
+            XCTAssertTrue(ru.otherElements["actualGrossEntry.screen"].waitForExistence(timeout: 5))
+            ru.terminate()
+        }
+    }
+
     // MARK: - SL-476
 
     @MainActor
@@ -272,20 +322,9 @@ final class ShiftLedgerUITests: XCTestCase {
         )
 
         let selectedShiftIdentifier = try firstShiftCardIdentifier(in: relaunchedApp)
-        let shiftToCheck = try scrollToHittable(
-            requerying: { relaunchedApp.buttons[selectedShiftIdentifier] },
-            in: relaunchedApp,
-            direction: .towardTop,
-            message: "The Shift to check must be reachable"
-        )
-        if !shiftToCheck.isSelected { shiftToCheck.tap() }
-        XCTAssertTrue(shiftToCheck.isSelected)
         try verifyPaycheckResult(in: relaunchedApp)
-        let returnedShift = try requireElement(
-            relaunchedApp.buttons[selectedShiftIdentifier],
-            message: "The same Shift must be present after Result Done"
-        )
-        XCTAssertTrue(returnedShift.isSelected)
+        XCTAssertTrue(relaunchedApp.buttons[homeCardID(for: selectedShiftIdentifier)].exists)
+        try openFullShiftHistory(in: relaunchedApp)
 
         let editedCardIdentifier = try editOneShift(
             cardIdentifier: selectedShiftIdentifier,
@@ -300,12 +339,6 @@ final class ShiftLedgerUITests: XCTestCase {
                 minute: 0,
                 meridiem: "PM"
             )
-        )
-
-        try assertShiftCount(
-            2,
-            expectedHeroAmount: "2.01",
-            in: relaunchedApp
         )
 
         let editedCard = try requireElement(
@@ -344,12 +377,22 @@ final class ShiftLedgerUITests: XCTestCase {
             from: relaunchedApp
         )
 
+        selectHome(in: relaunchedApp)
+        try assertShiftCount(
+            2,
+            expectedHeroAmount: "2.01",
+            in: relaunchedApp
+        )
+
+        try openFullShiftHistory(in: relaunchedApp)
         let deletedIdentifier =
             try deleteShiftWithCancellationThenConfirmation(
                 cardIdentifier: editedCardIdentifier,
                 in: relaunchedApp
             )
 
+        XCTAssertFalse(relaunchedApp.buttons[deletedIdentifier].exists)
+        selectHome(in: relaunchedApp)
         try assertShiftCount(
             1,
             expectedHeroAmount: "1.00",
@@ -357,7 +400,7 @@ final class ShiftLedgerUITests: XCTestCase {
         )
 
         try assertButtonDoesNotExist(
-            identifier: deletedIdentifier,
+            identifier: homeCardID(for: deletedIdentifier),
             in: relaunchedApp,
             message: "Confirmed Delete must remove the exact Shift card"
         )
@@ -381,7 +424,7 @@ final class ShiftLedgerUITests: XCTestCase {
         )
 
         try assertButtonDoesNotExist(
-            identifier: deletedIdentifier,
+            identifier: homeCardID(for: deletedIdentifier),
             in: finalRelaunch,
             message: "Deleted Shift must not return after relaunch"
         )
@@ -403,8 +446,8 @@ final class ShiftLedgerUITests: XCTestCase {
         defer { app.terminate() }
         try completeFixedPerShiftOnboarding(in: app, scheduledPayroll: false)
         _ = try requireElement(app.staticTexts["overview.navigation.brand"], message: "Empty PerShift must retain navigation branding")
-        _ = try requireElement(app.staticTexts["overview.empty.title"], message: "Empty PerShift must explain how to begin")
-        XCTAssertFalse(app.buttons["overview.checkPaycheck"].exists)
+        _ = try requireElement(app.staticTexts["home.latestShifts.empty"], message: "Empty PerShift must explain how to begin")
+        XCTAssertFalse(app.buttons["overview.checkPaycheck"].isEnabled)
         attachScreenshot(named: "SL511-final-empty-per-shift-receipt", from: app)
         try addShift(
             start: ShiftTime(hour: 8, minute: 0, meridiem: "AM"),
@@ -423,34 +466,49 @@ final class ShiftLedgerUITests: XCTestCase {
         try assertShiftCount(2, expectedHeroAmount: "1.00", in: app)
         XCTAssertEqual(normalizedWhitespace(app.staticTexts["overview.expectedGross.amount"].label),
                        "Expected gross · EUR, 1.00")
-        let identities = Set(shiftCards(in: app).map(\.identifier))
+        let identities = Set(homeRecentCards(in: app).map { ledgerCardID(for: $0.identifier) })
         XCTAssertEqual(identities.count, 2)
         XCTAssertTrue(identities.contains(olderID))
         let newIdentities = identities.subtracting([olderID])
         XCTAssertEqual(newIdentities.count, 1)
         let newerID = try XCTUnwrap(newIdentities.first)
-        XCTAssertTrue(app.buttons[newerID].isSelected)
+        XCTAssertTrue(app.buttons[homeCardID(for: newerID)].exists)
         XCTAssertNotEqual(period.label, olderPeriod)
         XCTAssertFalse(app.scrollViews["overview.period.rail"].isHittable)
         _ = try scrollToHittable(
             requerying: { app.staticTexts["overview.receipt.perShiftPeriod"] },
-            in: app, direction: .towardTop, message: "PerShift receipt heading must be reachable"
+            in: app, direction: .towardBottom, message: "PerShift receipt heading must be reachable"
         )
         attachScreenshot(named: "SL511-receipt-per-shift-two-records", from: app)
-        let historical = try scrollToHittable(
-            requerying: { app.buttons[olderID] },
-            in: app, direction: .towardBottom, message: "Older PerShift record must remain selectable"
+        let picker = try scrollToHittable(
+            requerying: { app.buttons["home.calculation.chooseShift"] },
+            in: app, direction: .towardBottom, message: "PerShift calculation picker must be reachable"
         )
-        historical.tap()
-        let selected = XCTNSPredicateExpectation(
-            predicate: NSPredicate(format: "selected == YES"), object: app.buttons[olderID]
-        )
+        picker.tap()
+        let olderChoice = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "8:00")).firstMatch
+        XCTAssertTrue(olderChoice.waitForExistence(timeout: 5))
+        olderChoice.tap()
         let selectedPeriod = XCTNSPredicateExpectation(
             predicate: NSPredicate(format: "label == %@", olderPeriod), object: period
         )
-        XCTAssertEqual(XCTWaiter().wait(for: [selected, selectedPeriod], timeout: 5), .completed)
+        XCTAssertEqual(XCTWaiter().wait(for: [selectedPeriod], timeout: 5), .completed)
         XCTAssertEqual(normalizedWhitespace(app.staticTexts["overview.expectedGross.amount"].label),
                        "Expected gross · EUR, 1.00")
+        let check = try scrollToHittable(
+            requerying: { app.buttons["overview.checkPaycheck"] },
+            in: app, direction: .towardTop, message: "Check Paycheck must be reachable after selecting an older Shift"
+        )
+        check.tap()
+        XCTAssertTrue(app.otherElements["actualGrossEntry.screen"].waitForExistence(timeout: 5))
+        XCTAssertEqual(normalizedWhitespace(app.staticTexts["actualGrossEntry.period"].label),
+                       normalizedWhitespace(olderPeriod))
+        app.navigationBars.buttons.firstMatch.tap()
+        try openFullShiftHistory(in: app)
+        let olderRow = try scrollToHittable(
+            requerying: { app.buttons[olderID] }, in: app, direction: .towardBottom,
+            message: "Older Shift must be reachable in full history"
+        )
+        if !olderRow.isSelected { olderRow.tap() }
         app.buttons[olderID].tap()
         let expanded = XCTNSPredicateExpectation(
             predicate: NSPredicate(format: "value == %@", "Expanded"), object: app.buttons[olderID]
@@ -469,11 +527,12 @@ final class ShiftLedgerUITests: XCTestCase {
         )
         XCTAssertEqual(XCTWaiter().wait(for: [collapsed], timeout: 5), .completed)
         XCTAssertLessThan(app.buttons[olderID].frame.height, expandedHeight)
-        XCTAssertEqual(period.label, olderPeriod)
         XCTAssertEqual(Set(shiftCards(in: app).map(\.identifier)), identities)
+        selectHome(in: app)
+        XCTAssertEqual(period.label, olderPeriod)
         _ = try scrollToHittable(
             requerying: { app.staticTexts["overview.receipt.perShiftPeriod"] },
-            in: app, direction: .towardTop, message: "Collapsed receipt must resize and remain scrollable"
+            in: app, direction: .towardBottom, message: "Collapsed receipt must resize and remain scrollable"
         )
         attachScreenshot(named: "SL511-receipt-per-shift-historical-collapsed", from: app)
         let identitiesEvidence = XCTAttachment(string:
@@ -505,16 +564,17 @@ final class ShiftLedgerUITests: XCTestCase {
         try assertShiftCount(1, expectedHeroAmount: "1.00", in: app)
         _ = try scrollToHittable(
             requerying: { app.staticTexts["overview.period.label"] },
-            in: app, direction: .towardTop,
+            in: app, direction: .towardBottom,
             message: "Accessibility receipt heading must remain readable"
         )
         attachScreenshot(named: "SL511-receipt-accessibility-xxl-top", from: app)
+        try openFullShiftHistory(in: app)
         let row = try scrollToHittable(
             requerying: { app.buttons[persistedID] },
             in: app, direction: .towardBottom,
             message: "Accessibility receipt history must remain reachable"
         )
-        row.tap()
+        if !row.isSelected { row.tap() }
         let selected = XCTNSPredicateExpectation(
             predicate: NSPredicate(format: "selected == YES"),
             object: app.buttons[persistedID]
@@ -535,6 +595,8 @@ final class ShiftLedgerUITests: XCTestCase {
         XCTAssertTrue(app.buttons[persistedID].label.contains("Exact contribution: €1.004"))
         XCTAssertEqual(app.buttons[persistedID].label.components(separatedBy: "Paid time:").count, 2)
         attachScreenshot(named: "SL511-receipt-accessibility-xxl-history", from: app)
+        XCTAssertEqual(shiftCards(in: app).map(\.identifier), [persistedID])
+        selectHome(in: app)
         for identifier in ["overview.checkPaycheck", "overview.addShift"] {
             let button = try scrollToHittable(
                 requerying: { app.buttons[identifier] },
@@ -543,7 +605,7 @@ final class ShiftLedgerUITests: XCTestCase {
             )
             XCTAssertGreaterThanOrEqual(button.frame.height, 44)
         }
-        XCTAssertEqual(shiftCards(in: app).map(\.identifier), [persistedID])
+        XCTAssertEqual(homeRecentCards(in: app).map(\.identifier), [homeCardID(for: persistedID)])
         attachScreenshot(named: "SL511-receipt-accessibility-xxl-actions", from: app)
 
         // Same persisted record, no reset: inspect the longer Russian receipt labels too.
@@ -559,9 +621,10 @@ final class ShiftLedgerUITests: XCTestCase {
         app.launch()
         _ = try scrollToHittable(
             requerying: { app.scrollViews["overview.period.rail"] },
-            in: app, direction: .towardTop, message: "Russian receipt heading must be reachable"
+            in: app, direction: .towardBottom, message: "Russian receipt heading must be reachable"
         )
         attachScreenshot(named: "SL511-refinement-russian-top", from: app)
+        try openFullShiftHistory(in: app)
         let russianRow = try scrollToHittable(
             requerying: { app.buttons[persistedID] }, in: app, direction: .towardBottom,
             message: "Same persisted Shift must remain selectable in Russian"
@@ -589,11 +652,12 @@ final class ShiftLedgerUITests: XCTestCase {
             direction: .towardTop, message: "Russian XXL receipt heading must be reachable"
         )
         attachScreenshot(named: "SL511-final-russian-xxl-top", from: app)
+        try openFullShiftHistory(in: app)
         let russianAccessibilityRow = try scrollToHittable(
             requerying: { app.buttons[persistedID] }, in: app, direction: .towardBottom,
             message: "Russian XXL persisted Shift must remain selectable"
         )
-        russianAccessibilityRow.tap()
+        if !russianAccessibilityRow.isSelected { russianAccessibilityRow.tap() }
         let russianAccessibilitySelected = XCTNSPredicateExpectation(
             predicate: NSPredicate(format: "selected == YES"), object: app.buttons[persistedID])
         XCTAssertEqual(XCTWaiter().wait(for: [russianAccessibilitySelected], timeout: 5), .completed)
@@ -603,6 +667,7 @@ final class ShiftLedgerUITests: XCTestCase {
         XCTAssertEqual(XCTWaiter().wait(for: [russianAccessibilityExpanded], timeout: 5), .completed)
         XCTAssertTrue(normalizedWhitespace(app.buttons[persistedID].label).contains("Точный вклад: 1,004 €"))
         attachScreenshot(named: "SL511-final-russian-xxl-details", from: app)
+        selectHome(in: app)
         _ = try scrollToHittable(
             requerying: { app.buttons["overview.addShift"] }, in: app, direction: .towardBottom,
             message: "Russian XXL actions must remain reachable"
@@ -630,17 +695,21 @@ final class ShiftLedgerUITests: XCTestCase {
                 end: ShiftTime(hour: endHour, minute: 0, meridiem: endHour == 12 ? "PM" : "AM"),
                 in: app
             )
-            let currentIdentifiers = Set(shiftCards(in: app).map(\.identifier))
+            let currentIdentifiers = Set(homeRecentCards(in: app).map { ledgerCardID(for: $0.identifier) })
             let newlyPersisted = currentIdentifiers.subtracting(identifiersByStartTime)
             XCTAssertEqual(newlyPersisted.count, 1)
             identifiersByStartTime.append(try XCTUnwrap(newlyPersisted.first))
         }
 
+        XCTAssertEqual(homeRecentCards(in: app).map { ledgerCardID(for: $0.identifier) },
+                       Array(identifiersByStartTime.reversed().prefix(4)))
+        try openFullShiftHistory(in: app)
         let cards = shiftCards(in: app)
         XCTAssertEqual(cards.count, 12)
         let identifiers = cards.map(\.identifier)
         XCTAssertEqual(Set(identifiers).count, 12)
         XCTAssertEqual(identifiers, Array(identifiersByStartTime.reversed()))
+        selectHome(in: app)
         let hero = try requireElement(
             app.staticTexts["overview.expectedGross.amount"],
             message: "Twelve one-euro-and-fraction Shifts must have a period Expected Gross"
@@ -661,6 +730,7 @@ final class ShiftLedgerUITests: XCTestCase {
         )
         attachScreenshot(named: "SL511-receipt-12-shifts-precision", from: app)
 
+        try openFullShiftHistory(in: app)
         let bottomRecordID = try XCTUnwrap(identifiers.last)
         let bottomRecord = try scrollToHittable(
             requerying: { app.buttons[bottomRecordID] },
@@ -687,6 +757,7 @@ final class ShiftLedgerUITests: XCTestCase {
         )
         XCTAssertEqual(XCTWaiter().wait(for: [expanded], timeout: 5), .completed)
         attachScreenshot(named: "SL511-receipt-12-shifts-expanded", from: app)
+        selectHome(in: app)
 
         _ = try scrollToHittable(
             requerying: { app.buttons["overview.addShift"] },
@@ -701,6 +772,7 @@ final class ShiftLedgerUITests: XCTestCase {
             direction: .towardBottom,
             message: "Check Paycheck must remain reachable below the receipt"
         )
+        try openFullShiftHistory(in: app)
         XCTAssertEqual(Set(shiftCards(in: app).map(\.identifier)), Set(identifiers))
 
         let expandedRecord = try scrollToHittable(
@@ -731,7 +803,7 @@ final class ShiftLedgerUITests: XCTestCase {
         let back = app.navigationBars.buttons.element(boundBy: 0)
         _ = try requireHittable(back, message: "Edit Back must remain usable")
         back.tap()
-        try assertOverviewExists(in: app)
+        try assertShiftsExists(in: app)
         XCTAssertEqual(Set(shiftCards(in: app).map(\.identifier)), Set(identifiers))
         XCTAssertTrue(app.buttons[bottomRecordID].isSelected)
         XCTAssertEqual(app.buttons[bottomRecordID].value as? String, "Expanded")
@@ -745,10 +817,12 @@ final class ShiftLedgerUITests: XCTestCase {
         defer { accessibilityApp.terminate() }
         try assertShiftCount(12, expectedHeroAmount: "12.05", in: accessibilityApp)
         XCTAssertEqual(normalizedWhitespace(accessibilityApp.staticTexts["overview.expectedGross.amount"].label), "Expected gross · EUR, 12.05")
+        try openFullShiftHistory(in: accessibilityApp)
         XCTAssertEqual(Set(shiftCards(in: accessibilityApp).map(\.identifier)), Set(identifiers))
+        selectHome(in: accessibilityApp)
         _ = try scrollToHittable(
             requerying: { accessibilityApp.staticTexts["overview.period.label"] },
-            in: accessibilityApp, direction: .towardTop,
+            in: accessibilityApp, direction: .towardBottom,
             message: "Twelve-Shift receipt heading must remain reachable at Accessibility XXL"
         )
         attachScreenshot(named: "SL511-refinement-12-xxl-top", from: accessibilityApp)
@@ -800,11 +874,11 @@ final class ShiftLedgerUITests: XCTestCase {
 
         try addCalendarShift(start: newerStart, calendar: calendar, in: app)
         try assertShiftCount(2, expectedHeroAmount: "1.00", in: app)
-        let newerID = try XCTUnwrap(shiftCards(in: app).first { $0.identifier != olderID }?.identifier)
+        let newerID = try XCTUnwrap(homeRecentCards(in: app).map { ledgerCardID(for: $0.identifier) }.first { $0 != olderID })
         try requireCondition(UUID(uuidString: String(newerID.dropFirst("overview.shift.".count))) != nil,
                              message: "Newer Shift must expose a distinct persisted UUID")
         let identities = Set([olderID, newerID])
-        try requireCondition(app.buttons[newerID].isSelected, message: "Post-save reload must select the newer Shift")
+        try requireCondition(homeRecentCards(in: app).first?.identifier == homeCardID(for: newerID), message: "Post-save reload must show the newest Shift first")
 
         app.terminate()
         app = makeApplication()
@@ -818,7 +892,7 @@ final class ShiftLedgerUITests: XCTestCase {
             in: app
         )
         let newestCard = try scrollToHittable(
-            requerying: { app.buttons[newerID] },
+            requerying: { app.buttons[homeCardID(for: newerID)] },
             in: app,
             direction: .towardBottom,
             message: "Newest persisted Shift must remain reachable after relaunch"
@@ -861,6 +935,7 @@ final class ShiftLedgerUITests: XCTestCase {
             identities: identities,
             in: app
         )
+        try openFullShiftHistory(in: app)
         let olderCard = try scrollToHittable(requerying: { app.buttons[olderID] }, in: app,
                                             direction: .towardBottom, message: "Historical card header must be tappable")
         olderCard.tap()
@@ -891,6 +966,7 @@ final class ShiftLedgerUITests: XCTestCase {
             identities: identities,
             in: app
         )
+        try openFullShiftHistory(in: app)
         app.buttons[olderID].tap()
         let expandedExpectation = XCTNSPredicateExpectation(
             predicate: NSPredicate(format: "value == %@", "Expanded"),
@@ -900,6 +976,7 @@ final class ShiftLedgerUITests: XCTestCase {
             XCTWaiter().wait(for: [expandedExpectation], timeout: 5) == .completed,
             message: "Historical card must expand"
         )
+        selectHome(in: app)
         try navigatePayroll(identifier: "overview.period.previous", in: app)
         try assertGlobalHistory(
             month: emptyMonth,
@@ -908,6 +985,7 @@ final class ShiftLedgerUITests: XCTestCase {
             identities: identities,
             in: app
         )
+        try openFullShiftHistory(in: app)
         let preservedExpectation = XCTNSPredicateExpectation(
             predicate: NSPredicate(format: "selected == YES AND value == %@", "Expanded"),
             object: app.buttons[olderID]
@@ -920,6 +998,7 @@ final class ShiftLedgerUITests: XCTestCase {
                                 direction: .towardBottom, message: "Expanded historical card must remain visible")
         attachScreenshot(named: "SL507-04-cross-period-selected-expanded", from: app)
 
+        selectHome(in: app)
         let check = try scrollToHittable(requerying: { app.buttons["overview.checkPaycheck"] }, in: app,
                                         direction: .towardBottom, message: "Check Paycheck must be reachable")
         check.tap()
@@ -961,6 +1040,7 @@ final class ShiftLedgerUITests: XCTestCase {
             identities: identities,
             in: app
         )
+        try openFullShiftHistory(in: app)
         let historicalPreservationExpectation = XCTNSPredicateExpectation(
             predicate: NSPredicate(format: "selected == YES AND value == %@", "Expanded"),
             object: app.buttons[olderID]
@@ -1188,12 +1268,14 @@ final class ShiftLedgerUITests: XCTestCase {
             XCTWaiter().wait(for: [heroExpectation], timeout: 5) == .completed,
             message: "Expected hero must exactly equal \(expectedHeroLabel); observed \(hero.label)"
         )
+        try openFullShiftHistory(in: app)
         let cards = shiftCards(in: app)
         try requireCondition(Set(cards.map(\.identifier)) == identities, message: "Every persisted UUID must remain in global history")
         try requireCondition(
             cards.allSatisfy { normalizedWhitespace($0.label).contains("Expected: \(expectedCardContribution)") },
             message: "Every persisted card accessibility summary must include \(expectedCardContribution); observed \(cards.map(\.label))"
         )
+        selectHome(in: app)
         _ = try scrollToHittable(
             requerying: { app.buttons["overview.period.previous"] },
             in: app,
@@ -1244,7 +1326,7 @@ final class ShiftLedgerUITests: XCTestCase {
     @MainActor
     private func navigatePayroll(identifier: String, in app: XCUIApplication) throws {
         let control = try scrollToHittable(requerying: { app.buttons[identifier] }, in: app,
-                                          direction: .towardTop, message: "Payroll navigation must be reachable")
+                                          direction: .towardBottom, message: "Payroll navigation must be reachable")
         try requireCondition(control.isEnabled, message: "Requested payroll navigation must be enabled")
         control.tap()
     }
@@ -1687,7 +1769,7 @@ final class ShiftLedgerUITests: XCTestCase {
 
         save.tap()
 
-        try assertOverviewExists(in: app)
+        try assertShiftsExists(in: app)
 
         return identifier
     }
@@ -1745,7 +1827,7 @@ final class ShiftLedgerUITests: XCTestCase {
 
         confirm.tap()
 
-        try assertOverviewExists(in: app)
+        try assertShiftsExists(in: app)
 
         return cardIdentifier
     }
@@ -1824,30 +1906,12 @@ final class ShiftLedgerUITests: XCTestCase {
         expectedHeroAmount: String,
         in app: XCUIApplication
     ) throws {
-        let count = try requireElement(
-            app.descendants(matching: .any)[
-                "overview.shiftHistory.title"
-            ],
-            message: "Overview Shift count must exist"
-        )
-
-        let expectedLabel = "All saved shifts \(expected)"
-
-        try requireCondition(
-            normalizedWhitespace(count.label) == expectedLabel,
-            message:
-                "Expected '\(expectedLabel)'; "
-                + "observed '\(count.label)'"
-        )
-
-        let cards = shiftCards(in: app)
-
-        try requireCondition(
-            cards.count == expected,
-            message:
-                "Expected \(expected) Shift cards; "
-                + "observed \(cards.count)"
-        )
+        let count = try requireElement(app.buttons["home.savedShifts"], message: "Saved Shifts count must exist")
+        XCTAssertEqual(count.value as? String, String(expected))
+        XCTAssertEqual(homeRecentCards(in: app).count, min(expected, 4))
+        try openFullShiftHistory(in: app)
+        XCTAssertEqual(shiftCards(in: app).count, expected)
+        selectHome(in: app)
 
         let hero = try requireElement(
             app.staticTexts["overview.expectedGross.amount"],
@@ -1863,6 +1927,41 @@ final class ShiftLedgerUITests: XCTestCase {
         )
     }
 
+    @MainActor
+    private func selectHome(in app: XCUIApplication) {
+        app.tabBars.firstMatch.buttons.element(boundBy: 0).tap()
+    }
+
+    @MainActor
+    private func assertShiftsExists(in app: XCUIApplication) throws {
+        _ = try requireElement(app.otherElements["shifts.screen"], message: "Full Shifts tab must be visible")
+        XCTAssertTrue(app.tabBars.firstMatch.buttons.element(boundBy: 1).isSelected)
+    }
+
+    @MainActor
+    private func openFullShiftHistory(in app: XCUIApplication) throws {
+        let shortcut = try scrollToHittable(
+            requerying: { app.buttons["home.savedShifts"] },
+            in: app, direction: .towardTop, message: "Saved Shifts shortcut must be reachable"
+        )
+        shortcut.tap()
+        try assertShiftsExists(in: app)
+    }
+
+    private func ledgerCardID(for homeID: String) -> String {
+        "overview.shift." + homeID.dropFirst("home.recentShift.".count)
+    }
+
+    private func homeCardID(for ledgerID: String) -> String {
+        "home.recentShift." + ledgerID.dropFirst("overview.shift.".count)
+    }
+
+    @MainActor
+    private func homeRecentCards(in app: XCUIApplication) -> [XCUIElement] {
+        app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "home.recentShift."))
+            .allElementsBoundByIndex
+    }
+
     // MARK: - Shift identity
 
     @MainActor
@@ -1870,14 +1969,14 @@ final class ShiftLedgerUITests: XCTestCase {
         in app: XCUIApplication
     ) throws -> String {
         let first = try XCTUnwrap(
-            shiftCards(in: app).first,
+            homeRecentCards(in: app).first,
             "Expected at least one persisted Shift card"
         )
 
         return try XCTUnwrap(
             first.identifier.isEmpty
                 ? nil
-                : first.identifier,
+                : ledgerCardID(for: first.identifier),
             "Shift card must expose a stable identifier"
         )
     }

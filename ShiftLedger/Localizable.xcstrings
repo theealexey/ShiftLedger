@@ -1,6 +1,34 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "home.savedShifts" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Saved Shifts" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Сохранённые смены" } }
+      }
+    },
+    "home.latestShifts" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Latest Shifts" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Последние смены" } }
+      }
+    },
+    "home.calculation" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Paycheck calculation" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Расчёт начисления" } }
+      }
+    },
+    "home.chooseShift" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Choose shift for calculation" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Выбрать смену для расчёта" } }
+      }
+    },
     "overview.payPeriod.caption" : {
       "extractionState" : "manual",
       "localizations" : {
