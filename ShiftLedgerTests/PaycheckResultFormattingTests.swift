@@ -15,8 +15,8 @@ struct PaycheckResultFormattingTests {
             locale: locale
         )
 
-        #expect(model.expected.contains("€"))
-        #expect(model.expected.contains("1234.56"))
+        #expect(model.expectedAmount.text.contains("€"))
+        #expect(model.expectedAmount.text.contains("1234.56"))
     }
 
     @Test("Actual gross uses normal currency convention")
@@ -29,8 +29,8 @@ struct PaycheckResultFormattingTests {
             locale: locale
         )
 
-        #expect(model.actual.contains("€"))
-        #expect(model.actual.contains("1234.56"))
+        #expect(model.actualAmount.text.contains("€"))
+        #expect(model.actualAmount.text.contains("1234.56"))
     }
 
     @Test("Zero difference uses conventional currency zero")
@@ -42,6 +42,23 @@ struct PaycheckResultFormattingTests {
         )
 
         #expect(value == PaycheckResultFormatting.currency(.zero, currencyCode: "EUR", locale: locale))
+    }
+
+    @Test("Exact zero preserves locale currency spacing and has no approximation",
+          arguments: ["EUR", "SEK", "JPY"], ["en_US_POSIX", "en_US", "ru_RU"])
+    func exactZeroPreservesCurrencyConvention(code: String, identifier: String) throws {
+        let displayLocale = Locale(identifier: identifier)
+        let source = try comparison(expected: .zero, actual: .zero, breakdowns: [])
+        let model = PaycheckResultFormatting.renderModel(
+            comparison: source, currencyCode: code, timeZoneIdentifier: "UTC", workTypes: [], locale: displayLocale
+        )
+        let standard = PaycheckResultFormatting.currency(.zero, currencyCode: code, locale: displayLocale)
+        #expect(PaycheckResultFormatting.difference(.zero, currencyCode: code, locale: displayLocale) == standard)
+        #expect(model.expected == standard)
+        #expect(model.actual == standard)
+        #expect(model.difference == standard)
+        #expect(!model.differenceAmount.isBound && !model.differenceAmount.isApproximate)
+        #expect(model.approximationNote == nil)
     }
 
     @Test("Positive normal difference remains positive")
@@ -75,7 +92,8 @@ struct PaycheckResultFormattingTests {
         let zero = PaycheckResultFormatting.difference(.zero, currencyCode: "EUR", locale: locale)
 
         #expect(value != zero)
-        #expect(value.contains("004"))
+        #expect(value.contains("<"))
+        #expect(value.contains("0.01"))
     }
 
     @Test("EUR tiny negative difference never appears as zero")
@@ -86,7 +104,8 @@ struct PaycheckResultFormattingTests {
 
         #expect(value != zero)
         #expect(value.contains("-"))
-        #expect(value.contains("004"))
+        #expect(value.contains("<"))
+        #expect(value.contains("0.01"))
     }
 
     @Test("Tiny difference retains direction")
@@ -114,7 +133,9 @@ struct PaycheckResultFormattingTests {
         let zero = PaycheckResultFormatting.difference(.zero, currencyCode: "JPY", locale: locale)
 
         #expect(value != zero)
-        #expect(value.contains(".4"))
+        #expect(value.contains("<"))
+        #expect(value.contains("1"))
+        #expect(value.contains(".") == false)
     }
 
     @Test("Currency formatting does not impose two fraction digits")
@@ -371,146 +392,108 @@ struct PaycheckResultFormattingTests {
         #expect(model.breakdownRows.first?.workTypeName == PaycheckResultStrings.unnamedWorkType)
     }
 
-    @Test("Ordinary EUR and JPY Results retain currency precision and reconcile")
-    func ordinaryResultsReconcile() throws {
-        for code in ["EUR", "JPY"] {
-            let model = try result(rows: ["10", "20"], actual: "35", currencyCode: code)
-            try expectReconciled(model, locale: locale)
-            #expect(model.expected == PaycheckResultFormatting.currency(30, currencyCode: code, locale: locale))
-            #expect(model.actual == PaycheckResultFormatting.currency(35, currencyCode: code, locale: locale))
-            #expect(model.difference.hasPrefix("+"))
+    @Test("Ordinary results respect each currency's minor units", arguments: ["EUR", "SEK", "JPY", "KWD"])
+    func ordinaryResultsReconcile(_ code: String) throws {
+        let model = try result(rows: ["10", "20"], actual: "35", currencyCode: code)
+        #expect(displayedAmount(model.expectedAmount.text) == 30)
+        #expect(displayedAmount(model.actualAmount.text) == 35)
+        #expect(displayedAmount(model.differenceAmount.text) == 5)
+        #expect(model.differenceAmount.text.hasPrefix("+"))
+        #expect(!model.expectedAmount.needsExactDetail && !model.differenceAmount.needsExactDetail)
+        #expect(model.approximationNote == nil)
+    }
+
+    @Test("Exactly one minor unit is displayed as an exact, ordinary difference",
+          arguments: [("JPY", "1"), ("EUR", "0.01"), ("SEK", "0.01"), ("KWD", "0.001")])
+    func oneMinorUnit(code: String, unit: String) throws {
+        let model = try result(rows: ["0"], actual: unit, currencyCode: code)
+        #expect(!model.differenceAmount.needsExactDetail)
+        #expect(model.differenceAmount.text.hasPrefix("+"))
+        #expect(try displayedAmount(model.differenceAmount.text) == decimal(unit))
+    }
+
+    @Test("Sub-minor differences have a localized bound, accessible direction and full exact value",
+          arguments: ["en_US", "ru_RU"])
+    func tinyDifferencePresentation(_ identifier: String) throws {
+        let displayLocale = Locale(identifier: identifier)
+        let positive = try result(rows: ["2.008"], actual: "2.010", currencyCode: "SEK", displayLocale: displayLocale)
+        let negative = try result(rows: ["2.010"], actual: "2.008", currencyCode: "SEK", displayLocale: displayLocale)
+        let zero = try result(rows: ["2.008"], actual: "2.008", currencyCode: "SEK", displayLocale: displayLocale)
+        let threshold = identifier == "ru_RU" ? "0,01" : "0.01"
+
+        #expect(positive.differenceAmount.text.hasPrefix("+<"))
+        #expect(negative.differenceAmount.text.hasPrefix("-<"))
+        #expect(positive.differenceAmount.text.contains(threshold))
+        #expect(negative.differenceAmount.text.contains(threshold))
+        #expect(positive.differenceAmount.accessibilityText != negative.differenceAmount.accessibilityText)
+        #expect(!positive.differenceAmount.accessibilityText.contains("<"))
+        #expect(!negative.differenceAmount.accessibilityText.contains("<"))
+        #expect(positive.differenceAmount.accessibilityText.contains(threshold))
+        #expect(negative.differenceAmount.accessibilityText.contains(threshold))
+        #expect(positive.differenceAmount.isBound && negative.differenceAmount.isBound)
+        #expect(zero.differenceAmount.text.contains("<") == false)
+        #expect(zero.differenceAmount.needsExactDetail == false)
+        #expect(positive.differenceAmount.exact == (identifier == "ru_RU" ? "+0,002 SEK" : "+0.002 SEK"))
+        #expect(negative.differenceAmount.exact == (identifier == "ru_RU" ? "-0,002 SEK" : "-0.002 SEK"))
+    }
+
+    @Test("Approximate rows and totals can differ while their exact values reconcile",
+          arguments: [
+            (["1.004", "1.004"], "2.008", "2.01"),
+            (["1.005", "1.005"], "2.01", "2.01"),
+            (["1.004", "2.006"], "3.01", "3.01"),
+            (["1.004", "1.004"], "2.010", "2.01"),
+            (["0.0004", "0.0004", "0.0004", "0.0004"], "0.0016", "0.01"),
+            (["0.004", "0.004", "0.004"], "0.012", "0.01"),
+            (["10", "0.0004"], "10.0004", "10.00")
+          ])
+    func roundedSummaryPreservesExactEvidence(rows: [String], actual: String, display: String) throws {
+        let model = try result(rows: rows, actual: actual)
+        #expect(try displayedAmount(model.expectedAmount.text) == decimal(display))
+        #expect(model.breakdownRows.allSatisfy { $0.amount.needsExactDetail }
+            || rows.contains("10"))
+        #expect(model.approximationNote != nil || model.expectedAmount.isBound)
+        let expected = try rows.map(decimal).reduce(.zero, +)
+        if try expected >= 0.01 && expected != decimal(display) {
+            #expect(model.expectedAmount.text.hasPrefix("≈"))
+            #expect(model.expectedAmount.accessibilityText != model.expectedAmount.text)
         }
     }
 
-    @Test("Sub-minor breakdown amounts reveal the lowest reconciling precision")
-    func subMinorBreakdownReconciles() throws {
-        let model = try result(rows: ["1.004", "1.004"], actual: "2.008")
-        try expectReconciled(model, locale: locale)
-        #expect(try displayedAmount(model.expected, locale: locale) == decimal("2.008"))
-        #expect(model.breakdownRows.map(\.amount) == [try money("1.004", digits: 3), try money("1.004", digits: 3)])
-        try expectMoney(model.difference, "0", digits: 3)
+    @Test("JPY fractions remain distinguishable from zero without adding fractional yen to the summary")
+    func fractionalJPY() throws {
+        let model = try result(rows: ["1.4", "1.4"], actual: "3.0", currencyCode: "JPY")
+        #expect(model.expectedAmount.text.hasPrefix("≈"))
+        #expect(displayedAmount(model.expectedAmount.text) == 3)
+        #expect(model.differenceAmount.text.hasPrefix("+<"))
+        #expect(model.differenceAmount.exact == "+0.2 JPY")
     }
 
-    @Test("Half-even boundary rounding cannot contradict the breakdown sum")
-    func roundingBoundaryReconciles() throws {
-        let model = try result(rows: ["1.005", "1.005"], actual: "2.01")
-        try expectReconciled(model, locale: locale)
-        #expect(try displayedAmount(model.expected, locale: locale) == decimal("2.01"))
-        #expect(model.breakdownRows.map(\.amount) == [try money("1.005", digits: 3), try money("1.005", digits: 3)])
-        try expectMoney(model.actual, "2.010", digits: 3)
-    }
-
-    @Test("Mixed sub-minor values do not increase precision when normal rounding reconciles")
-    func mixedValuesKeepNormalPrecision() throws {
-        let model = try result(rows: ["1.004", "2.006"], actual: "3.01")
-        try expectReconciled(model, locale: locale)
-        #expect(model.breakdownRows.map(\.amount) == [try money("1.00", digits: 2), try money("2.01", digits: 2)])
-        try expectMoney(model.expected, "3.01", digits: 2)
-        try expectMoney(model.difference, "0", digits: 2)
-    }
-
-    @Test("Summary subtraction and every breakdown row share three fraction digits")
-    func summaryUsesCoherentPrecision() throws {
-        let model = try result(rows: ["1.004", "1.004"], actual: "2.010")
-        try expectReconciled(model, locale: locale)
-        try expectMoney(model.expected, "2.008", digits: 3)
-        try expectMoney(model.actual, "2.010", digits: 3)
-        let positiveDifference = try money("0.002", digits: 3, signed: true)
-        #expect(model.difference == positiveDifference)
-    }
-
-    @Test("Tiny negative difference remains explained by the displayed summary")
-    func negativeSummaryReconciles() throws {
-        let model = try result(rows: ["2.010"], actual: "2.008")
-        try expectReconciled(model, locale: locale)
-        try expectMoney(model.expected, "2.010", digits: 3)
-        try expectMoney(model.actual, "2.008", digits: 3)
-        #expect(try displayedAmount(model.difference, locale: locale) == decimal("-0.002"))
-    }
-
-    @Test("Exact zero summary retains conventional zero when the breakdown reconciles")
-    func exactZeroKeepsNormalPrecision() throws {
-        let model = try result(rows: ["1.00", "2.00"], actual: "3.00")
-        try expectReconciled(model, locale: locale)
-        try expectMoney(model.difference, "0", digits: 2)
-        try expectMoney(model.expected, "3", digits: 2)
-    }
-
-    @Test("JPY fractions use extra precision only to preserve real arithmetic")
-    func fractionalJPYReconciles() throws {
-        let normal = try result(rows: ["1.2", "1.2"], actual: "2.4", currencyCode: "JPY")
-        try expectReconciled(normal, locale: locale)
-        #expect(normal.expected.contains(".") == false)
-        let extra = try result(rows: ["1.4", "1.4"], actual: "3.0", currencyCode: "JPY")
-        try expectReconciled(extra, locale: locale)
-        #expect(try displayedAmount(extra.expected, locale: locale) == decimal("2.8"))
-        #expect(try displayedAmount(extra.difference, locale: locale) == decimal("0.2"))
-        #expect(extra.actual.hasSuffix("3.0"))
-    }
-
-    @Test("Many rows reconcile at the minimal precision, not an arbitrary fixed scale")
-    func multipleRowsReconcile() throws {
-        let model = try result(rows: ["0.0004", "0.0004", "0.0004", "0.0004"], actual: "0.0016")
-        try expectReconciled(model, locale: locale)
-        try expectMoney(model.expected, "0.0016", digits: 4)
-        try expectMoney(model.actual, "0.0016", digits: 4)
-        try expectMoney(model.difference, "0", digits: 4)
-        let visibleRow = try money("0.0004", digits: 4)
-        #expect(model.breakdownRows.map(\.amount) == Array(repeating: visibleRow, count: 4))
-        let nonzero = try result(rows: ["0.004", "0.004", "0.004"], actual: "0.012")
-        try expectReconciled(nonzero, locale: locale)
-        try expectMoney(nonzero.expected, "0.012", digits: 3)
-    }
-
-    @Test("A tiny non-zero row stays visible even when the summary is much larger")
-    func tinyRowNeverDisappears() throws {
-        let model = try result(rows: ["10", "0.0004"], actual: "10.0004")
-        try expectReconciled(model, locale: locale)
-        try expectMoney(model.expected, "10.0004", digits: 4)
-        let row = try #require(model.breakdownRows.last)
-        try expectMoney(row.amount, "0.0004", digits: 4)
-    }
-
-    @Test("Fixed-per-shift rate equals its amount in the shared expanded precision")
-    func fixedRateMatchesAdaptiveAmount() throws {
-        let amount = try decimal("1.004")
-        let model = PaycheckResultFormatting.renderModel(
-            comparison: try comparison(
-                expected: amount, actual: decimal("1.006"),
-                breakdowns: [breakdown(amount: amount, rateAmount: amount, basis: .fixedPerShift)]
-            ),
-            currencyCode: "EUR", timeZoneIdentifier: "UTC", workTypes: [], locale: locale
-        )
-        try expectReconciled(model, locale: locale)
-        let row = try #require(model.breakdownRows.first)
-        try expectMoney(row.amount, "1.004", digits: 3)
-        #expect(row.rate == "\(row.amount) / \(PaycheckResultStrings.rateShift)")
-        #expect(try displayedAmount(rateAmount(row.rate), locale: locale) == amount)
-    }
-
-    @Test("Hourly rate shares Result precision without changing paid-duration semantics")
-    func hourlyRateSharesAdaptivePrecision() throws {
+    @Test("Exact rate and contribution preserve hourly and fixed-shift arithmetic",
+          arguments: [BasePayBasis.hourly, .fixedPerShift])
+    func exactRatesReconcile(_ basis: BasePayBasis) throws {
         let rate = try decimal("1.004")
-        let expected = rate * 8
-        let model = PaycheckResultFormatting.renderModel(
-            comparison: try comparison(
-                expected: expected, actual: expected + decimal("0.002"),
-                breakdowns: [breakdown(amount: expected, rateAmount: rate)]
-            ),
-            currencyCode: "EUR", timeZoneIdentifier: "UTC", workTypes: [], locale: locale
+        let expected = basis == .hourly ? rate * 8 : rate
+        let source = try comparison(
+            expected: expected, actual: expected + decimal("0.002"),
+            breakdowns: [breakdown(amount: expected, rateAmount: rate, basis: basis)]
         )
-        try expectReconciled(model, locale: locale)
+        let model = PaycheckResultFormatting.renderModel(
+            comparison: source, currencyCode: "EUR", timeZoneIdentifier: "UTC", workTypes: [], locale: locale
+        )
         let row = try #require(model.breakdownRows.first)
-        let formattedRate = try money("1.004", digits: 3)
-        #expect(row.rate == "\(formattedRate) / \(PaycheckResultStrings.rateHour)")
+        #expect(row.rate.text.hasPrefix("≈"))
+        #expect(row.rate.exact.hasSuffix(basis == .hourly
+            ? PaycheckResultStrings.rateHour : PaycheckResultStrings.rateShift))
+        let exactRate = try #require(displayedAmount(row.rate.exact.components(separatedBy: " / ")[0]))
+        #expect(exactRate == rate)
+        #expect(try exactAmount(row.amount.exact) == (basis == .hourly ? exactRate * 8 : exactRate))
         #expect(row.duration == PaycheckResultFormatting.paidDuration(8 * 3_600))
-        #expect(try displayedAmount(rateAmount(row.rate), locale: locale) * 8
-            == displayedAmount(row.amount, locale: locale))
+        try expectExact(model, comparison: source, displayLocale: locale)
     }
 
-    @Test("Scheduled empty breakdown preserves non-zero Actual and Difference")
+    @Test("Scheduled empty breakdown preserves zero and shows a nonzero bound for fractional actual")
     func scheduledZeroBreakdownRemainsExplainable() throws {
-        let actual = try decimal("0.0004")
         let source = PaycheckComparison(
             expected: ExpectedGrossBreakdown(
                 period: .scheduled(PayPeriod(
@@ -519,110 +502,46 @@ struct PaycheckResultFormattingTests {
                 )),
                 shiftBreakdowns: [], expectedGross: .zero
             ),
-            actualGross: try ActualGross(amount: actual)
+            actualGross: try ActualGross(amount: decimal("0.0004"))
         )
         let model = PaycheckResultFormatting.renderModel(
             comparison: source, currencyCode: "EUR", timeZoneIdentifier: "Europe/Stockholm",
             workTypes: [], locale: locale
         )
-        try expectReconciled(model, locale: locale)
         #expect(model.breakdownRows.isEmpty)
         #expect(model.emptyBreakdownMessage == PaycheckResultStrings.breakdownEmpty)
-        try expectMoney(model.expected, "0", digits: 4)
-        try expectMoney(model.actual, "0.0004", digits: 4)
-        let signedActual = try money("0.0004", digits: 4, signed: true)
-        #expect(model.difference == signedActual)
-        #expect(try displayedAmount(model.actual, locale: locale) == actual)
-        #expect(try displayedAmount(model.difference, locale: locale) == actual)
+        #expect(!model.expectedAmount.needsExactDetail)
+        #expect(model.actualAmount.isBound && model.differenceAmount.isBound)
+        try expectExact(model, comparison: source, displayLocale: locale)
     }
 
-    @Test("Difference signs use localized formatter affixes at shared precision")
-    func differenceUsesLocaleSignAffixes() throws {
-        for identifier in ["en_US_POSIX", "de_DE", "ru_RU"] {
-            let displayLocale = Locale(identifier: identifier)
-            let positive = try result(rows: ["2.008"], actual: "2.010", displayLocale: displayLocale)
-            let negative = try result(rows: ["2.008"], actual: "2.006", displayLocale: displayLocale)
-            try expectReconciled(positive, locale: displayLocale)
-            try expectReconciled(negative, locale: displayLocale)
-            let positiveText = try money("0.002", digits: 3, signed: true, displayLocale: displayLocale)
-            let negativeText = try money("-0.002", digits: 3, signed: true, displayLocale: displayLocale)
-            #expect(positive.difference == positiveText)
-            #expect(negative.difference == negativeText)
-        }
-    }
-
-    @Test("Rendering never mutates Domain Decimal inputs")
-    func renderingPreservesSourceValues() throws {
-        let rows = try [breakdown(amount: decimal("1.004")), breakdown(amount: decimal("1.004"))]
-        let source = try comparison(expected: decimal("2.008"), actual: decimal("2.010"), breakdowns: rows)
-        let expected = source.expected.expectedGross
-        let actual = source.actualGross.amount
-        let difference = source.difference
-        let amounts = source.expected.shiftBreakdowns.map(\.basePay)
-        _ = PaycheckResultFormatting.renderModel(
-            comparison: source, currencyCode: "EUR", timeZoneIdentifier: "UTC", workTypes: [], locale: locale
+    @Test("Long fractional amounts preserve all original digits and leave Domain values unchanged",
+          arguments: ["en_US", "ru_RU"])
+    func minuteShiftPrecision(_ identifier: String) throws {
+        let locale = Locale(identifier: identifier)
+        let expected = try decimal("1.6666666666666666666666666666666666666")
+        let actual = try decimal("1.666666666667")
+        let source = try comparison(expected: expected, actual: actual, breakdowns: [breakdown(amount: expected, rateAmount: 100)])
+        let model = PaycheckResultFormatting.renderModel(
+            comparison: source, currencyCode: "SEK", timeZoneIdentifier: "UTC", workTypes: [], locale: locale
         )
-        #expect(source.expected.expectedGross == expected)
-        #expect(source.actualGross.amount == actual)
-        #expect(source.difference == difference)
-        #expect(source.expected.shiftBreakdowns.map(\.basePay) == amounts)
+        #expect(model.expectedAmount.text.contains(identifier == "ru_RU" ? "1,67" : "1.67"))
+        #expect(model.expectedAmount.text.hasPrefix("≈") && model.actualAmount.text.hasPrefix("≈"))
+        #expect(model.differenceAmount.text.hasPrefix("+<"))
+        #expect(model.differenceAmount.text.count < 14)
+        #expect(source.expected.expectedGross == expected && source.actualGross.amount == actual)
+        try expectExact(model, comparison: source, displayLocale: locale)
     }
 
-    @Test("Currency placement and separators remain locale-owned at additional precision")
-    func additionalPrecisionUsesLocale() throws {
-        let german = Locale(identifier: "de_DE")
-        let model = try result(rows: ["1.004", "1.004"], actual: "2.010", displayLocale: german)
-        try expectReconciled(model, locale: german)
-        let formatter = NumberFormatter()
-        formatter.locale = german
-        formatter.numberStyle = .currency
-        formatter.currencyCode = "EUR"
-        formatter.minimumFractionDigits = 3
-        formatter.maximumFractionDigits = 3
-        formatter.roundingMode = .halfEven
-        #expect(model.actual == formatter.string(from: NSDecimalNumber(decimal: try decimal("2.010"))))
-        #expect(model.expected.contains("2,008"))
-    }
-
-    @Test("Extreme Decimal magnitude remains arithmetically explainable without digit loss")
-    func extremeMagnitudeRemainsExact() throws {
-        let huge = "1e100"
-        let model = try result(rows: [huge], actual: "0")
-        try expectReconciled(model, locale: locale)
-        #expect(model.difference.hasPrefix("-"))
-        #expect(try displayedAmount(model.actual, locale: locale) == .zero)
-        #expect(try displayedAmount(model.expected, locale: locale) == decimal(huge))
-    }
-
-    @Test("Representable tiny Decimals remain visible beyond 38 fractional places")
-    func tinyDecimalScaleRemainsVisible() throws {
-        let tiny = "0.0000000000000000000000000000000000000001"
-        let model = try result(rows: [tiny], actual: "0")
-        try expectReconciled(model, locale: locale)
-        #expect(try displayedAmount(model.expected, locale: locale) == decimal(tiny))
-        #expect(try displayedAmount(model.difference, locale: locale) == -decimal(tiny))
-    }
-
-    private func money(
-        _ value: String, digits: Int, signed: Bool = false, displayLocale: Locale? = nil
-    ) throws -> String {
-        let formatter = NumberFormatter()
-        formatter.locale = displayLocale ?? locale
-        formatter.numberStyle = .currency
-        formatter.currencyCode = "EUR"
-        formatter.minimumFractionDigits = digits
-        formatter.maximumFractionDigits = digits
-        formatter.roundingMode = .halfEven
-        let amount = try decimal(value)
-        if signed, amount > .zero {
-            formatter.positivePrefix = "+" + (formatter.positivePrefix ?? "")
-        }
-        return try #require(formatter.string(from: NSDecimalNumber(decimal: amount)))
-    }
-
-    private func expectMoney(_ text: String, _ value: String, digits: Int) throws {
-        let expected = try money(value, digits: digits)
-        #expect(text == expected)
+    @Test("Extreme Decimal magnitude and very small scale retain original evidence",
+          arguments: ["1e100", "12345678901234567890123456789012345678", "1e-40"])
+    func extremeMagnitudeRemainsExact(_ value: String) throws {
+        let model = try result(rows: [value], actual: "0")
+        #expect(model.expectedAmount.text.count < 20)
+        #expect(model.differenceAmount.text.count < 20)
+        #expect(model.expectedAmount.needsExactDetail && model.differenceAmount.needsExactDetail)
+        #expect(try exactAmount(model.expectedAmount.exact) == decimal(value))
+        #expect(try exactAmount(model.differenceAmount.exact) == -decimal(value))
     }
 
     private func result(
@@ -631,50 +550,39 @@ struct PaycheckResultFormattingTests {
         let amounts = try rows.map(decimal)
         let breakdowns = try amounts.map { try breakdown(amount: $0) }
         let source = try comparison(expected: amounts.reduce(.zero, +), actual: decimal(actual), breakdowns: breakdowns)
-        let resolvedLocale = displayLocale ?? locale
+        let displayLocale = displayLocale ?? locale
         let model = PaycheckResultFormatting.renderModel(
-            comparison: source, currencyCode: currencyCode, timeZoneIdentifier: "UTC", workTypes: [], locale: resolvedLocale
+            comparison: source, currencyCode: currencyCode, timeZoneIdentifier: "UTC", workTypes: [], locale: displayLocale
         )
-        try expectNonZeroVisible(source.expected.expectedGross, text: model.expected, locale: resolvedLocale)
-        try expectNonZeroVisible(source.actualGross.amount, text: model.actual, locale: resolvedLocale)
-        try expectNonZeroVisible(source.difference, text: model.difference, locale: resolvedLocale)
-        for (breakdown, row) in zip(breakdowns, model.breakdownRows) {
-            try expectNonZeroVisible(breakdown.basePay, text: row.amount, locale: resolvedLocale)
-            try expectNonZeroVisible(breakdown.appliedPayRate.amount, text: rateAmount(row.rate), locale: resolvedLocale)
-        }
+        try expectExact(model, comparison: source, displayLocale: displayLocale)
         return model
     }
 
-    private func expectNonZeroVisible(_ source: Decimal, text: String, locale: Locale) throws {
-        let displayed = try displayedAmount(text, locale: locale)
-        #expect(source == .zero || displayed != .zero)
-    }
-
-    private func rateAmount(_ text: String) throws -> String {
-        try #require(text.components(separatedBy: " / ").first)
-    }
-
-    private func expectReconciled(_ model: PaycheckResultView.RenderModel, locale: Locale) throws {
-        let expected = try displayedAmount(model.expected, locale: locale)
-        let actual = try displayedAmount(model.actual, locale: locale)
-        let difference = try displayedAmount(model.difference, locale: locale)
-        let rows = try model.breakdownRows.map { try displayedAmount($0.amount, locale: locale) }
+    private func expectExact(_ model: PaycheckResultView.RenderModel, comparison: PaycheckComparison,
+                             displayLocale: Locale) throws {
+        let expected = try exactAmount(model.expectedAmount.exact, locale: displayLocale)
+        let actual = try exactAmount(model.actualAmount.exact, locale: displayLocale)
+        let difference = try exactAmount(model.differenceAmount.exact, locale: displayLocale)
+        let rows = try model.breakdownRows.map { try exactAmount($0.amount.exact, locale: displayLocale) }
+        #expect(expected == comparison.expected.expectedGross)
+        #expect(actual == comparison.actualGross.amount)
+        #expect(difference == comparison.difference)
+        #expect(rows == comparison.expected.shiftBreakdowns.map(\.basePay))
         #expect(rows.reduce(.zero, +) == expected)
         #expect(actual - expected == difference)
+        for (breakdown, row) in zip(comparison.expected.shiftBreakdowns, model.breakdownRows) {
+            let amount = try #require(row.rate.exact.components(separatedBy: " / ").first)
+            #expect(try exactAmount(amount, locale: displayLocale) == breakdown.appliedPayRate.amount)
+        }
     }
 
-    private func displayedAmount(_ text: String, locale: Locale) throws -> Decimal {
-        if text.hasSuffix(" EUR") {
-            return try #require(Decimal(string: String(text.dropLast(4)), locale: self.locale))
-        }
-        let formatter = NumberFormatter()
-        formatter.locale = locale
-        formatter.numberStyle = .currency
-        let decimalSeparator = formatter.currencyDecimalSeparator ?? "."
-        let withoutGroups = text.replacingOccurrences(of: formatter.currencyGroupingSeparator ?? ",", with: "")
-            .replacingOccurrences(of: decimalSeparator, with: ".")
-        let numeric = withoutGroups.filter { $0.isNumber || $0 == "." || $0 == "-" }
-        return try #require(Decimal(string: numeric, locale: self.locale))
+    private func exactAmount(_ text: String, locale: Locale? = nil) throws -> Decimal {
+        let number = try #require(text.split(separator: " ").first)
+        return try #require(Decimal(string: String(number), locale: locale ?? self.locale))
+    }
+
+    private func displayedAmount(_ text: String) -> Decimal? {
+        Decimal(string: text.filter { $0.isNumber || $0 == "." || $0 == "-" }, locale: locale)
     }
 
     private func breakdown(

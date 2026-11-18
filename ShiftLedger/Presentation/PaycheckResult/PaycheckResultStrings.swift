@@ -39,5 +39,38 @@ enum PaycheckResultStrings {
             table: "Localizable"
         )
     }
+    static var showExactAmounts: String {
+        String(localized: "paycheckResult.exact.show", table: "Localizable")
+    }
+    static var hideExactAmounts: String {
+        String(localized: "paycheckResult.exact.hide", table: "Localizable")
+    }
+    static var exactRate: String {
+        String(localized: "paycheckResult.exact.rate", table: "Localizable")
+    }
+    static var exactContribution: String {
+        String(localized: "paycheckResult.exact.contribution", table: "Localizable")
+    }
+    static var approximationNote: String {
+        String(localized: "paycheckResult.approximation.note", table: "Localizable")
+    }
+
+    static func approximate(_ amount: String) -> String {
+        String(format: String(localized: "paycheckResult.approximation.value", table: "Localizable"), amount)
+    }
+
+    static func belowMinorUnit(_ bound: String, negative: Bool, isDifference: Bool) -> String {
+        let format = if isDifference {
+            if negative {
+                String(localized: "paycheckResult.tiny.negative", table: "Localizable")
+            } else {
+                String(localized: "paycheckResult.tiny.positive", table: "Localizable")
+            }
+        } else {
+            String(localized: "paycheckResult.tiny.amount", table: "Localizable")
+        }
+        return String(format: format, bound)
+    }
+
     static var done: String { String(localized: "common.done", table: "Localizable") }
 }

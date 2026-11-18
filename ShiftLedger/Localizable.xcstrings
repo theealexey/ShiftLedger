@@ -1514,6 +1514,69 @@
         "ru" : { "stringUnit" : { "state" : "translated", "value" : "Указанная сумма выше ожидаемой." } }
       }
     },
+    "paycheckResult.exact.show" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Show exact amounts" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Показать точные суммы" } }
+      }
+    },
+    "paycheckResult.exact.hide" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Hide exact amounts" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Скрыть точные суммы" } }
+      }
+    },
+    "paycheckResult.exact.rate" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Exact rate" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Точная ставка" } }
+      }
+    },
+    "paycheckResult.exact.contribution" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Exact contribution" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Точная сумма за смену" } }
+      }
+    },
+    "paycheckResult.approximation.note" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Amounts marked ≈ are rounded for display." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Суммы со знаком ≈ округлены для отображения." } }
+      }
+    },
+    "paycheckResult.approximation.value" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Approximately %@" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Приблизительно %@" } }
+      }
+    },
+    "paycheckResult.tiny.negative" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Negative difference with a magnitude less than %@" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Отрицательная разница по модулю меньше %@" } }
+      }
+    },
+    "paycheckResult.tiny.positive" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Positive difference less than %@" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Положительная разница меньше %@" } }
+      }
+    },
+    "paycheckResult.tiny.amount" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Less than %@" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Меньше %@" } }
+      }
+    },
     "paycheckResult.breakdown.title" : {
       "extractionState" : "manual",
       "localizations" : {

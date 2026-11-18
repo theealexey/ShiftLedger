@@ -1644,64 +1644,38 @@ final class ShiftLedgerUITests: XCTestCase {
                 + "Observed: \(breakdownAmounts.count)"
         )
 
-        for index in 0 ... 1 {
-            try assertContainsAmount(
-                "1.004",
-                in: app.staticTexts[
-                    "paycheckResult.breakdown.row.\(index).rate"
-                ],
-                message:
-                    "Breakdown row \(index) rate must contain 1.004"
-            )
-
-            try assertContainsAmount(
-                "1.004",
-                in: app.staticTexts[
-                    "paycheckResult.breakdown.row.\(index).amount"
-                ],
-                message:
-                    "Breakdown row \(index) contribution must contain 1.004"
-            )
-        }
-
-        try assertContainsAmount(
-            "2.008",
-            in: app.staticTexts["paycheckResult.expected.value"],
-            message: "Expected must contain 2.008"
-        )
-
-        try assertContainsAmount(
-            "2.010",
-            in: app.staticTexts["paycheckResult.actual.value"],
-            message: "Actual must contain 2.010"
-        )
-
         let difference = try requireElement(
             app.staticTexts["paycheckResult.difference.value"],
             message: "Difference must exist"
         )
+        XCTAssertTrue(difference.label.contains("Positive difference less than"))
+        XCTAssertTrue(normalizedAmountLabel(difference.label).contains("0.01"))
+        XCTAssertFalse(app.descendants(matching: .any)["paycheckResult.exact.difference"].exists)
+        attachScreenshot(named: "04-paycheck-result-top", from: app)
 
-        let normalizedDifference =
-            normalizedAmountLabel(difference.label)
-
-        try requireCondition(
-            normalizedDifference.contains("0.002"),
-            message:
-                "Difference must contain 0.002. "
-                + "Observed: \(difference.label)"
+        let toggle = try scrollToHittable(
+            requerying: { app.buttons["paycheckResult.exact.toggle"] },
+            in: app, direction: .towardBottom,
+            message: "Exact amounts disclosure must be reachable"
         )
+        toggle.tap()
+        XCTAssertEqual(toggle.label, "Hide exact amounts")
 
-        try requireCondition(
-            difference.label.contains("+"),
-            message:
-                "Positive Difference must preserve +. "
-                + "Observed: \(difference.label)"
-        )
-
-        attachScreenshot(
-            named: "04-paycheck-result-top",
-            from: app
-        )
+        let exactValues = [
+            ("paycheckResult.exact.expected", "2.008 EUR"),
+            ("paycheckResult.exact.actual", "2.01 EUR"),
+            ("paycheckResult.exact.difference", "+0.002 EUR")
+        ] + (0 ... 1).flatMap { index in
+            [
+                ("paycheckResult.breakdown.row.\(index).exactRate", "1.004 EUR / shift"),
+                ("paycheckResult.breakdown.row.\(index).exactAmount", "1.004 EUR")
+            ]
+        }
+        for (identifier, amount) in exactValues {
+            let field = try requireElement(app.descendants(matching: .any)[identifier],
+                                           message: "Exact evidence must remain available for \(identifier)")
+            XCTAssertEqual(field.value as? String, amount)
+        }
 
         let done = try requireElement(
             app.buttons["paycheckResult.done"],

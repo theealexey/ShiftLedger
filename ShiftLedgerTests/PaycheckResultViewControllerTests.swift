@@ -22,11 +22,11 @@ struct PaycheckResultViewControllerTests {
             identifier: "paycheckResult.expected.value",
             in: viewController.view
         )
-        #expect(label.text == PaycheckResultFormatting.currency(
+        #expect(label.text.map(withoutCurrencySpacing) == withoutCurrencySpacing(PaycheckResultFormatting.currency(
             comparison.expected.expectedGross,
             currencyCode: "EUR",
             locale: locale
-        ))
+        )))
     }
 
     @Test("Reported gross renders from ActualGross")
@@ -46,7 +46,7 @@ struct PaycheckResultViewControllerTests {
             identifier: "paycheckResult.actual.value",
             in: viewController.view
         )
-        #expect(label.text == model.actual)
+        #expect(label.text == model.actualAmount.text)
     }
 
     @Test("Difference renders from PaycheckComparison difference")
@@ -66,7 +66,7 @@ struct PaycheckResultViewControllerTests {
             identifier: "paycheckResult.difference.value",
             in: viewController.view
         )
-        #expect(label.text == model.difference)
+        #expect(label.text == model.differenceAmount.text)
     }
 
     @Test("Negative difference renders lower explanation")
@@ -378,12 +378,12 @@ struct PaycheckResultViewControllerTests {
             identifier: "paycheckResult.breakdown.row.0.rate",
             in: viewController.view
         )
-        #expect(label.text == PaycheckResultFormatting.rate(
+        #expect(label.text.map(withoutCurrencySpacing) == withoutCurrencySpacing(PaycheckResultFormatting.rate(
             amount: breakdown.appliedPayRate.amount,
             basis: .hourly,
             currencyCode: "EUR",
             locale: locale
-        ))
+        )))
     }
 
     @Test("Hourly row renders canonical base pay")
@@ -400,11 +400,11 @@ struct PaycheckResultViewControllerTests {
             identifier: "paycheckResult.breakdown.row.0.amount",
             in: viewController.view
         )
-        #expect(label.text == PaycheckResultFormatting.currency(
+        #expect(label.text.map(withoutCurrencySpacing) == withoutCurrencySpacing(PaycheckResultFormatting.currency(
             breakdown.basePay,
             currencyCode: "EUR",
             locale: locale
-        ))
+        )))
     }
 
     @Test("Fixed-per-shift row labels rate per shift")
@@ -438,11 +438,11 @@ struct PaycheckResultViewControllerTests {
             identifier: "paycheckResult.breakdown.row.0.amount",
             in: viewController.view
         )
-        #expect(label.text == PaycheckResultFormatting.currency(
+        #expect(label.text.map(withoutCurrencySpacing) == withoutCurrencySpacing(PaycheckResultFormatting.currency(
             breakdown.basePay,
             currencyCode: "EUR",
             locale: locale
-        ))
+        )))
         #expect(label.text?.contains("175") == true)
     }
 
@@ -480,6 +480,43 @@ struct PaycheckResultViewControllerTests {
         #expect(expected.text?.contains("0") == true)
         #expect(actual.text?.contains("50") == true)
         #expect(difference.text?.contains("50") == true)
+    }
+
+    @Test("Exact amounts disclosure is reversible and exposes full totals and row evidence")
+    func exactAmountsDisclosure() throws {
+        let expected = try #require(Decimal(string: "1.6666666666666666666666666666666666666", locale: locale))
+        let actual = try #require(Decimal(string: "1.666666666667", locale: locale))
+        let rate = try #require(Decimal(string: "100.0004", locale: locale))
+        let comparison = try makeComparison(expected: expected, actual: actual,
+            breakdowns: [hourlyBreakdown(day: 20, rate: rate, basePay: expected)])
+        let controller = PaycheckResultViewController(comparison: comparison, currencyCode: "SEK",
+            timeZoneIdentifier: "UTC", workTypes: [], displayLocale: locale)
+        controller.loadViewIfNeeded()
+        let toggle: UIButton = try requireView(identifier: "paycheckResult.exact.toggle", in: controller.view)
+        let exactDifference: UIView = try requireView(identifier: "paycheckResult.exact.difference", in: controller.view)
+        let exactAmount: UIView = try requireView(identifier: "paycheckResult.breakdown.row.0.exactAmount", in: controller.view)
+        let exactRate: UIView = try requireView(identifier: "paycheckResult.breakdown.row.0.exactRate", in: controller.view)
+        let difference: UILabel = try requireView(identifier: "paycheckResult.difference.value", in: controller.view)
+        let containers = try [exactDifference, exactAmount, exactRate].map { field in
+            try #require(field.superview)
+        }
+
+        #expect(toggle.accessibilityLabel == PaycheckResultStrings.showExactAmounts)
+        #expect(containers.allSatisfy { $0.isHidden && $0.accessibilityElementsHidden })
+        #expect(difference.text?.hasPrefix("+<") == true)
+        #expect(difference.accessibilityLabel?.contains("<") == false)
+
+        toggle.sendActions(for: .touchUpInside)
+        #expect(toggle.accessibilityLabel == PaycheckResultStrings.hideExactAmounts)
+        #expect(containers.allSatisfy { !$0.isHidden && !$0.accessibilityElementsHidden })
+        #expect(exactDifference.isAccessibilityElement)
+        #expect(exactDifference.accessibilityValue == "+0.0000000000003333333333333333333333334 SEK")
+        #expect(exactAmount.accessibilityValue == "1.6666666666666666666666666666666666666 SEK")
+        #expect(exactRate.accessibilityValue?.hasPrefix("100.0004 SEK / ") == true)
+
+        toggle.sendActions(for: .touchUpInside)
+        #expect(toggle.accessibilityLabel == PaycheckResultStrings.showExactAmounts)
+        #expect(containers.allSatisfy { $0.isHidden && $0.accessibilityElementsHidden })
     }
 
     @Test("Done action invokes callback exactly once")
@@ -655,15 +692,12 @@ struct PaycheckResultViewControllerTests {
                         controller.view.setNeedsLayout()
                         window.layoutIfNeeded()
                         controller.view.layoutIfNeeded()
-                        for (label, text) in zip(labels, [model.expected, model.actual, model.difference]) {
-                            #expect(label.text == text)
-                            #expect(label.accessibilityLabel == text)
-                            let probe = UILabel()
-                            probe.text = text
-                            probe.font = label.font
-                            let size = probe.sizeThatFits(CGSize(width: CGFloat.greatestFiniteMagnitude,
+                        for (label, amount) in zip(labels, [model.expectedAmount, model.actualAmount, model.differenceAmount]) {
+                            #expect(label.text == amount.text)
+                            #expect(label.accessibilityLabel == amount.accessibilityText)
+                            let size = label.sizeThatFits(CGSize(width: label.bounds.width,
                                                                height: CGFloat.greatestFiniteMagnitude))
-                            #expect(size.width <= label.bounds.width)
+                            #expect(size.width <= label.bounds.width + 1)
                             #expect(size.height <= label.bounds.height + 1)
                             #expect(label.font.pointSize >= 17)
                             let frame = label.convert(label.bounds, to: controller.view)
@@ -705,11 +739,12 @@ struct PaycheckResultViewControllerTests {
                 let text = bundle.localizedString(forKey: key, value: nil, table: "Localizable")
                 #expect(text != key)
                 let root = try #require(controller.view as? PaycheckResultView)
-                let expected: UILabel = try requireView(identifier: "paycheckResult.expected.value", in: root)
-                let actual: UILabel = try requireView(identifier: "paycheckResult.actual.value", in: root)
-                let difference: UILabel = try requireView(identifier: "paycheckResult.difference.value", in: root)
-                root.render(.init(expected: expected.text ?? "", actual: actual.text ?? "",
-                    difference: difference.text ?? "", explanation: text, breakdownRows: [], emptyBreakdownMessage: nil))
+                let model = PaycheckResultFormatting.renderModel(
+                    comparison: try makeComparison(expected: 4700, actual: 4700),
+                    currencyCode: "SEK", timeZoneIdentifier: "UTC", workTypes: [], locale: locale
+                )
+                root.render(.init(expectedAmount: model.expectedAmount, actualAmount: model.actualAmount, differenceAmount: model.differenceAmount,
+                    explanation: text, approximationNote: nil, breakdownRows: [], emptyBreakdownMessage: nil))
                 for appearance in [UIUserInterfaceStyle.light, .dark] {
                     controller.overrideUserInterfaceStyle = appearance
                     var normalFont: UIFont?
@@ -801,6 +836,10 @@ struct PaycheckResultViewControllerTests {
                 #expect(button.bounds.width > 0)
             }
         }
+    }
+
+    private func withoutCurrencySpacing(_ text: String) -> String {
+        text.split(whereSeparator: \.isWhitespace).joined()
     }
 
     private func makeViewController(

@@ -1,21 +1,28 @@
 import UIKit
 
 final class PaycheckResultView: UIView {
+    typealias Amount = PaycheckResultFormatting.Amount
+
     struct BreakdownRow {
         let workTypeName: String
         let date: String
         let duration: String
-        let rate: String
-        let amount: String
+        let rate: Amount
+        let amount: Amount
     }
 
     struct RenderModel {
-        let expected: String
-        let actual: String
-        let difference: String
+        let expectedAmount: Amount
+        let actualAmount: Amount
+        let differenceAmount: Amount
         let explanation: String
+        let approximationNote: String?
         let breakdownRows: [BreakdownRow]
         let emptyBreakdownMessage: String?
+
+        var expected: String { expectedAmount.text }
+        var actual: String { actualAmount.text }
+        var difference: String { differenceAmount.text }
     }
 
     var onDoneTapped: (() -> Void)?
@@ -39,6 +46,11 @@ final class PaycheckResultView: UIView {
     private let differenceValueLabel = SummaryValueLabel(isDifference: true)
 
     private let explanationLabel = UILabel()
+    private let approximationLabel = UILabel()
+    private let exactAmountsButton = UIButton(type: .system)
+    private let exactSummaryStack = UIStackView()
+    private var exactBreakdownStacks: [UIStackView] = []
+    private var showsExactAmounts = false
     private let breakdownTitleLabel = UILabel()
     private let breakdownRowsStack = UIStackView()
     private let emptyBreakdownLabel = UILabel()
@@ -112,14 +124,30 @@ final class PaycheckResultView: UIView {
     }
 
     func render(_ model: RenderModel) {
-        expectedValueLabel.text = model.expected
-        expectedValueLabel.accessibilityLabel = model.expected
-        actualValueLabel.text = model.actual
-        actualValueLabel.accessibilityLabel = model.actual
-        differenceValueLabel.text = model.difference
-        differenceValueLabel.accessibilityLabel = model.difference
+        for (label, amount) in [(expectedValueLabel, model.expectedAmount), (actualValueLabel, model.actualAmount),
+                                (differenceValueLabel, model.differenceAmount)] {
+            label.text = amount.text
+            label.accessibilityLabel = amount.accessibilityText
+        }
         explanationLabel.text = model.explanation
+        approximationLabel.text = model.approximationNote
+        approximationLabel.isHidden = model.approximationNote == nil
 
+        for view in exactSummaryStack.arrangedSubviews {
+            view.removeFromSuperview()
+        }
+        let exactSummary = [
+            ("expected", PaycheckResultStrings.expected, model.expectedAmount.exact),
+            ("actual", PaycheckResultStrings.actual, model.actualAmount.exact),
+            ("difference", PaycheckResultStrings.difference, model.differenceAmount.exact)
+        ]
+        for (key, title, value) in exactSummary {
+            exactSummaryStack.addArrangedSubview(makeExactField(
+                title: title, value: value, identifier: "paycheckResult.exact.\(key)"
+            ))
+        }
+
+        exactBreakdownStacks.removeAll()
         breakdownRowsStack.arrangedSubviews.forEach { row in
             breakdownRowsStack.removeArrangedSubview(row)
             row.removeFromSuperview()
@@ -128,6 +156,7 @@ final class PaycheckResultView: UIView {
             breakdownRowsStack.addArrangedSubview(makeBreakdownRow(row, index: index))
         }
 
+        setExactAmountsVisible(false)
         emptyBreakdownLabel.text = model.emptyBreakdownMessage
         emptyBreakdownLabel.isHidden = model.emptyBreakdownMessage == nil
         setNeedsLayout()
@@ -198,6 +227,20 @@ final class PaycheckResultView: UIView {
         explanationLabel.lineBreakStrategy = []
         explanationLabel.accessibilityIdentifier = "paycheckResult.explanation"
 
+        configureLabel(approximationLabel, font: ShiftLedgerTypography.callout, color: ShiftLedgerColors.textSecondary)
+        approximationLabel.accessibilityIdentifier = "paycheckResult.approximation"
+        approximationLabel.isHidden = true
+
+        exactAmountsButton.accessibilityIdentifier = "paycheckResult.exact.toggle"
+        exactSummaryStack.axis = .vertical
+        exactSummaryStack.spacing = 12
+        exactSummaryStack.backgroundColor = ShiftLedgerColors.surfacePrimary
+        exactSummaryStack.layer.cornerCurve = .continuous
+        exactSummaryStack.layer.cornerRadius = 18
+        exactSummaryStack.isLayoutMarginsRelativeArrangement = true
+        exactSummaryStack.directionalLayoutMargins = .init(top: 16, leading: 16, bottom: 16, trailing: 16)
+        setExactAmountsVisible(false)
+
         configureLabel(
             breakdownTitleLabel,
             font: ShiftLedgerTypography.headline,
@@ -237,7 +280,8 @@ final class PaycheckResultView: UIView {
         addSubview(scrollView)
         scrollView.addSubview(contentView)
         contentView.addSubview(mainStack)
-        [summaryCard, explanationLabel, breakdownTitleLabel, breakdownRowsStack, emptyBreakdownLabel, doneButton]
+        [summaryCard, explanationLabel, approximationLabel, exactAmountsButton, exactSummaryStack,
+         breakdownTitleLabel, breakdownRowsStack, emptyBreakdownLabel, doneButton]
             .forEach(mainStack.addArrangedSubview)
 
         mainStack.insertArrangedSubview(periodLabel, at: 0)
@@ -269,11 +313,57 @@ final class PaycheckResultView: UIView {
             summaryStack.trailingAnchor.constraint(equalTo: summaryCard.trailingAnchor, constant: -20),
             summaryStack.bottomAnchor.constraint(equalTo: summaryCard.bottomAnchor, constant: -20),
 
+            exactAmountsButton.heightAnchor.constraint(greaterThanOrEqualToConstant: 50),
             doneButton.heightAnchor.constraint(greaterThanOrEqualToConstant: 50)
         ])
     }
 
+    private func setExactAmountsVisible(_ visible: Bool) {
+        showsExactAmounts = visible
+        for stack in [exactSummaryStack] + exactBreakdownStacks {
+            stack.isHidden = !visible
+            stack.accessibilityElementsHidden = !visible
+        }
+        let title = visible ? PaycheckResultStrings.hideExactAmounts : PaycheckResultStrings.showExactAmounts
+        var configuration = UIButton.Configuration.tinted()
+        configuration.title = title
+        configuration.titleLineBreakMode = .byWordWrapping
+        configuration.image = UIImage(systemName: visible ? "chevron.up" : "chevron.down")
+        configuration.imagePlacement = .trailing
+        configuration.imagePadding = 8
+        configuration.baseForegroundColor = ShiftLedgerColors.accentPrimary
+        configuration.cornerStyle = .large
+        exactAmountsButton.configuration = configuration
+        exactAmountsButton.titleLabel?.font = ShiftLedgerTypography.button
+        exactAmountsButton.titleLabel?.adjustsFontForContentSizeCategory = true
+        exactAmountsButton.accessibilityLabel = title
+    }
+
+    private func makeExactField(title: String, value: String, identifier: String) -> UIStackView {
+        let titleLabel = UILabel()
+        configureLabel(titleLabel, font: ShiftLedgerTypography.callout, color: ShiftLedgerColors.textSecondary)
+        titleLabel.text = title
+        let valueLabel = UILabel()
+        configureLabel(valueLabel, font: ShiftLedgerTypography.body, color: ShiftLedgerColors.textPrimary)
+        valueLabel.text = value
+        // Only the expanded evidence can contain an arbitrarily long exact digit sequence.
+        valueLabel.lineBreakMode = .byCharWrapping
+        let field = UIStackView(arrangedSubviews: [titleLabel, valueLabel])
+        field.axis = .vertical
+        field.spacing = 4
+        field.isAccessibilityElement = true
+        field.accessibilityTraits = .staticText
+        field.accessibilityIdentifier = identifier
+        field.accessibilityLabel = title
+        field.accessibilityValue = value
+        return field
+    }
+
     private func configureInteractions() {
+        exactAmountsButton.addAction(UIAction { [weak self] _ in
+            guard let self else { return }
+            self.setExactAmountsVisible(!self.showsExactAmounts)
+        }, for: .touchUpInside)
         doneButton.addAction(UIAction { [weak self] _ in
             self?.onDoneTapped?()
         }, for: .touchUpInside)
@@ -328,21 +418,39 @@ final class PaycheckResultView: UIView {
         stack.setCustomSpacing(14, after: dateLabel)
 
         let metrics = [
-            (PaycheckResultStrings.paidTime, row.duration, ShiftLedgerTypography.body, "duration"),
-            (PaycheckResultStrings.rate, row.rate, ShiftLedgerTypography.body, "rate"),
-            (PaycheckResultStrings.shiftExpected, row.amount, ShiftLedgerTypography.headline, "amount")
+            (PaycheckResultStrings.paidTime, row.duration, row.duration, ShiftLedgerTypography.body, "duration"),
+            (PaycheckResultStrings.rate, row.rate.text, row.rate.accessibilityText, ShiftLedgerTypography.body, "rate"),
+            (PaycheckResultStrings.shiftExpected, row.amount.text, row.amount.accessibilityText,
+             ShiftLedgerTypography.headline, "amount")
         ]
         for (metricIndex, metric) in metrics.enumerated() {
             stack.addArrangedSubview(makeBreakdownValue(
                 title: metric.0,
                 value: metric.1,
-                valueFont: metric.2,
-                identifier: "paycheckResult.breakdown.row.\(index).\(metric.3)",
-                fitsTitleWords: metric.3 == "duration"
+                accessibilityText: metric.2,
+                valueFont: metric.3,
+                identifier: "paycheckResult.breakdown.row.\(index).\(metric.4)",
+                fitsTitleWords: metric.4 == "duration"
             ))
             if metricIndex < metrics.count - 1 {
                 stack.addArrangedSubview(makeSeparator())
             }
+        }
+
+        let exactMetrics = UIStackView()
+        exactMetrics.axis = .vertical
+        exactMetrics.spacing = 10
+        if row.rate.needsExactDetail {
+            exactMetrics.addArrangedSubview(makeExactField(title: PaycheckResultStrings.exactRate,
+                value: row.rate.exact, identifier: "paycheckResult.breakdown.row.\(index).exactRate"))
+        }
+        if row.amount.needsExactDetail {
+            exactMetrics.addArrangedSubview(makeExactField(title: PaycheckResultStrings.exactContribution,
+                value: row.amount.exact, identifier: "paycheckResult.breakdown.row.\(index).exactAmount"))
+        }
+        if !exactMetrics.arrangedSubviews.isEmpty {
+            stack.addArrangedSubview(exactMetrics)
+            exactBreakdownStacks.append(exactMetrics)
         }
 
         NSLayoutConstraint.activate([
@@ -358,6 +466,7 @@ final class PaycheckResultView: UIView {
     private func makeBreakdownValue(
         title: String,
         value: String,
+        accessibilityText: String,
         valueFont: UIFont,
         identifier: String,
         fitsTitleWords: Bool
@@ -365,6 +474,7 @@ final class PaycheckResultView: UIView {
         BreakdownMetricRow(
             title: title,
             value: value,
+            accessibilityText: accessibilityText,
             valueFont: valueFont,
             identifier: identifier,
             fitsTitleWords: fitsTitleWords
@@ -411,21 +521,22 @@ final class PaycheckResultView: UIView {
                 traitCollection.performAsCurrent { baseFont = ShiftLedgerTypography.display }
             }
             let measure = UILabel()
-            measure.text = text
             let scale = max(1, traitCollection.displayScale)
             let available = floor(bounds.width * scale) / scale - 1 / scale
-            func fits(_ size: CGFloat) -> Bool {
+            func fits(_ value: String, at size: CGFloat) -> Bool {
+                measure.text = value
                 measure.font = baseFont.withSize(size)
                 let width = measure.sizeThatFits(CGSize(width: CGFloat.greatestFiniteMagnitude,
                                                        height: CGFloat.greatestFiniteMagnitude)).width
                 return ceil(width * scale) / scale <= available
             }
             var upper = baseFont.pointSize
-            var lower = min(upper, UIFont.preferredFont(forTextStyle: .body,
-                compatibleWith: UITraitCollection(preferredContentSizeCategory: .large)).pointSize)
-            // Keep unlimited lines for values outside the readable single-line range.
+            var lower = min(upper, max(17, upper * 0.75))
+            // Prefer wrapping at the currency boundary over excessive font reduction.
+            let parts = fits(text, at: lower) ? [text] : text.components(separatedBy: " ")
+            func fits(_ size: CGFloat) -> Bool { parts.allSatisfy { fits($0, at: size) } }
             guard fits(lower) else {
-                if font != baseFont { font = baseFont }
+                if font != baseFont.withSize(lower) { font = baseFont.withSize(lower) }
                 return
             }
             if fits(upper) {
@@ -447,7 +558,8 @@ final class PaycheckResultView: UIView {
 
         private let fitsTitleWords: Bool
 
-        init(title: String, value: String, valueFont: UIFont, identifier: String, fitsTitleWords: Bool) {
+        init(title: String, value: String, accessibilityText: String, valueFont: UIFont,
+             identifier: String, fitsTitleWords: Bool) {
             self.fitsTitleWords = fitsTitleWords
             super.init(frame: .zero)
 
@@ -463,6 +575,7 @@ final class PaycheckResultView: UIView {
 
             configureLabel(valueLabel, font: valueFont, color: ShiftLedgerColors.textPrimary)
             valueLabel.text = value
+            valueLabel.accessibilityLabel = accessibilityText
             valueLabel.accessibilityIdentifier = identifier
 
             [titleLabel, valueLabel].forEach(addArrangedSubview)
