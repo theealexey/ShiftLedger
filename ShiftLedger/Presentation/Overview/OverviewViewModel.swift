@@ -163,14 +163,8 @@ final class OverviewViewModel {
             return
         }
 
-        if selectedShiftID != id {
-            selectedShiftID = id
-            expandedShiftID = nil
-        } else if expandedShiftID == id {
-            expandedShiftID = nil
-        } else {
-            expandedShiftID = id
-        }
+        expandedShiftID = selectedShiftID == id && expandedShiftID == id ? nil : id
+        selectedShiftID = id
 
         do {
             switch job.payCalculationCycle {

@@ -191,9 +191,23 @@ struct OverviewViewModelTests {
         #expect(content.expectedBreakdown?.expectedGross == Decimal(80))
         #expect(content.shiftHistoryBreakdowns.map(\.shift) == [older, latest])
         #expect(content.selectedShiftID == older.id)
-        #expect(content.expandedShiftID == nil)
+        #expect(content.expandedShiftID == older.id)
         #expect(content.selectedPeriod == .perShift(shiftID: older.id))
         #expect(content.expectedBreakdown?.shiftBreakdowns.map(\.shift) == [older])
+
+        for (shift, expectedGross) in [(latest, Decimal(160)), (older, Decimal(80))] {
+            viewModel.handleShiftCardTap(with: shift.id)
+            content = try requireContent(viewModel.state)
+            #expect(content.selectedShiftID == shift.id)
+            #expect(content.expandedShiftID == shift.id)
+            #expect(content.selectedPeriod == .perShift(shiftID: shift.id))
+            #expect(content.expectedBreakdown?.expectedGross == expectedGross)
+            #expect(content.expectedBreakdown?.shiftBreakdowns.map(\.shift) == [shift])
+        }
+
+        viewModel.handleShiftCardTap(with: UUID())
+        #expect(try requireContent(viewModel.state).expandedShiftID == older.id)
+        #expect(try requireContent(viewModel.state).selectedPeriod == .perShift(shiftID: older.id))
     }
 
     @Test("Scheduled previous navigation uses Domain weekly arithmetic")
@@ -536,7 +550,6 @@ struct OverviewViewModelTests {
         )
         viewModel.load()
         viewModel.handleShiftCardTap(with: selected.id)
-        viewModel.handleShiftCardTap(with: selected.id)
 
         viewModel.reload()
 
@@ -564,7 +577,6 @@ struct OverviewViewModelTests {
             currentDate: { Date(timeIntervalSinceReferenceDate: 0) }
         )
         viewModel.load()
-        viewModel.handleShiftCardTap(with: selected.id)
         viewModel.handleShiftCardTap(with: selected.id)
 
         viewModel.reload()
@@ -800,7 +812,6 @@ struct OverviewViewModelTests {
         )
         viewModel.load()
         viewModel.handleShiftCardTap(with: september.id)
-        viewModel.handleShiftCardTap(with: september.id)
         let currentPeriod = try #require(requireContent(viewModel.state).selectedPeriod)
 
         viewModel.navigateToPreviousPeriod()
@@ -818,7 +829,6 @@ struct OverviewViewModelTests {
         #expect(content.selectedShiftID == september.id)
         #expect(content.expandedShiftID == september.id)
 
-        viewModel.handleShiftCardTap(with: august.id)
         viewModel.handleShiftCardTap(with: august.id)
         viewModel.navigateToNextPeriod()
 
@@ -844,7 +854,6 @@ struct OverviewViewModelTests {
             now: try date(year: 2026, month: 9, day: 18, hour: 12)
         )
         viewModel.load()
-        viewModel.handleShiftCardTap(with: september.id)
         viewModel.handleShiftCardTap(with: september.id)
         let historical = try #require(requireContent(viewModel.state).railPeriods.first?.period)
 
@@ -883,7 +892,6 @@ struct OverviewViewModelTests {
         #expect(initial.expectedBreakdown?.expectedGross == Decimal(160))
         #expect(initial.shiftHistoryBreakdowns.map(\.shift) == [august, october])
         #expect(initial.shiftHistoryBreakdowns.map(\.basePay) == [Decimal(80), Decimal(160)])
-        viewModel.handleShiftCardTap(with: august.id)
         viewModel.handleShiftCardTap(with: august.id)
         #expect(try requireContent(viewModel.state).selectedPeriod == initial.selectedPeriod)
         #expect(try requireContent(viewModel.state).expectedBreakdown == initial.expectedBreakdown)
@@ -927,7 +935,7 @@ struct OverviewViewModelTests {
         #expect(content.expandedShiftID == nil)
     }
 
-    @Test("Card taps separate selection from expansion without changing scheduled payroll")
+    @Test("Card taps switch expansion immediately without changing scheduled payroll")
     func selectingShiftControlsSingleExpandedCard() throws {
         let job = try makeJob(cycle: .scheduled(.calendarMonthly))
         let older = try makeShift(id: 1, day: 10)
@@ -943,8 +951,8 @@ struct OverviewViewModelTests {
         #expect(initial.expandedShiftID == nil)
 
         for (id, expectedExpansion) in [
-            (newer.id, nil), (newer.id, newer.id),
-            (older.id, nil), (older.id, older.id), (older.id, nil)
+            (newer.id, newer.id), (older.id, older.id),
+            (newer.id, newer.id), (newer.id, nil), (newer.id, newer.id)
         ] as [(UUID, UUID?)] {
             viewModel.handleShiftCardTap(with: id)
             let content = try requireContent(viewModel.state)
@@ -953,6 +961,13 @@ struct OverviewViewModelTests {
             #expect(content.selectedPeriod == initial.selectedPeriod)
             #expect(content.expectedBreakdown == initial.expectedBreakdown)
         }
+
+        viewModel.handleShiftCardTap(with: UUID())
+        let afterInvalidTap = try requireContent(viewModel.state)
+        #expect(afterInvalidTap.selectedShiftID == newer.id)
+        #expect(afterInvalidTap.expandedShiftID == newer.id)
+        #expect(afterInvalidTap.selectedPeriod == initial.selectedPeriod)
+        #expect(afterInvalidTap.expectedBreakdown == initial.expectedBreakdown)
     }
 
     @Test("Deleting another Shift preserves selected expanded payroll context")
@@ -995,7 +1010,6 @@ struct OverviewViewModelTests {
             currentDate: { now }
         )
         viewModel.load()
-        viewModel.handleShiftCardTap(with: shift.id)
         viewModel.handleShiftCardTap(with: shift.id)
 
         viewModel.reload()

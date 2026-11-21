@@ -508,8 +508,7 @@ final class ShiftLedgerUITests: XCTestCase {
             requerying: { app.buttons[olderID] }, in: app, direction: .towardBottom,
             message: "Older Shift must be reachable in full history"
         )
-        if !olderRow.isSelected { olderRow.tap() }
-        app.buttons[olderID].tap()
+        olderRow.tap()
         let expanded = XCTNSPredicateExpectation(
             predicate: NSPredicate(format: "value == %@", "Expanded"), object: app.buttons[olderID]
         )
@@ -574,13 +573,12 @@ final class ShiftLedgerUITests: XCTestCase {
             in: app, direction: .towardBottom,
             message: "Accessibility receipt history must remain reachable"
         )
-        if !row.isSelected { row.tap() }
+        row.tap()
         let selected = XCTNSPredicateExpectation(
             predicate: NSPredicate(format: "selected == YES"),
             object: app.buttons[persistedID]
         )
         XCTAssertEqual(XCTWaiter().wait(for: [selected], timeout: 5), .completed)
-        app.buttons[persistedID].tap()
         let expanded = XCTNSPredicateExpectation(
             predicate: NSPredicate(format: "selected == YES AND value == %@", "Expanded"),
             object: app.buttons[persistedID]
@@ -629,13 +627,7 @@ final class ShiftLedgerUITests: XCTestCase {
             requerying: { app.buttons[persistedID] }, in: app, direction: .towardBottom,
             message: "Same persisted Shift must remain selectable in Russian"
         )
-        if !russianRow.isSelected {
-            russianRow.tap()
-            let selectedRussian = XCTNSPredicateExpectation(
-                predicate: NSPredicate(format: "selected == YES"), object: app.buttons[persistedID])
-            XCTAssertEqual(XCTWaiter().wait(for: [selectedRussian], timeout: 5), .completed)
-        }
-        app.buttons[persistedID].tap()
+        russianRow.tap()
         let expandedRussian = XCTNSPredicateExpectation(
             predicate: NSPredicate(format: "value == %@", "Развернута"), object: app.buttons[persistedID])
         XCTAssertEqual(XCTWaiter().wait(for: [expandedRussian], timeout: 5), .completed)
@@ -657,11 +649,10 @@ final class ShiftLedgerUITests: XCTestCase {
             requerying: { app.buttons[persistedID] }, in: app, direction: .towardBottom,
             message: "Russian XXL persisted Shift must remain selectable"
         )
-        if !russianAccessibilityRow.isSelected { russianAccessibilityRow.tap() }
+        russianAccessibilityRow.tap()
         let russianAccessibilitySelected = XCTNSPredicateExpectation(
             predicate: NSPredicate(format: "selected == YES"), object: app.buttons[persistedID])
         XCTAssertEqual(XCTWaiter().wait(for: [russianAccessibilitySelected], timeout: 5), .completed)
-        app.buttons[persistedID].tap()
         let russianAccessibilityExpanded = XCTNSPredicateExpectation(
             predicate: NSPredicate(format: "value == %@", "Развернута"), object: app.buttons[persistedID])
         XCTAssertEqual(XCTWaiter().wait(for: [russianAccessibilityExpanded], timeout: 5), .completed)
@@ -673,6 +664,49 @@ final class ShiftLedgerUITests: XCTestCase {
             message: "Russian XXL actions must remain reachable"
         )
         attachScreenshot(named: "SL511-final-russian-xxl-actions", from: app)
+    }
+
+    @MainActor
+    func testShiftsSwitchExpandedCardsWithOneTap() throws {
+        let app = makeApplication(resetStore: true)
+        app.launch()
+        try completeFixedPerShiftOnboarding(in: app)
+
+        for hour in [8, 9, 10] {
+            try addShift(
+                start: ShiftTime(hour: hour, minute: 0, meridiem: "AM"),
+                end: ShiftTime(hour: hour + 1, minute: 0, meridiem: "AM"),
+                in: app
+            )
+        }
+
+        try openFullShiftHistory(in: app)
+        let identifiers = shiftCards(in: app).map(\.identifier)
+        XCTAssertEqual(identifiers.count, 3)
+        guard identifiers.count == 3 else { return }
+
+        for (index, shouldExpand) in [(0, true), (1, true), (2, true), (2, false), (2, true)] {
+            let id = identifiers[index]
+            let card = try scrollToHittable(
+                requerying: { app.buttons[id] }, in: app, direction: .towardBottom,
+                message: "Shift \(id) must be reachable"
+            )
+            card.tap()
+            let current = app.buttons[id]
+            XCTAssertTrue(current.isSelected)
+            XCTAssertEqual(current.value as? String, shouldExpand ? "Expanded" : "Collapsed")
+
+            for otherID in identifiers where otherID != id {
+                XCTAssertEqual(app.buttons[otherID].value as? String, "Collapsed")
+            }
+            if shouldExpand {
+                let startHour = 10 - index
+                XCTAssertTrue(current.label.contains("\(startHour):00"))
+                XCTAssertTrue(current.label.contains("Exact contribution: €1.004"))
+                XCTAssertTrue(app.buttons[id + ".edit"].exists)
+                attachScreenshot(named: "SL556-expanded-card-\(index + 1)", from: app)
+            }
+        }
     }
 
     @MainActor
@@ -758,13 +792,6 @@ final class ShiftLedgerUITests: XCTestCase {
             object: app.buttons[bottomRecordID]
         )
         XCTAssertEqual(XCTWaiter().wait(for: [selected], timeout: 5), .completed)
-        let selectedRecord = try scrollToHittable(
-            requerying: { app.buttons[bottomRecordID] },
-            in: app,
-            direction: .towardBottom,
-            message: "Selected record must remain tappable for expansion"
-        )
-        selectedRecord.tap()
         let expanded = XCTNSPredicateExpectation(
             predicate: NSPredicate(format: "value == %@", "Expanded"),
             object: app.buttons[bottomRecordID]
@@ -981,7 +1008,6 @@ final class ShiftLedgerUITests: XCTestCase {
             in: app
         )
         try openFullShiftHistory(in: app)
-        app.buttons[olderID].tap()
         let expandedExpectation = XCTNSPredicateExpectation(
             predicate: NSPredicate(format: "value == %@", "Expanded"),
             object: app.buttons[olderID]
@@ -1974,7 +2000,7 @@ final class ShiftLedgerUITests: XCTestCase {
         forCardIdentifier cardIdentifier: String,
         in app: XCUIApplication
     ) throws {
-        var card = try scrollToHittable(
+        let card = try scrollToHittable(
             requerying: {
                 app.buttons[cardIdentifier]
             },
@@ -1988,50 +2014,6 @@ final class ShiftLedgerUITests: XCTestCase {
             _ = try requireHittable(
                 card,
                 message: "Collapsed Shift card must be hittable"
-            )
-
-            if card.isSelected == false {
-                card.tap()
-
-                let selectedAndCollapsed = XCTNSPredicateExpectation(
-                    predicate: NSPredicate { _, _ in
-                        let reselectedCard = app.buttons[cardIdentifier]
-                        return reselectedCard.exists
-                            && reselectedCard.isSelected
-                            && String(describing: reselectedCard.value).contains("Collapsed")
-                    },
-                    object: app
-                )
-
-                try requireCondition(
-                    XCTWaiter.wait(for: [selectedAndCollapsed], timeout: 5) == .completed,
-                    message:
-                        "Background Shift card \(cardIdentifier) must become selected and remain Collapsed"
-                )
-
-                attachScreenshot(
-                    named: "03a-overview-selected-collapsed",
-                    from: app
-                )
-
-                card = try scrollToHittable(
-                    requerying: {
-                        app.buttons[cardIdentifier]
-                    },
-                    in: app,
-                    direction: .towardTop,
-                    message: "Selected Shift card \(cardIdentifier) must remain reachable"
-                )
-            }
-
-            try requireCondition(
-                card.isSelected,
-                message: "Shift card \(cardIdentifier) must be selected before expanding"
-            )
-
-            try requireCondition(
-                String(describing: card.value).contains("Collapsed"),
-                message: "Selected Shift card \(cardIdentifier) must remain Collapsed before expanding"
             )
 
             card.tap()
