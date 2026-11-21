@@ -38,12 +38,14 @@ struct AddShiftViewControllerTests {
         formatter.timeZone = calendar.timeZone
         formatter.locale = locale
         formatter.timeStyle = .short
-        for (field, date) in [("start", start), ("end", end), ("breakStart", breakStart), ("breakEnd", breakEnd)] {
+        let expected = localeIdentifier == "ru_RU"
+            ? ["31.08.2026, 23:30", "01.09.2026, 01:30", "31.08.2026, 23:55", "01.09.2026, 00:10"]
+            : ["08/31/2026, 11:30\u{202F}PM", "09/01/2026, 1:30\u{202F}AM", "08/31/2026, 11:55\u{202F}PM", "09/01/2026, 12:10\u{202F}AM"]
+        for (index, (field, date)) in [("start", start), ("end", end), ("breakStart", breakStart), ("breakEnd", breakEnd)].enumerated() {
             let row: UIControl = try requireView("addShift.\(field)", in: controller.view)
             formatter.dateStyle = .long
             #expect(row.accessibilityValue == formatter.string(from: date))
-            formatter.dateStyle = .long
-            #expect(containsLabel(with: formatter.string(from: date), in: row))
+            #expect(containsLabel(with: expected[index], in: row))
         }
         let startRow: UIControl = try requireView("addShift.start", in: controller.view)
         #expect(startRow.accessibilityValue?.contains(localeIdentifier == "en_US" ? "August" : "августа") == true)

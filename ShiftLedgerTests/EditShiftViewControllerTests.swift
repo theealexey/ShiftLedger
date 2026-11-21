@@ -83,10 +83,14 @@ struct EditShiftViewControllerTests {
       ), displayLocale: locale
     )
     add.loadViewIfNeeded()
-    for (field, date) in [("start", start), ("end", end), ("breakStart", unpaidBreak.start), ("breakEnd", unpaidBreak.end)] {
+    let expected = localeIdentifier == "ru_RU"
+      ? ["31.08.2026, 23:30", "01.09.2026, 01:30", "31.08.2026, 23:55", "01.09.2026, 00:10"]
+      : ["08/31/2026, 11:30\u{202F}PM", "09/01/2026, 1:30\u{202F}AM", "08/31/2026, 11:55\u{202F}PM", "09/01/2026, 12:10\u{202F}AM"]
+    for (index, (field, date)) in [("start", start), ("end", end), ("breakStart", unpaidBreak.start), ("breakEnd", unpaidBreak.end)].enumerated() {
       let row: UIControl = try requireView("editShift.\(field)", in: controller.view)
       let addRow: UIControl = try requireView("addShift.\(field)", in: add.view)
       expectDate(date, in: row, timeZoneIdentifier: timeZoneIdentifier, locale: locale)
+      #expect(containsLabel(with: expected[index], in: row))
       #expect(row.accessibilityValue == addRow.accessibilityValue)
     }
     let startRow: UIControl = try requireView("editShift.start", in: controller.view)

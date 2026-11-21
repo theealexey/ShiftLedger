@@ -166,6 +166,101 @@ final class ShiftLedgerUITests: XCTestCase {
         return app
     }
 
+    @MainActor
+    func testSL558NumericDateForms() throws {
+        let en = makeApplication(resetStore: true)
+        en.launchArguments.append("-ui-testing-seed-job")
+        en.launch()
+        try addShift(start: ShiftTime(hour: 8, minute: 0, meridiem: "AM"),
+                     end: ShiftTime(hour: 11, minute: 0, meridiem: "AM"), in: en)
+        let recent = en.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "home.recentShift.")).firstMatch
+        XCTAssertTrue(recent.waitForExistence(timeout: 10))
+        let identifier = recent.identifier
+        recent.tap()
+        XCTAssertTrue(en.scrollViews["editShift.screen"].waitForExistence(timeout: 5))
+        XCTAssertTrue(en.buttons["editShift.start"].isHittable)
+        attachScreenshot(named: "SL558-en-edit", from: en)
+        en.navigationBars.buttons.firstMatch.tap()
+        let add = try scrollToHittable(requerying: { en.buttons["overview.addShift"] }, in: en,
+                                       direction: .towardBottom, message: "Add Shift must be reachable")
+        add.tap()
+        XCTAssertTrue(en.scrollViews["addShift.screen"].waitForExistence(timeout: 5))
+        try select(ShiftTime(hour: 8, minute: 0, meridiem: "AM"), for: en.buttons["addShift.start"], in: en)
+        attachScreenshot(named: "SL558-en-add", from: en)
+        en.terminate()
+
+        let ru = launchRussianTabs(size: "L")
+        let ruRecent = ru.buttons[identifier]
+        XCTAssertTrue(ruRecent.waitForExistence(timeout: 10))
+        ruRecent.tap()
+        XCTAssertTrue(ru.scrollViews["editShift.screen"].waitForExistence(timeout: 5))
+        attachScreenshot(named: "SL558-ru-edit", from: ru)
+        ru.navigationBars.buttons.firstMatch.tap()
+        let ruAdd = try scrollToHittable(requerying: { ru.buttons["overview.addShift"] }, in: ru,
+                                         direction: .towardBottom, message: "Add Shift must be reachable")
+        ruAdd.tap()
+        XCTAssertTrue(ru.scrollViews["addShift.screen"].waitForExistence(timeout: 5))
+        ru.buttons["addShift.start"].tap()
+        let done = ru.navigationBars.buttons["Готово"]
+        XCTAssertTrue(done.waitForExistence(timeout: 5))
+        done.tap()
+        attachScreenshot(named: "SL558-ru-add", from: ru)
+        ru.terminate()
+    }
+
+    @MainActor
+    func testSL558UnpaidBreakDatesPersist() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["-ui-testing-reset-store", "-ui-testing-seed-job",
+                               "-AppleLanguages", "(ru)", "-AppleLocale", "ru_RU",
+                               "-AppleICUForce24HourTime", "NO", "-AppleICUForce12HourTime", "YES"]
+        app.launch()
+        let add = try scrollToHittable(requerying: { app.buttons["overview.addShift"] }, in: app,
+                                       direction: .towardBottom, message: "Add Shift must be reachable")
+        add.tap()
+        XCTAssertTrue(app.scrollViews["addShift.screen"].waitForExistence(timeout: 5))
+        func setTime(_ identifier: String, hour: String, minute: String) throws {
+            let row = try scrollToHittable(requerying: { app.buttons[identifier] }, in: app,
+                                           direction: .towardBottom, message: "Date row must be reachable")
+            row.tap()
+            let picker = try requireElement(app.datePickers.firstMatch, message: "Date picker must appear")
+            let wheels = picker.pickerWheels.allElementsBoundByIndex
+            try requireCondition(wheels.count == 4, message: "Expected four picker wheels; got \(wheels.count)")
+            wheels[1].adjust(toPickerWheelValue: hour)
+            wheels[2].adjust(toPickerWheelValue: minute)
+            wheels[3].adjust(toPickerWheelValue: "AM")
+            let done = app.navigationBars.buttons["Готово"]
+            XCTAssertTrue(done.waitForExistence(timeout: 5))
+            done.tap()
+        }
+        try setTime("addShift.start", hour: "8", minute: "00")
+        try setTime("addShift.end", hour: "11", minute: "00")
+        let toggle = app.switches["addShift.unpaidBreak"]
+        XCTAssertTrue(toggle.waitForExistence(timeout: 5))
+        toggle.tap()
+        try setTime("addShift.breakStart", hour: "9", minute: "00")
+        try setTime("addShift.breakEnd", hour: "9", minute: "30")
+        let start = app.buttons["addShift.breakStart"]
+        let end = app.buttons["addShift.breakEnd"]
+        XCTAssertTrue(start.isHittable && end.isHittable)
+        let startValue = try XCTUnwrap(start.value as? String)
+        let endValue = try XCTUnwrap(end.value as? String)
+        attachScreenshot(named: "SL558-ru-break-add", from: app)
+        app.navigationBars.buttons["Сохранить"].tap()
+        let recent = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "home.recentShift.")).firstMatch
+        XCTAssertTrue(recent.waitForExistence(timeout: 10))
+        recent.tap()
+        XCTAssertTrue(app.scrollViews["editShift.screen"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.switches["editShift.unpaidBreak"].value as? String, "1")
+        let editStart = try scrollToHittable(requerying: { app.buttons["editShift.breakStart"] }, in: app,
+                                             direction: .towardBottom, message: "Edit break start must be reachable")
+        let editEnd = app.buttons["editShift.breakEnd"]
+        XCTAssertTrue(editEnd.isHittable)
+        XCTAssertEqual(editStart.value as? String, startValue)
+        XCTAssertEqual(editEnd.value as? String, endValue)
+        attachScreenshot(named: "SL558-ru-break-edit", from: app)
+    }
+
     // MARK: - Existing coverage
 
     @MainActor
