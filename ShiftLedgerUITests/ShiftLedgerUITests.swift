@@ -293,6 +293,56 @@ final class ShiftLedgerUITests: XCTestCase {
         app.terminate()
     }
 
+    @MainActor
+    func testSL561UnpaidBreakSwitchLayout() throws {
+        let seed = makeApplication(resetStore: true)
+        seed.launchArguments.append("-ui-testing-seed-job")
+        seed.launch()
+        try addShift(start: ShiftTime(hour: 8, minute: 0, meridiem: "AM"),
+                     end: ShiftTime(hour: 11, minute: 0, meridiem: "AM"), in: seed)
+        let recent = seed.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "home.recentShift.")).firstMatch
+        XCTAssertTrue(recent.waitForExistence(timeout: 10))
+        let identifier = recent.identifier
+        seed.terminate()
+
+        for (language, locale, size, form) in [
+            ("ru", "ru_RU", "L", "addShift"),
+            ("ru", "ru_RU", "AccessibilityXXXL", "addShift"),
+            ("ru", "ru_RU", "AccessibilityXXXL", "editShift"),
+            ("en", "en_US", "AccessibilityXXXL", "editShift")
+        ] {
+            let app = XCUIApplication()
+            app.launchArguments = [
+                "-ui-testing-seed-job", "-AppleLanguages", "(\(language))", "-AppleLocale", locale,
+                "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategory\(size)"
+            ]
+            app.launch()
+            let entry = form == "addShift" ? app.buttons["overview.addShift"] : app.buttons[identifier]
+            try scrollToHittable(entry, in: app, direction: .towardBottom, message: "Open \(form)").tap()
+
+            let scroll = app.scrollViews["\(form).screen"]
+            XCTAssertTrue(scroll.waitForExistence(timeout: 5))
+            let toggle = app.switches["\(form).unpaidBreak"]
+            XCTAssertTrue(toggle.waitForExistence(timeout: 5))
+            for _ in 0..<6 where !toggle.isHittable { scroll.swipeUp() }
+            attachScreenshot(named: "SL561-\(language)-\(size)-\(form)", from: app)
+            let window = app.windows.firstMatch
+            XCTAssertTrue(toggle.isHittable)
+            XCTAssertGreaterThanOrEqual(toggle.frame.minX, window.frame.minX + 23.5)
+            XCTAssertLessThanOrEqual(toggle.frame.maxX, window.frame.maxX - 23.5)
+            XCTAssertEqual(toggle.value as? String, "0")
+            toggle.tap()
+            XCTAssertEqual(toggle.value as? String, "1")
+            XCTAssertTrue(app.buttons["\(form).breakStart"].exists)
+            for _ in 0..<6 where !toggle.isHittable { scroll.swipeDown() }
+            XCTAssertTrue(toggle.isHittable)
+            toggle.tap()
+            XCTAssertEqual(toggle.value as? String, "0")
+            XCTAssertFalse(app.buttons["\(form).breakStart"].exists)
+            app.terminate()
+        }
+    }
+
     // MARK: - Existing coverage
 
     @MainActor

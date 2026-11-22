@@ -635,6 +635,64 @@ struct EditShiftViewControllerTests {
     #expect(deleteButton.hitTest(CGPoint(x: deleteButton.bounds.midX, y: deleteButton.bounds.midY), with: nil) != nil)
   }
 
+  @Test("Unpaid break switch adapts while Edit Shift stays visible")
+  func unpaidBreakSwitchAdaptsToLiveDynamicTypeChanges() throws {
+    let workType = try makeWorkType(id: testWorkTypeID, name: "Lectures")
+    let shift = try Shift(id: shiftID, jobID: testJobID, workTypeID: workType.id,
+                          start: start, end: end)
+    let model = EditShiftViewModel(timeZoneIdentifier: "UTC", workTypes: [workType], shift: shift,
+                                  saveShift: { _ in .success(()) }, deleteShift: { _ in .success(()) })
+    let controller = EditShiftViewController(viewModel: model)
+    controller.traitOverrides.preferredContentSizeCategory = .large
+    let window = makeVisibleWindow(root: controller)
+    defer { hide(window) }
+
+    let toggle: UISwitch = try requireView("editShift.unpaidBreak", in: controller.view)
+    let row = try #require(toggle.superview)
+    let title = try #require(row.subviews.compactMap { $0 as? UILabel }.first)
+    let scroll: UIScrollView = try requireView("editShift.screen", in: controller.view)
+    let breakStart: UIControl = try requireView("editShift.breakStart", in: controller.view)
+    let breakEnd: UIControl = try requireView("editShift.breakEnd", in: controller.view)
+
+    let categories: [UIContentSizeCategory] = [
+      .large, .accessibilityExtraExtraLarge, .accessibilityExtraExtraExtraLarge, .large
+    ]
+    for category in categories {
+      controller.traitOverrides.preferredContentSizeCategory = category
+      window.layoutIfNeeded()
+      controller.view.layoutIfNeeded()
+
+      #expect(toggle.traitCollection.preferredContentSizeCategory == category)
+      #expect(row.bounds.contains(toggle.frame))
+      #expect(row.bounds.contains(title.frame))
+      #expect(!title.frame.intersects(toggle.frame))
+      #expect(abs(toggle.frame.maxX - row.bounds.maxX) <= 0.5)
+      if category.isAccessibilityCategory {
+        #expect(toggle.frame.minY - title.frame.maxY >= 11.5)
+        #expect(title.frame.height + 0.5 >= title.sizeThatFits(
+          CGSize(width: title.bounds.width, height: .greatestFiniteMagnitude)
+        ).height)
+      } else {
+        #expect(toggle.frame.minX - title.frame.maxX >= 11.5)
+        #expect(abs(toggle.frame.midY - title.frame.midY) <= 0.5)
+      }
+
+      scroll.scrollRectToVisible(toggle.convert(toggle.bounds, to: scroll), animated: false)
+      window.layoutIfNeeded()
+      let center = toggle.convert(CGPoint(x: toggle.bounds.midX, y: toggle.bounds.midY), to: window)
+      let hit = window.hitTest(center, with: nil)
+      #expect(hit === toggle || hit?.isDescendant(of: toggle) == true)
+    }
+
+    for enabled in [true, false] {
+      toggle.setOn(enabled, animated: false)
+      toggle.sendActions(for: .valueChanged)
+      #expect(toggle.isOn == enabled)
+      #expect(breakStart.superview?.isHidden == !enabled)
+      #expect(breakEnd.superview?.isHidden == !enabled)
+    }
+  }
+
   @Test("Edit form preserves scrolling, complete heading and destructive reachability",
         arguments: [UIContentSizeCategory.large, .accessibilityExtraExtraLarge, .accessibilityExtraExtraExtraLarge],
         [UIUserInterfaceStyle.light, .dark])

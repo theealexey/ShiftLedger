@@ -306,6 +306,8 @@ private final class ShiftFormSwitchRow: UIControl {
     private let titleLabel = UILabel()
     private let toggle = UISwitch()
     private let separator = ShiftFormSeparator()
+    private var horizontalConstraints: [NSLayoutConstraint] = []
+    private var verticalConstraints: [NSLayoutConstraint] = []
     var onChanged: ((Bool) -> Void)?
     var isOn: Bool {
         get { toggle.isOn }
@@ -320,6 +322,7 @@ private final class ShiftFormSwitchRow: UIControl {
         titleLabel.textColor = ShiftLedgerColors.textPrimary
         titleLabel.adjustsFontForContentSizeCategory = true
         titleLabel.numberOfLines = 0
+        toggle.setContentCompressionResistancePriority(.required, for: .horizontal)
         toggle.onTintColor = ShiftLedgerColors.accentPrimary
         toggle.accessibilityLabel = title
         toggle.accessibilityIdentifier = accessibilityIdentifier
@@ -332,17 +335,41 @@ private final class ShiftFormSwitchRow: UIControl {
             addSubview($0)
         }
         heightAnchor.constraint(greaterThanOrEqualToConstant: 56).isActive = true
+        let switchInsets = toggle.alignmentRectInsets
+        let horizontalSwitchInset = max(switchInsets.left, switchInsets.right)
         NSLayoutConstraint.activate([
             titleLabel.leadingAnchor.constraint(equalTo: leadingAnchor),
-            titleLabel.trailingAnchor.constraint(lessThanOrEqualTo: toggle.leadingAnchor, constant: -12),
             titleLabel.topAnchor.constraint(equalTo: topAnchor, constant: 12),
-            titleLabel.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -12),
-            toggle.trailingAnchor.constraint(equalTo: trailingAnchor),
-            toggle.centerYAnchor.constraint(equalTo: centerYAnchor),
+            toggle.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -horizontalSwitchInset),
             separator.leadingAnchor.constraint(equalTo: leadingAnchor),
             separator.trailingAnchor.constraint(equalTo: trailingAnchor),
             separator.bottomAnchor.constraint(equalTo: bottomAnchor)
         ])
+        horizontalConstraints = [
+            titleLabel.trailingAnchor.constraint(lessThanOrEqualTo: toggle.leadingAnchor, constant: -12 - horizontalSwitchInset),
+            titleLabel.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -12),
+            toggle.centerYAnchor.constraint(equalTo: centerYAnchor),
+            toggle.topAnchor.constraint(greaterThanOrEqualTo: topAnchor, constant: 12)
+        ]
+        verticalConstraints = [
+            titleLabel.trailingAnchor.constraint(equalTo: trailingAnchor),
+            toggle.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 12 + switchInsets.top),
+            toggle.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -12 - switchInsets.bottom)
+        ]
+        registerForTraitChanges([UITraitPreferredContentSizeCategory.self]) { (self: Self, _) in
+            self.updateLayoutForContentSizeCategory()
+        }
+        updateLayoutForContentSizeCategory()
+    }
+
+    private func updateLayoutForContentSizeCategory() {
+        if traitCollection.preferredContentSizeCategory.isAccessibilityCategory {
+            NSLayoutConstraint.deactivate(horizontalConstraints)
+            NSLayoutConstraint.activate(verticalConstraints)
+        } else {
+            NSLayoutConstraint.deactivate(verticalConstraints)
+            NSLayoutConstraint.activate(horizontalConstraints)
+        }
     }
 
     @available(*, unavailable)
