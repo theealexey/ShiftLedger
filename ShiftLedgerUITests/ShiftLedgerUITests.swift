@@ -261,6 +261,38 @@ final class ShiftLedgerUITests: XCTestCase {
         attachScreenshot(named: "SL558-ru-break-edit", from: app)
     }
 
+    @MainActor
+    func testSL559DeleteButtonAccessibilityAndAlert() throws {
+        let en = makeApplication(resetStore: true)
+        en.launchArguments.append("-ui-testing-seed-job")
+        en.launch()
+        try addShift(start: ShiftTime(hour: 8, minute: 0, meridiem: "AM"),
+                     end: ShiftTime(hour: 11, minute: 0, meridiem: "AM"), in: en)
+        let recent = en.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "home.recentShift.")).firstMatch
+        XCTAssertTrue(recent.waitForExistence(timeout: 10))
+        let identifier = recent.identifier
+        en.terminate()
+        let app = launchRussianTabs(size: "AccessibilityXXXL")
+        let shift = app.buttons[identifier]
+        XCTAssertTrue(shift.waitForExistence(timeout: 10))
+        let visible = try scrollToHittable(requerying: { app.buttons[identifier] }, in: app,
+                                           direction: .towardBottom, message: "Recent shift must be reachable")
+        visible.tap()
+        let scroll = app.scrollViews["editShift.screen"]
+        XCTAssertTrue(scroll.waitForExistence(timeout: 5))
+        let delete = app.buttons["editShift.delete"]
+        for _ in 0..<8 where !delete.isHittable { scroll.swipeUp() }
+        XCTAssertTrue(delete.isHittable)
+        attachScreenshot(named: "SL559-ru-axxxl-delete", from: app)
+        delete.tap()
+        XCTAssertTrue(app.alerts.firstMatch.waitForExistence(timeout: 5))
+        attachScreenshot(named: "SL559-ru-delete-confirmation", from: app)
+        XCTAssertTrue(app.alerts.buttons["Отмена"].exists)
+        app.alerts.buttons["Отмена"].tap()
+        XCTAssertTrue(scroll.exists)
+        app.terminate()
+    }
+
     // MARK: - Existing coverage
 
     @MainActor

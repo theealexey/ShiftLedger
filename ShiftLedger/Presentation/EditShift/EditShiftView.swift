@@ -47,9 +47,13 @@ final class EditShiftView: UIView {
         headingLabel.accessibilityTraits = .header
         headingLabel.accessibilityIdentifier = "editShift.heading"
 
-        var configuration = UIButton.Configuration.plain()
+        var configuration = UIButton.Configuration.tinted()
         configuration.title = EditShiftStrings.delete
         configuration.baseForegroundColor = ShiftLedgerColors.statusNegative
+        configuration.baseBackgroundColor = ShiftLedgerColors.statusNegative
+        configuration.cornerStyle = .fixed
+        configuration.background.cornerRadius = 14
+        configuration.contentInsets = NSDirectionalEdgeInsets(top: 12, leading: 16, bottom: 12, trailing: 16)
         deleteButton.configuration = configuration
         deleteButton.titleLabel?.font = ShiftLedgerTypography.button
         deleteButton.titleLabel?.adjustsFontForContentSizeCategory = true
@@ -85,7 +89,7 @@ final class EditShiftView: UIView {
             shiftFormView.trailingAnchor.constraint(equalTo: trailingAnchor),
             deleteButton.topAnchor.constraint(equalTo: footerView.topAnchor, constant: 12),
             deleteButton.bottomAnchor.constraint(equalTo: footerView.bottomAnchor, constant: -16),
-            deleteButton.heightAnchor.constraint(greaterThanOrEqualToConstant: 44)
+            deleteButton.heightAnchor.constraint(greaterThanOrEqualToConstant: 52)
         ])
         buttonLeadingConstraint?.isActive = true
         buttonTrailingConstraint?.isActive = true

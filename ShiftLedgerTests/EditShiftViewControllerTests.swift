@@ -606,7 +606,9 @@ struct EditShiftViewControllerTests {
     #expect(deleteButton.accessibilityLabel == EditShiftStrings.delete)
     #expect(deleteButton.allControlEvents.contains(.touchUpInside))
     #expect(deleteButton.configuration?.baseForegroundColor == ShiftLedgerColors.statusNegative)
-    #expect(deleteButton.bounds.height >= 44)
+    #expect(deleteButton.configuration?.baseBackgroundColor == ShiftLedgerColors.statusNegative)
+    #expect(deleteButton.configuration?.background.cornerRadius == 14)
+    #expect(deleteButton.bounds.height >= 52)
     #expect(deleteButton.isEnabled)
     #expect(viewController.navigationItem.rightBarButtonItem?.isEnabled == false)
 
@@ -622,7 +624,7 @@ struct EditShiftViewControllerTests {
       .accessibilityExtraExtraExtraLarge
     window.layoutIfNeeded()
     viewController.view.layoutIfNeeded()
-    #expect(deleteButton.bounds.height >= 44)
+    #expect(deleteButton.bounds.height >= 52)
     #expect(deleteButton.titleLabel?.numberOfLines == 0)
     #expect(deleteButton.isEnabled)
     #expect(deleteButton.isDescendant(of: screen))
