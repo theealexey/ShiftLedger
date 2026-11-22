@@ -922,15 +922,15 @@
     "editShift.delete.confirmation.title" : {
       "extractionState" : "manual",
       "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Delete this shift?" } },
-        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Удалить эту смену?" } }
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Delete forever?" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Удалить навсегда?" } }
       }
     },
     "editShift.delete.confirmation.message" : {
       "extractionState" : "manual",
       "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "This shift will be permanently removed from your history and expected pay calculations. This can’t be undone." } },
-        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Смена будет навсегда удалена из истории и расчёта ожидаемой зарплаты. Отменить это действие нельзя." } }
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Removes it from history and expected pay." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Смена исчезнет из истории и расчёта зарплаты." } }
       }
     },
     "editShift.delete.error.title" : {

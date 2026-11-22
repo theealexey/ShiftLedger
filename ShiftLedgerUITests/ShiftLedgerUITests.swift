@@ -294,6 +294,84 @@ final class ShiftLedgerUITests: XCTestCase {
     }
 
     @MainActor
+    func testSL562DeleteConfirmationRemainsReadable() throws {
+        let seed = makeApplication(resetStore: true)
+        seed.launchArguments.append("-ui-testing-seed-job")
+        seed.launch()
+        try addShift(start: ShiftTime(hour: 8, minute: 0, meridiem: "AM"),
+                     end: ShiftTime(hour: 11, minute: 0, meridiem: "AM"), in: seed)
+        let recent = seed.buttons.matching(
+            NSPredicate(format: "identifier BEGINSWITH %@", "home.recentShift.")
+        ).firstMatch
+        XCTAssertTrue(recent.waitForExistence(timeout: 10))
+        let identifier = recent.identifier
+        seed.terminate()
+
+        let scenarios = [
+            (language: "ru", locale: "ru_RU", size: "L",
+             message: "Смена исчезнет из истории и расчёта зарплаты.",
+             cancel: "Отмена", confirm: "Удалить смену"),
+            (language: "ru", locale: "ru_RU", size: "AccessibilityXXXL",
+             message: "Смена исчезнет из истории и расчёта зарплаты.",
+             cancel: "Отмена", confirm: "Удалить смену"),
+            (language: "en", locale: "en_US", size: "AccessibilityXXXL",
+             message: "Removes it from history and expected pay.",
+             cancel: "Cancel", confirm: "Delete Shift")
+        ]
+
+        for scenario in scenarios {
+            let app = XCUIApplication()
+            app.launchArguments = [
+                "-ui-testing-seed-job",
+                "-AppleLanguages", "(\(scenario.language))",
+                "-AppleLocale", scenario.locale,
+                "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategory\(scenario.size)"
+            ]
+            app.launch()
+            let shift = try scrollToHittable(
+                requerying: { app.buttons[identifier] },
+                in: app,
+                direction: .towardBottom,
+                message: "Seeded Shift must be reachable"
+            )
+            shift.tap()
+            let scroll = try requireElement(
+                app.scrollViews["editShift.screen"],
+                message: "Edit Shift must open"
+            )
+            let delete = app.buttons["editShift.delete"]
+            for _ in 0..<8 where !delete.isHittable { scroll.swipeUp() }
+            XCTAssertTrue(delete.isHittable)
+            delete.tap()
+
+            let alert = try requireElement(app.alerts.firstMatch, message: "Confirmation must appear")
+            let message = try requireElement(
+                alert.staticTexts[scenario.message],
+                message: "Confirmation must expose the complete warning"
+            )
+            let cancel = try requireElement(
+                alert.buttons[scenario.cancel],
+                message: "Cancel must remain reachable"
+            )
+            let confirm = try requireElement(
+                alert.buttons[scenario.confirm],
+                message: "Destructive confirmation must remain reachable"
+            )
+            attachScreenshot(
+                named: "SL562-\(scenario.language)-\(scenario.size)-confirmation",
+                from: app
+            )
+            XCTAssertTrue(alert.frame.contains(message.frame))
+            XCTAssertTrue(cancel.isHittable)
+            XCTAssertTrue(confirm.isHittable)
+            cancel.tap()
+            XCTAssertTrue(app.scrollViews["editShift.screen"].exists)
+            XCTAssertTrue(app.buttons[identifier].exists == false)
+            app.terminate()
+        }
+    }
+
+    @MainActor
     func testSL561UnpaidBreakSwitchLayout() throws {
         let seed = makeApplication(resetStore: true)
         seed.launchArguments.append("-ui-testing-seed-job")
