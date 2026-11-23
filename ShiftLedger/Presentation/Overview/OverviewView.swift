@@ -166,7 +166,7 @@ final class OverviewView: UIView, UIScrollViewDelegate {
         perShiftTimeLabel.isHidden = periodTime == nil
         renderPeriodRail(periodItems)
         shiftCountValueLabel.text = String(shiftCount)
-        shiftCountStack.accessibilityLabel = "\(OverviewStrings.allShiftHistory) \(shiftCount)"
+        shiftCountStack.accessibilityLabel = "\(OverviewStrings.shiftHistoryCountTitle) \(shiftCount)"
         previousButton.isEnabled = canNavigatePrevious
         nextButton.isEnabled = canNavigateNext
         checkPaycheckButton.isEnabled = canCheckPaycheck
@@ -274,7 +274,7 @@ final class OverviewView: UIView, UIScrollViewDelegate {
 
     func renderHistoryOnly(_ cards: [ShiftCard]) {
         shiftCountValueLabel.text = String(cards.count)
-        shiftCountStack.accessibilityLabel = "\(OverviewStrings.allShiftHistory) \(cards.count)"
+        shiftCountStack.accessibilityLabel = "\(OverviewStrings.shiftHistoryCountTitle) \(cards.count)"
         renderShiftHistory(cards)
         setVisible(content: false, shiftHistory: true, checkPaycheck: false,
                    addShift: false, empty: false, error: false)
@@ -426,7 +426,7 @@ final class OverviewView: UIView, UIScrollViewDelegate {
         shiftCountStack.isAccessibilityElement = true
         shiftCountStack.accessibilityTraits = .header
         shiftCountStack.accessibilityIdentifier = "overview.shiftHistory.title"
-        shiftCountLabel.text = OverviewStrings.allShiftHistory
+        shiftCountLabel.text = OverviewStrings.shiftHistoryCountTitle
         configureLabel(
             shiftCountLabel,
             font: ShiftLedgerTypography.headline,

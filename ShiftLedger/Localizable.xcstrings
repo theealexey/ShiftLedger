@@ -1248,6 +1248,13 @@
         "ru" : { "stringUnit" : { "state" : "translated", "value" : "Пока нет сохранённых смен." } }
       }
     },
+    "overview.ledgerHistory.countTitle" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Total" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Всего" } }
+      }
+    },
     "overview.receipt.brand" : {
       "extractionState" : "manual",
       "localizations" : {

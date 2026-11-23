@@ -372,6 +372,81 @@ final class ShiftLedgerUITests: XCTestCase {
     }
 
     @MainActor
+    func testSL563ShiftHistoryUsesScopeTitleAndTotalCounter() throws {
+        let seed = makeApplication(resetStore: true)
+        seed.launchArguments.append("-ui-testing-seed-job")
+        seed.launch()
+        for (start, end) in [
+            (ShiftTime(hour: 8, minute: 0, meridiem: "AM"), ShiftTime(hour: 9, minute: 0, meridiem: "AM")),
+            (ShiftTime(hour: 10, minute: 0, meridiem: "AM"), ShiftTime(hour: 11, minute: 0, meridiem: "AM")),
+            (ShiftTime(hour: 1, minute: 0, meridiem: "PM"), ShiftTime(hour: 2, minute: 0, meridiem: "PM"))
+        ] {
+            try addShift(
+                start: start,
+                end: end,
+                in: seed
+            )
+        }
+        XCTAssertEqual(seed.buttons.matching(
+            NSPredicate(format: "identifier BEGINSWITH %@", "home.recentShift.")
+        ).count, 3)
+        seed.terminate()
+
+        let scenarios = [
+            (language: "ru", locale: "ru_RU", size: "L", tab: "Смены", navigation: "Все смены", total: "Всего"),
+            (language: "en", locale: "en_US", size: "L", tab: "Shifts", navigation: "All shifts", total: "Total"),
+            (language: "ru", locale: "ru_RU", size: "AccessibilityXXXL", tab: "Смены", navigation: "Все смены", total: "Всего")
+        ]
+
+        for scenario in scenarios {
+            let app = XCUIApplication()
+            app.launchArguments = [
+                "-ui-testing-seed-job",
+                "-AppleLanguages", "(\(scenario.language))",
+                "-AppleLocale", scenario.locale,
+                "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategory\(scenario.size)"
+            ]
+            app.launch()
+            let tabs = try requireElement(app.tabBars.firstMatch, message: "Tab bar must exist")
+            let shifts = try requireElement(tabs.buttons[scenario.tab], message: "Shifts tab must exist")
+            shifts.tap()
+            XCTAssertTrue(shifts.isSelected)
+            XCTAssertTrue(tabs.buttons[scenario.tab].exists)
+
+            let navigation = try requireElement(
+                app.navigationBars[scenario.navigation],
+                message: "Shifts navigation title must use the complete history scope"
+            )
+            let counterTitle = try requireElement(
+                app.staticTexts["overview.shiftCount.label"],
+                message: "Internal history counter title must exist"
+            )
+            let counterValue = try requireElement(
+                app.staticTexts["overview.shiftCount.value"],
+                message: "Internal history count must exist"
+            )
+            _ = try requireElement(
+                app.staticTexts["overview.receipt.historyScope"],
+                message: "History scope subtitle must remain visible"
+            )
+            XCTAssertEqual(counterTitle.label, scenario.total)
+            XCTAssertEqual(counterValue.label, "3")
+            XCTAssertEqual(app.buttons.matching(
+                NSPredicate(format: "identifier MATCHES %@", "overview[.]shift[.][0-9A-Fa-f-]{36}")
+            ).count, 3)
+            if scenario.size == "AccessibilityXXXL" {
+                XCTAssertFalse(counterTitle.frame.intersects(counterValue.frame))
+            }
+            attachScreenshot(named: "SL563-\(scenario.language)-\(scenario.size)-shifts", from: app)
+
+            tabs.buttons.element(boundBy: 0).tap()
+            XCTAssertTrue(app.staticTexts["overview.navigation.brand"].exists)
+            XCTAssertFalse(navigation.exists)
+            app.terminate()
+        }
+    }
+
+    @MainActor
     func testSL561UnpaidBreakSwitchLayout() throws {
         let seed = makeApplication(resetStore: true)
         seed.launchArguments.append("-ui-testing-seed-job")

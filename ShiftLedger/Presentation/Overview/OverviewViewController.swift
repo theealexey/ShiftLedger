@@ -51,7 +51,10 @@ final class OverviewViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         if showsShiftHistoryOnly {
-            title = String(localized: "tabs.shifts")
+            title = OverviewStrings.allShiftHistory
+            let tabTitle = String(localized: "tabs.shifts", table: "Localizable")
+            tabBarItem.title = tabTitle
+            navigationController?.tabBarItem.title = tabTitle
             overviewView.accessibilityIdentifier = "shifts.screen"
             overviewView.showsShiftHistoryOnly = true
         } else {

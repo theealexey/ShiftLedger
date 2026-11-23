@@ -7,7 +7,7 @@ struct OverviewViewControllerTests {
     private let displayLocale = Locale(identifier: "en_US_POSIX")
 
     @Test("Saved Shift heading preserves complete words and count across text sizes",
-          arguments: [CGFloat(320), 375, 402], ["Все сохранённые смены", "All saved shifts"])
+          arguments: [CGFloat(320), 375, 402], ["Всего", "Total", "Все сохранённые смены", "All saved shifts"])
     func savedShiftHeadingWrapsWholeWords(_ width: CGFloat, _ heading: String) throws {
         let host = UIViewController()
         let root = OverviewView()
@@ -704,8 +704,68 @@ struct OverviewViewControllerTests {
         #expect(grossElements.count == 1)
         #expect(grossElements[0] === amount)
         #expect(heading.isAccessibilityElement)
-        #expect(heading.accessibilityLabel == "\(OverviewStrings.allShiftHistory) 1")
+        #expect(heading.accessibilityLabel == "\(OverviewStrings.shiftHistoryCountTitle) 1")
         #expect(heading.arrangedSubviews.count == 2)
+    }
+
+    @Test("Shifts history separates its localized scope title from the internal count")
+    func shiftHistoryUsesDistinctNavigationAndCountTitles() throws {
+        for (language, expectedNavigationTitle, expectedCountTitle) in [
+            ("ru", "Все смены", "Всего"),
+            ("en", "All shifts", "Total")
+        ] {
+            let path = try #require(
+                Bundle(for: OverviewViewController.self).path(forResource: language, ofType: "lproj")
+            )
+            let localization = try #require(Bundle(path: path))
+            #expect(localization.localizedString(
+                forKey: "overview.ledgerHistory.title", value: nil, table: "Localizable"
+            ) == expectedNavigationTitle)
+            #expect(localization.localizedString(
+                forKey: "overview.ledgerHistory.countTitle", value: nil, table: "Localizable"
+            ) == expectedCountTitle)
+        }
+
+        let shifts = try [
+            makeShift(id: 1, month: 9, day: 10),
+            makeShift(id: 2, month: 9, day: 11),
+            makeShift(id: 3, month: 9, day: 12)
+        ]
+        let subject = try makeSubject(job: makeJob(cycle: .scheduled(.calendarMonthly)), shifts: shifts)
+        subject.viewController.showsShiftHistoryOnly = true
+        subject.viewController.traitOverrides.preferredContentSizeCategory = .accessibilityExtraExtraExtraLarge
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 320, height: 844))
+        window.rootViewController = UINavigationController(rootViewController: subject.viewController)
+        window.isHidden = false
+        defer { window.isHidden = true }
+        subject.viewController.loadViewIfNeeded()
+        window.layoutIfNeeded()
+
+        let root = try requireRootView(subject.viewController)
+        let title: UILabel = try requireView(identifier: "overview.shiftCount.label", in: root)
+        let count: UILabel = try requireView(identifier: "overview.shiftCount.value", in: root)
+        let counter: UIStackView = try requireView(identifier: "overview.shiftHistory.title", in: root)
+        #expect(subject.viewController.title == OverviewStrings.allShiftHistory)
+        #expect(subject.viewController.tabBarItem.title == String(localized: "tabs.shifts", table: "Localizable"))
+        #expect(subject.viewController.navigationController?.tabBarItem.title == String(localized: "tabs.shifts", table: "Localizable"))
+        #expect(root.accessibilityIdentifier == "shifts.screen")
+        #expect(title.text == OverviewStrings.shiftHistoryCountTitle)
+        #expect(count.text == "3")
+        #expect(counter.accessibilityLabel == "\(OverviewStrings.shiftHistoryCountTitle) 3")
+        #expect(title.text != subject.viewController.title)
+        #expect(!title.convert(title.bounds, to: root).intersects(count.convert(count.bounds, to: root)))
+
+        let empty = OverviewView()
+        empty.renderHistoryOnly([])
+        let emptyTitle: UILabel = try requireView(identifier: "overview.shiftCount.label", in: empty)
+        let emptyCount: UILabel = try requireView(identifier: "overview.shiftCount.value", in: empty)
+        #expect(emptyTitle.text == OverviewStrings.shiftHistoryCountTitle)
+        #expect(emptyCount.text == "0")
+
+        let home = try makeSubject(job: makeJob(cycle: .scheduled(.calendarMonthly)), shifts: shifts)
+        home.viewController.usesHomeComposition = true
+        home.viewController.loadViewIfNeeded()
+        #expect((home.viewController.navigationItem.titleView as? UILabel)?.text == "ShiftLedger")
     }
 
     @Test("Content displays the expected gross")
@@ -1301,7 +1361,7 @@ struct OverviewViewControllerTests {
         let root = try requireRootView(subject.viewController)
         let heading: UILabel = try requireView(identifier: "overview.shiftCount.label", in: root)
         let count: UILabel = try requireView(identifier: "overview.shiftCount.value", in: root)
-        #expect(heading.text == OverviewStrings.allShiftHistory)
+        #expect(heading.text == OverviewStrings.shiftHistoryCountTitle)
         #expect(heading.text?.hasSuffix("·") == false)
         #expect(heading.bounds.width <= width - 64 + 0.5)
         #expect(heading.lineBreakMode == .byWordWrapping)

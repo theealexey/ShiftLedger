@@ -11,6 +11,9 @@ enum OverviewStrings {
     static var allShiftHistory: String {
         String(localized: "overview.ledgerHistory.title", table: "Localizable")
     }
+    static var shiftHistoryCountTitle: String {
+        String(localized: "overview.ledgerHistory.countTitle", table: "Localizable")
+    }
     static var noSavedShifts: String {
         String(localized: "overview.ledgerHistory.empty", table: "Localizable")
     }
