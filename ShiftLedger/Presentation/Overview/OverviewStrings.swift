@@ -1,6 +1,9 @@
 import Foundation
 
 enum OverviewStrings {
+    static var unpaidBreakDetail: String {
+        String(localized: "overview.shift.unpaidBreakDetail", table: "Localizable")
+    }
     static func paidDuration(_ duration: String) -> String {
         String(format: String(localized: "overview.shift.paidDuration", table: "Localizable"), duration)
     }

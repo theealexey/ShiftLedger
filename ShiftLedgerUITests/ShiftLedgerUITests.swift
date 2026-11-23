@@ -262,6 +262,67 @@ final class ShiftLedgerUITests: XCTestCase {
     }
 
     @MainActor
+    func testSL565ExpandedUnpaidBreak() throws {
+        let seed = XCUIApplication()
+        seed.launchArguments = ["-ui-testing-reset-store", "-ui-testing-seed-job", "-AppleLanguages", "(ru)", "-AppleLocale", "ru_RU", "-AppleICUForce24HourTime", "NO", "-AppleICUForce12HourTime", "YES"]
+        seed.launch()
+        try scrollToHittable(requerying: { seed.buttons["overview.addShift"] }, in: seed, direction: .towardBottom, message: "Add shift").tap()
+        func setTime(_ identifier: String, hour: String, minute: String) throws {
+            try scrollToHittable(requerying: { seed.buttons[identifier] }, in: seed, direction: .towardBottom, message: identifier).tap()
+            let picker = try requireElement(seed.datePickers.firstMatch, message: "Date picker")
+            let wheels = picker.pickerWheels.allElementsBoundByIndex
+            try requireCondition(wheels.count == 4, message: "Expected four wheels")
+            wheels[1].adjust(toPickerWheelValue: hour)
+            wheels[2].adjust(toPickerWheelValue: minute)
+            wheels[3].adjust(toPickerWheelValue: "AM")
+            seed.navigationBars.buttons["Готово"].tap()
+        }
+        try setTime("addShift.start", hour: "8", minute: "00")
+        try setTime("addShift.end", hour: "11", minute: "00")
+        seed.switches["addShift.unpaidBreak"].tap()
+        try setTime("addShift.breakStart", hour: "9", minute: "00")
+        try setTime("addShift.breakEnd", hour: "9", minute: "30")
+        seed.navigationBars.buttons["Сохранить"].tap()
+        XCTAssertTrue(seed.buttons["overview.addShift"].waitForExistence(timeout: 10))
+        seed.terminate()
+
+        for (language, locale, size, tab) in [("ru", "ru_RU", "L", "Смены"), ("ru", "ru_RU", "AccessibilityXXXL", "Смены"), ("en", "en_US", "L", "Shifts")] {
+            let app = XCUIApplication()
+            app.launchArguments = ["-ui-testing-seed-job", "-AppleLanguages", "(\(language))", "-AppleLocale", locale, "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategory\(size)"]
+            app.launch()
+            let shifts = app.tabBars.buttons[tab]
+            XCTAssertTrue(shifts.waitForExistence(timeout: 10))
+            shifts.tap()
+            let card = app.buttons.matching(NSPredicate(format: "identifier MATCHES %@", "overview[.]shift[.][0-9A-Fa-f-]{36}")).firstMatch
+            XCTAssertTrue(card.waitForExistence(timeout: 10))
+            let identifier = card.identifier
+            attachScreenshot(named: "SL565-\(language)-\(size)-collapsed", from: app)
+            card.tap()
+            XCTAssertTrue(app.buttons[identifier + ".edit"].waitForExistence(timeout: 5))
+            XCTAssertTrue(card.isSelected)
+            let description = card.label
+            for part in (language == "ru" ? ["08:00", "11:00", "09:00", "09:30", "2 ч 30 мин", "30 мин", "250", "100"] : ["8:00", "11:00", "9:00", "9:30", "2 h 30 min", "30 min", "250", "100"]) {
+                XCTAssertTrue(description.contains(part), "Missing \(part) in \(description)")
+            }
+            XCTAssertEqual(card.value as? String, language == "ru" ? "Развернута" : "Expanded")
+            let breakTitle = language == "ru" ? "Неоплачиваемый перерыв" : "Unpaid break"
+            XCTAssertEqual(description.components(separatedBy: breakTitle).count - 1, 1)
+            attachScreenshot(named: "SL565-\(language)-\(size)-expanded", from: app)
+            if size == "AccessibilityXXXL" {
+                let edit = try scrollToHittable(requerying: { app.buttons[identifier + ".edit"] }, in: app, direction: .towardBottom, message: "Edit must be reachable")
+                XCTAssertTrue(edit.isHittable)
+                attachScreenshot(named: "SL565-ru-AXXXL-details", from: app)
+            }
+            let visibleCard = try scrollToHittable(requerying: { app.buttons[identifier] }, in: app, direction: .towardTop, message: "Card must be reachable")
+            visibleCard.tap()
+            XCTAssertFalse(app.buttons[identifier + ".edit"].exists)
+            visibleCard.tap()
+            XCTAssertTrue(app.buttons[identifier + ".edit"].waitForExistence(timeout: 5))
+            app.terminate()
+        }
+    }
+
+    @MainActor
     func testSL559DeleteButtonAccessibilityAndAlert() throws {
         let en = makeApplication(resetStore: true)
         en.launchArguments.append("-ui-testing-seed-job")

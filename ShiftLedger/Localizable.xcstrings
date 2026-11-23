@@ -1248,6 +1248,13 @@
         "ru" : { "stringUnit" : { "state" : "translated", "value" : "Пока нет сохранённых смен." } }
       }
     },
+    "overview.shift.unpaidBreakDetail" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Unpaid break" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Перерыв без оплаты" } }
+      }
+    },
     "overview.ledgerHistory.countTitle" : {
       "extractionState" : "manual",
       "localizations" : {

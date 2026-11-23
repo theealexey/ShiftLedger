@@ -213,7 +213,11 @@ final class OverviewShiftLedgerRowView: UIControl {
             let interval = card.unpaidBreakTimeRange.map { "\($0) · " } ?? ""
             return "\(interval)\(duration)"
         }
-        unpaidBreak.update(label: AddShiftStrings.unpaidBreak, value: breakValue ?? "",
+        let wrappedBreakValue = card.unpaidBreak.flatMap { duration in
+            card.unpaidBreakTimeRange.map { "\($0)\n\(duration)" }
+        }
+        unpaidBreak.update(label: OverviewStrings.unpaidBreakDetail, value: breakValue ?? "",
+                           wrappedValue: wrappedBreakValue,
                            identifier: "\(prefix).detail.break")
         unpaidBreak.isHidden = card.unpaidBreak == nil
         rate.update(label: PaycheckResultStrings.rate,
@@ -460,9 +464,7 @@ final class OverviewReceiptFieldView: UIStackView {
     }
 
     func update(label title: String, value text: String, wrappedValue: String? = nil, identifier: String) {
-        let paragraph = NSMutableParagraphStyle()
-        paragraph.hyphenationFactor = 1
-        label.attributedText = NSAttributedString(string: title, attributes: [.paragraphStyle: paragraph])
+        label.text = title
         fullValue = text
         self.wrappedValue = wrappedValue
         value.text = text
