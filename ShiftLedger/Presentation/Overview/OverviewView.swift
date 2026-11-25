@@ -19,6 +19,7 @@ final class OverviewView: UIView, UIScrollViewDelegate {
         let expectedAmount: String
         let exactExpectedAmount: String?
         let paidDuration: String
+        let workTypeName: String
         let unpaidBreak: String?
         let unpaidBreakTimeRange: String?
         let appliedRate: String

@@ -12,8 +12,8 @@ struct ArchivedJobHistoryTests {
         let a = try fixture.insertJob(index: 1)
         let b = try fixture.insertJob(index: 2, archived: true, name: "  Archive  ")
         let workType = try #require(b.workTypes?.allObjects.first as? WorkTypeEntity)
-        let rate = try #require(workType.payRates?.allObjects.first as? PayRateEntity)
-        rate.amount = NSDecimalNumber(string: "1.004")
+        let rate = try #require(workType.payRates?.allObjects.first as? PayRateV7Entity)
+        rate.amount = "1.004"
         try insertShift(index: 1, job: b, workType: workType, context: fixture.stack.viewContext)
         try insertShift(index: 2, job: b, workType: workType, context: fixture.stack.viewContext)
         let foreignWorkType = try #require(a.workTypes?.allObjects.first as? WorkTypeEntity)
@@ -117,8 +117,8 @@ struct ArchivedJobHistoryTests {
         let job = try fixture.insertJob(index: 2, archived: true)
         let workType = try #require(job.workTypes?.allObjects.first as? WorkTypeEntity)
         workType.basePayKind = "hourly"
-        let rate = try #require(workType.payRates?.allObjects.first as? PayRateEntity)
-        rate.amount = NSDecimalNumber(value: 10)
+        let rate = try #require(workType.payRates?.allObjects.first as? PayRateV7Entity)
+        rate.amount = String(describing: 10)
         try insertShift(index: 1, job: job, workType: workType, context: fixture.stack.viewContext)
         let shift = try #require(job.shifts?.allObjects.first as? ShiftEntity)
         let parser = ISO8601DateFormatter()
@@ -142,9 +142,9 @@ struct ArchivedJobHistoryTests {
             startText = "2026-10-08T08:00:00Z"
             endText = "2026-10-08T09:00:00Z"
             expected = 20
-            let dated = PayRateEntity(entity: try #require(NSEntityDescription.entity(forEntityName: "PayRateEntity", in: fixture.stack.viewContext)), insertInto: fixture.stack.viewContext)
+            let dated = PayRateV7Entity(entity: try #require(NSEntityDescription.entity(forEntityName: "PayRateEntity", in: fixture.stack.viewContext)), insertInto: fixture.stack.viewContext)
             dated.id = try #require(UUID(uuidString: "CCCCCCCC-0000-0000-0000-000000000001"))
-            dated.amount = NSDecimalNumber(value: 20)
+            dated.amount = String(describing: 20)
             let effectiveDate: Date = try #require(parser.date(from: "2026-10-07T22:00:00Z"))
             dated.effectiveFrom = effectiveDate
             dated.job = job

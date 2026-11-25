@@ -75,8 +75,10 @@ final class OverviewShiftLedgerRowView: UIControl {
     private let summarySpacer = UIView()
     private let durationSummary = UIStackView()
     private let details = UIStackView()
+    private let workType = OverviewReceiptFieldView()
     private let unpaidBreak = OverviewReceiptFieldView()
     private let rate = OverviewReceiptFieldView()
+    private let exactAmount = OverviewReceiptFieldView()
     fileprivate let editButton = UIButton(type: .system)
     private let editChevron = UIImageView(image: UIImage(systemName: "chevron.right"))
     private let disclosure = UIImageView(image: UIImage(systemName: "chevron.right"))
@@ -209,6 +211,9 @@ final class OverviewShiftLedgerRowView: UIControl {
         durationLabel.text = OverviewStrings.paidDuration(card.paidDuration)
         durationLabel.accessibilityIdentifier = "\(prefix).duration"
 
+        workType.update(label: AddShiftStrings.workType, value: card.workTypeName,
+                        identifier: "\(prefix).detail.workType")
+
         let breakValue = card.unpaidBreak.map { duration in
             let interval = card.unpaidBreakTimeRange.map { "\($0) · " } ?? ""
             return "\(interval)\(duration)"
@@ -224,8 +229,12 @@ final class OverviewShiftLedgerRowView: UIControl {
                     value: card.appliedRate,
                     wrappedValue: card.appliedRate.replacingOccurrences(of: " / ", with: "\n/\u{00a0}"),
                     identifier: "\(prefix).detail.rate")
+        exactAmount.update(label: OverviewStrings.exactAmountDetail, value: card.exactExpectedAmount ?? "",
+                           identifier: "\(prefix).detail.exactContribution")
+        exactAmount.isHidden = card.exactExpectedAmount == nil
         if card.isExpanded {
             accessibilityLabel = [card.accessibilityLabel,
+                                  "\(AddShiftStrings.workType): \(card.workTypeName)",
                                   "\(PaycheckResultStrings.rate): \(card.appliedRate)"]
                 .joined(separator: ", ")
         }
@@ -276,7 +285,8 @@ final class OverviewShiftLedgerRowView: UIControl {
         details.spacing = 8
         details.isLayoutMarginsRelativeArrangement = true
         details.layoutMargins = UIEdgeInsets(top: 8, left: 12, bottom: 8, right: 0)
-        [unpaidBreak, rate].forEach(details.addArrangedSubview)
+        exactAmount.value.lineBreakMode = .byCharWrapping
+        [workType, unpaidBreak, rate, exactAmount].forEach(details.addArrangedSubview)
 
         var editConfiguration = UIButton.Configuration.tinted()
         editConfiguration.title = OverviewStrings.editShift

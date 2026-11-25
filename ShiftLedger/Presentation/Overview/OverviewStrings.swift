@@ -23,6 +23,7 @@ enum OverviewStrings {
     static var receiptBrand: String { String(localized: "overview.receipt.brand", table: "Localizable") }
     static var receiptSubtitle: String { String(localized: "overview.receipt.subtitle", table: "Localizable") }
     static var historyScope: String { String(localized: "overview.receipt.historyScope", table: "Localizable") }
+    static var exactAmountDetail: String { String(localized: "overview.shift.exactAmountDetail", table: "Localizable") }
     static var exactContribution: String { String(localized: "overview.receipt.exactContribution", table: "Localizable") }
     static var exactTotal: String { String(localized: "overview.receipt.exactTotal", table: "Localizable") }
     static var displayedTotal: String { String(localized: "overview.receipt.displayedTotal", table: "Localizable") }

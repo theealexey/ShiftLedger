@@ -3,6 +3,7 @@ import Foundation
 struct OverviewShiftCardMapper {
     private enum MappingError: Error {
         case invalidFormatting
+        case missingWorkType
     }
 
     private let currencyCode: String
@@ -21,11 +22,15 @@ struct OverviewShiftCardMapper {
 
     func map(
         _ shiftBreakdowns: [ShiftPayBreakdown],
+        workTypeNames: [UUID: String],
         selectedShiftID: UUID?,
         expandedShiftID: UUID?
     ) throws -> [OverviewView.ShiftCard] {
         try shiftBreakdowns.reversed().map { shiftBreakdown in
             let shift = shiftBreakdown.shift
+            guard let workTypeName = workTypeNames[shift.workTypeID] else {
+                throw MappingError.missingWorkType
+            }
             guard
                 let heading = OverviewFormatting.shiftRowHeading(
                     shift,
@@ -122,6 +127,7 @@ struct OverviewShiftCardMapper {
                 expectedAmount: expectedAmount,
                 exactExpectedAmount: exactExpectedAmount,
                 paidDuration: paidDuration,
+                workTypeName: workTypeName,
                 unpaidBreak: unpaidBreak,
                 unpaidBreakTimeRange: unpaidBreakTimeRange,
                 appliedRate: appliedRate,

@@ -1479,10 +1479,11 @@ struct ShiftStorageTests {
         let original = try makeJob()
         try JobStorage(stack: stack).save(original)
         if readOnly {
+            let selectedURL = try #require(stack.viewContext.persistentStoreCoordinator?.persistentStores.first?.url)
             try close(stack)
             let coordinator = try #require(stack.viewContext.persistentStoreCoordinator)
             _ = try coordinator.addPersistentStore(
-                ofType: NSSQLiteStoreType, configurationName: nil, at: url,
+                ofType: NSSQLiteStoreType, configurationName: nil, at: selectedURL,
                 options: [NSReadOnlyPersistentStoreOption: true]
             )
         }
@@ -1575,11 +1576,12 @@ struct ShiftStorageTests {
         let stack = try await makeStack(storeURL: url, stacks: &stacks)
         let original = try makeJob()
         try JobStorage(stack: stack).save(original)
+        let selectedURL = try #require(stack.viewContext.persistentStoreCoordinator?.persistentStores.first?.url)
         try close(stack)
         let context = stack.viewContext
         let coordinator = try #require(context.persistentStoreCoordinator)
         _ = try coordinator.addPersistentStore(
-            ofType: NSSQLiteStoreType, configurationName: nil, at: url,
+            ofType: NSSQLiteStoreType, configurationName: nil, at: selectedURL,
             options: [NSReadOnlyPersistentStoreOption: true]
         )
         #expect(!context.hasChanges)
@@ -1722,8 +1724,8 @@ struct ShiftStorageTests {
         try context.fetch(NSFetchRequest<ShiftEntity>(entityName: "ShiftEntity"))
     }
 
-    private func fetchPayRates(in context: NSManagedObjectContext) throws -> [PayRateEntity] {
-        try context.fetch(NSFetchRequest<PayRateEntity>(entityName: "PayRateEntity"))
+    private func fetchPayRates(in context: NSManagedObjectContext) throws -> [PayRateV7Entity] {
+        try context.fetch(NSFetchRequest<PayRateV7Entity>(entityName: "PayRateEntity"))
     }
 
     private func onlyWorkType(for job: JobEntity) throws -> WorkTypeEntity {
@@ -1799,9 +1801,9 @@ struct ShiftStorageTests {
             additional.job = job
         }
 
-        let payRate = PayRateEntity(entity: payRateDescription, insertInto: context)
+        let payRate = PayRateV7Entity(entity: payRateDescription, insertInto: context)
         payRate.id = id
-        payRate.amount = NSDecimalNumber(decimal: 100)
+        payRate.amount = String(describing: 100)
         payRate.effectiveFrom = nil
         payRate.job = job
         payRate.workType = workType

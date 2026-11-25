@@ -13,7 +13,7 @@ struct CoreDataV4MigrationTests {
     private let shiftID = UUID(uuid: (0x40, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 6))
     private let shiftStart = Date(timeIntervalSinceReferenceDate: 800_000)
 
-    @Test("V3 SQLite migrates to V4 with truthful nil WorkType names and reopens")
+    @Test("V3 SQLite migrates through V6 to V7 with truthful nil WorkType names and reopens")
     func migratesV3StoreWithoutFabricatingNames() async throws {
         let storeURL = try makeTemporaryStoreURL()
         var v3Containers: [NSPersistentContainer] = []
@@ -38,14 +38,14 @@ struct CoreDataV4MigrationTests {
         try v3Container.viewContext.save()
         try close(v3Container)
 
-        let firstV4Stack = try await CoreDataStack.load(storeURL: storeURL)
-        stacks.append(firstV4Stack)
-        try verifyMigratedV4(in: firstV4Stack)
-        try close(firstV4Stack)
+        let firstV7Stack = try await CoreDataStack.load(storeURL: storeURL)
+        stacks.append(firstV7Stack)
+        try verifyMigratedV7(in: firstV7Stack)
+        try close(firstV7Stack)
 
-        let reopenedV4Stack = try await CoreDataStack.load(storeURL: storeURL)
-        stacks.append(reopenedV4Stack)
-        try verifyMigratedV4(in: reopenedV4Stack)
+        let reopenedV7Stack = try await CoreDataStack.load(storeURL: storeURL)
+        stacks.append(reopenedV7Stack)
+        try verifyMigratedV7(in: reopenedV7Stack)
     }
 
     private func insertV3Graph(in context: NSManagedObjectContext) throws {
@@ -92,14 +92,14 @@ struct CoreDataV4MigrationTests {
         shift.setValue(lecture, forKey: "workType")
     }
 
-    private func verifyMigratedV4(in stack: CoreDataStack) throws {
+    private func verifyMigratedV7(in stack: CoreDataStack) throws {
         let context = stack.viewContext
         let jobs = try context.fetch(NSFetchRequest<JobEntity>(entityName: "JobEntity"))
         let workTypes = try context.fetch(
             NSFetchRequest<WorkTypeEntity>(entityName: "WorkTypeEntity")
         )
         let payRates = try context.fetch(
-            NSFetchRequest<PayRateEntity>(entityName: "PayRateEntity")
+            NSFetchRequest<PayRateV7Entity>(entityName: "PayRateEntity")
         )
         let shifts = try context.fetch(NSFetchRequest<ShiftEntity>(entityName: "ShiftEntity"))
         let job = try #require(jobs.first)
@@ -118,8 +118,8 @@ struct CoreDataV4MigrationTests {
         #expect(lecture.job.objectID == job.objectID)
         #expect(exam.job.objectID == job.objectID)
         #expect(payRates.count == 2)
-        #expect(lectureRate.amount.decimalValue == NSDecimalNumber(string: "125.50").decimalValue)
-        #expect(examRate.amount.decimalValue == Decimal(650))
+        #expect(NSDecimalNumber(string: lectureRate.amount, locale: Locale(identifier: "en_US_POSIX")).decimalValue == NSDecimalNumber(string: "125.50").decimalValue)
+        #expect(NSDecimalNumber(string: examRate.amount, locale: Locale(identifier: "en_US_POSIX")).decimalValue == Decimal(650))
         #expect(lectureRate.effectiveFrom == nil)
         #expect(examRate.effectiveFrom == nil)
         #expect(lectureRate.job.objectID == job.objectID)

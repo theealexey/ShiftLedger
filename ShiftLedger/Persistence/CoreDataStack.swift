@@ -3,8 +3,11 @@ import CoreData
 
 enum CoreDataStackError: Error {
     case persistentStoreLoadFailed(underlying: Error)
+    case persistentStoreMigrationFailed(underlying: Error)
     case legacyWorkTypeBackfillFailed(underlying: LegacyWorkTypeBackfillError)
     case legacyShiftWorkTypeBackfillFailed(underlying: LegacyShiftWorkTypeBackfillError)
+    case missingStoreLocation
+    case testStoreRequired
 }
 
 @MainActor
@@ -19,16 +22,29 @@ final class CoreDataStack {
     }
 
     static func load(storeURL: URL? = nil) async throws -> CoreDataStack {
-        let persistentContainer = NSPersistentContainer(name: "ShiftLedger")
-
-        if let storeURL {
-            let storeDescription = NSPersistentStoreDescription(url: storeURL)
-            storeDescription.type = NSSQLiteStoreType
-            persistentContainer.persistentStoreDescriptions = [storeDescription]
+        let container = NSPersistentContainer(name: "ShiftLedger", managedObjectModel: try PayRateStoreMigrator.model(version: 7))
+        guard let defaultURL = container.persistentStoreDescriptions.first?.url else {
+            throw CoreDataStackError.missingStoreLocation
+        }
+        let original = storeURL ?? defaultStoreURL(defaultURL)
+        let active: URL
+        do {
+            active = try await PayRateStoreMigrator.resolve(original: original)
+        } catch let error as CoreDataStackError {
+            throw error
+        } catch {
+            throw CoreDataStackError.persistentStoreMigrationFailed(underlying: error)
         }
 
+        let description = NSPersistentStoreDescription(url: active)
+        description.type = NSSQLiteStoreType
+        description.shouldMigrateStoreAutomatically = false
+        description.shouldInferMappingModelAutomatically = false
+        description.shouldAddStoreAsynchronously = true
+        container.persistentStoreDescriptions = [description]
+
         try await withCheckedThrowingContinuation(isolation: MainActor.shared) { (continuation: CheckedContinuation<Void, Error>) in
-            persistentContainer.loadPersistentStores { _, error in
+            container.loadPersistentStores { _, error in
                 if let error {
                     continuation.resume(throwing: CoreDataStackError.persistentStoreLoadFailed(underlying: error))
                 } else {
@@ -36,47 +52,32 @@ final class CoreDataStack {
                 }
             }
         }
+        return CoreDataStack(persistentContainer: container)
+    }
 
-        do {
-            try LegacyWorkTypeBackfill.run(in: persistentContainer.viewContext)
-        } catch {
-            throw CoreDataStackError.legacyWorkTypeBackfillFailed(underlying: error)
+    private static func defaultStoreURL(_ url: URL) -> URL {
+#if DEBUG
+        if ProcessInfo.processInfo.environment["SHIFTLEDGER_UI_TEST_STORE"] == "1" {
+            return url.deletingLastPathComponent()
+                .appendingPathComponent("ShiftLedgerUITestStore", isDirectory: true)
+                .appendingPathComponent(url.lastPathComponent)
         }
-
-        do {
-            try LegacyShiftWorkTypeBackfill.run(in: persistentContainer.viewContext)
-        } catch {
-            throw CoreDataStackError.legacyShiftWorkTypeBackfillFailed(underlying: error)
-        }
-
-        return CoreDataStack(persistentContainer: persistentContainer)
+#endif
+        return url
     }
 
 #if DEBUG
     static func resetPersistentStoreForUITesting() throws {
-        let persistentContainer = NSPersistentContainer(name: "ShiftLedger")
-        guard
-            let storeDescription = persistentContainer.persistentStoreDescriptions.first,
-            let storeURL = storeDescription.url
-        else {
-            return
+        guard ProcessInfo.processInfo.environment["SHIFTLEDGER_UI_TEST_STORE"] == "1" else {
+            throw CoreDataStackError.testStoreRequired
         }
-
-        let fileManager = FileManager.default
-        let storeFiles = [
-            storeURL,
-            URL(fileURLWithPath: "\(storeURL.path)-wal"),
-            URL(fileURLWithPath: "\(storeURL.path)-shm")
-        ]
-        guard storeFiles.contains(where: { fileManager.fileExists(atPath: $0.path) }) else {
-            return
+        guard let url = NSPersistentContainer(name: "ShiftLedger").persistentStoreDescriptions.first?.url else {
+            throw CoreDataStackError.missingStoreLocation
         }
-
-        try persistentContainer.persistentStoreCoordinator.destroyPersistentStore(
-            at: storeURL,
-            ofType: storeDescription.type,
-            options: storeDescription.options
-        )
+        let directory = defaultStoreURL(url).deletingLastPathComponent()
+        if FileManager.default.fileExists(atPath: directory.path) {
+            try FileManager.default.removeItem(at: directory)
+        }
     }
 #endif
 }

@@ -24,6 +24,7 @@ enum JobStorageError: Error {
             actualJobID: UUID
         )
         case invalidPayRateEffectiveFrom(underlying: LocalDateConversionError)
+        case invalidCanonicalPayRateAmount(payRateID: UUID, underlying: PayRateDecimalCodec.Failure)
         case invalidPayRate(underlying: PayRateValidationError)
         case nonCanonicalPayRateEffectiveFrom
         case invalidJob(underlying: JobValidationError)

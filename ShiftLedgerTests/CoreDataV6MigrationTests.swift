@@ -34,12 +34,14 @@ struct CoreDataV6MigrationTests {
         let shifts: [Shift]
     }
 
-    @Test("Compiled current model is V6 and the V5 mapping is inferable")
-    func compiledModelIsV6() throws {
+    @Test("Compiled current model is V7 and the historical V5 to V6 mapping is inferable")
+    func compiledModelIsV7() throws {
         let v5 = try model(named: "ShiftLedgerV5")
         let v6 = try model(named: "ShiftLedgerV6")
         let current = try #require(NSManagedObjectModel(contentsOf: modelPackageURL()))
-        #expect(current.entityVersionHashesByName == v6.entityVersionHashesByName)
+        #expect(current.entityVersionHashesByName == (try model(named: "ShiftLedgerV7")).entityVersionHashesByName)
+        #expect(current.entitiesByName["PayRateEntity"]?.attributesByName["amount"]?.attributeType == .stringAttributeType)
+        #expect(v6.entitiesByName["PayRateEntity"]?.attributesByName["amount"]?.attributeType == .decimalAttributeType)
         let job = try #require(current.entitiesByName["JobEntity"])
         let name = try #require(job.attributesByName["name"])
         let archived = try #require(job.attributesByName["isArchived"])
@@ -54,7 +56,7 @@ struct CoreDataV6MigrationTests {
         _ = try NSMappingModel.inferredMappingModel(forSourceModel: v5, destinationModel: v6)
     }
 
-    @Test("Populated V5 SQLite preserves its complete graph and exact payroll in V6 and after reopen",
+    @Test("Populated V5 SQLite preserves its complete graph and exact payroll in V7 and after reopen",
           arguments: Cycle.allCases)
     func migratesPopulatedV5AndReopens(_ cycle: Cycle) async throws {
         let storeURL = try temporaryStoreURL()
@@ -91,14 +93,15 @@ struct CoreDataV6MigrationTests {
         coordinators.append(try #require(reopened.viewContext.persistentStoreCoordinator))
         try verify(reopened, fixture: fixture, before: before,
                    expectedAmounts: expectedAmounts, expectedGross: expectedGross)
+        let selected = try #require(reopened.viewContext.persistentStoreCoordinator?.persistentStores.first?.url)
         let newMetadata = try NSPersistentStoreCoordinator.metadataForPersistentStore(
-            ofType: NSSQLiteStoreType, at: storeURL)
-        #expect(try model(named: "ShiftLedgerV6").isConfiguration(
+            ofType: NSSQLiteStoreType, at: selected)
+        #expect(try model(named: "ShiftLedgerV7").isConfiguration(
             withName: nil, compatibleWithStoreMetadata: newMetadata))
     }
 
-    @Test("Fresh V6 production single-Job save keeps nil name and false archive state across reopen")
-    func freshV6StoreAndReopen() async throws {
+    @Test("Fresh V7 production single-Job save keeps nil name and false archive state across reopen")
+    func freshV7StoreAndReopen() async throws {
         let storeURL = try temporaryStoreURL()
         var coordinators: [NSPersistentStoreCoordinator] = []
         defer { cleanup(coordinators, storeURL: storeURL) }
@@ -146,8 +149,8 @@ struct CoreDataV6MigrationTests {
             JobCatalogEntry(job: expectedJob, name: nil, isArchived: false)
         ])
         let current = try #require(stack.viewContext.persistentStoreCoordinator?.managedObjectModel)
-        let v6 = try model(named: "ShiftLedgerV6")
-        #expect(current.entityVersionHashesByName == v6.entityVersionHashesByName)
+        let v7 = try model(named: "ShiftLedgerV7")
+        #expect(current.entityVersionHashesByName == v7.entityVersionHashesByName)
     }
 
     // Read every historical attribute and both sides of every relationship as value data.
@@ -164,6 +167,10 @@ struct CoreDataV6MigrationTests {
                     if entityName == "JobEntity", key == "name" || key == "isArchived" { continue }
                     guard let raw = object.value(forKey: key) else {
                         values[key] = .null
+                        continue
+                    }
+                    if entityName == "PayRateEntity", key == "amount", let canonical = raw as? String {
+                        values[key] = .decimal(try PayRateDecimalCodec.decode(canonical))
                         continue
                     }
                     switch attribute.attributeType {

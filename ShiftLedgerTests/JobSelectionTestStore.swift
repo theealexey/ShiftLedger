@@ -41,11 +41,11 @@ final class JobSelectionTestStore {
         workType.name = "Lectures"
         workType.basePayKind = "fixedPerShift"
         workType.job = job
-        let rate = PayRateEntity(entity: try #require(
+        let rate = PayRateV7Entity(entity: try #require(
             NSEntityDescription.entity(forEntityName: "PayRateEntity", in: context)
         ), insertInto: context)
         rate.id = try #require(UUID(uuidString: String(format: "%08d-0000-0000-0000-000000000002", index)))
-        rate.amount = NSDecimalNumber(value: index * 100)
+        rate.amount = String(describing: index * 100)
         rate.job = job
         rate.workType = workType
         try context.save()

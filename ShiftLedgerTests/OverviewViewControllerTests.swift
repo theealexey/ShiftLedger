@@ -906,7 +906,7 @@ struct OverviewViewControllerTests {
             #expect(breakdown.shiftBreakdowns.map(\.shift.id) == Array(shifts.dropFirst()).map(\.id))
             let cards = try OverviewShiftCardMapper(
                 currencyCode: "EUR", timeZoneIdentifier: job.timeZoneIdentifier, displayLocale: locale
-            ).map(breakdown.shiftBreakdowns, selectedShiftID: nil, expandedShiftID: nil)
+            ).map(breakdown.shiftBreakdowns, workTypeNames: [testWorkTypeID: "Day"], selectedShiftID: nil, expandedShiftID: nil)
             #expect(cards.map(\.exactExpectedAmount) == [expectedSecond, expectedFirst])
             #expect(cards[0].appliedRate.hasPrefix(expectedSecond))
             #expect(cards[1].appliedRate.hasPrefix(expectedFirst))
@@ -1170,7 +1170,8 @@ struct OverviewViewControllerTests {
         let breakdown = try job.expectedGrossBreakdown(for: .perShift(shiftID: shift.id), from: [shift])
         let locale = Locale(identifier: localeID)
         let card = try #require(OverviewShiftCardMapper(currencyCode: "EUR", timeZoneIdentifier: job.timeZoneIdentifier,
-            displayLocale: locale).map(breakdown.shiftBreakdowns, selectedShiftID: shift.id, expandedShiftID: shift.id).first)
+            displayLocale: locale).map(breakdown.shiftBreakdowns, workTypeNames: [testWorkTypeID: "Day"],
+                    selectedShiftID: shift.id, expandedShiftID: shift.id).first)
         let interval = try #require(card.unpaidBreakTimeRange)
         let expected = DateIntervalFormatter()
         expected.locale = locale
@@ -1291,7 +1292,8 @@ struct OverviewViewControllerTests {
             let shift = try Shift(jobID: job.id, workTypeID: testWorkTypeID, start: start, end: start.addingTimeInterval(3600))
             let breakdown = try job.expectedGrossBreakdown(for: .perShift(shiftID: shift.id), from: [shift])
             let card = try #require(OverviewShiftCardMapper(currencyCode: "EUR", timeZoneIdentifier: job.timeZoneIdentifier,
-                displayLocale: locale).map(breakdown.shiftBreakdowns, selectedShiftID: shift.id, expandedShiftID: shift.id).first)
+                displayLocale: locale).map(breakdown.shiftBreakdowns, workTypeNames: [testWorkTypeID: "Day"],
+                    selectedShiftID: shift.id, expandedShiftID: shift.id).first)
             let row = OverviewShiftLedgerRowView()
             let host = UIViewController()
             host.traitOverrides.preferredContentSizeCategory = accessibilitySize ? .accessibilityExtraExtraLarge : .large
@@ -1330,7 +1332,7 @@ struct OverviewViewControllerTests {
             #expect(row.accessibilityLabel?.contains(card.appliedRate) == true)
             #expect(row.accessibilityLabel?.contains(try #require(card.exactExpectedAmount)) == true)
             #expect(row.accessibilityLabel?.components(separatedBy: PaycheckResultStrings.paidTime).count == 2)
-            for removed in ["endpoints", "detail.paidTime", "detail.payBasis", "detail.exactContribution"] {
+            for removed in ["endpoints", "detail.paidTime", "detail.payBasis"] {
                 #expect(descendant(identifier: "\(prefix).\(removed)", in: row) == nil)
             }
             let edit: UIButton = try requireView(identifier: "\(prefix).edit", in: row)
@@ -1843,7 +1845,7 @@ struct OverviewViewControllerTests {
         let unpaidBreak: UILabel = try requireView(identifier: "\(prefix).detail.break", in: try requireRootView(subject.viewController))
 
         #expect(descendant(identifier: "\(prefix).timeline", in: card) == nil)
-        for removed in ["endpoints", "detail.paidTime", "detail.payBasis", "detail.exactContribution"] {
+        for removed in ["endpoints", "detail.paidTime", "detail.payBasis"] {
             #expect(descendant(identifier: "\(prefix).\(removed)", in: card) == nil)
         }
         #expect(duration.text == OverviewStrings.paidDuration(OverviewFormatting.duration(shift.paidDuration)))
@@ -3705,6 +3707,7 @@ struct OverviewViewControllerTests {
                 expectedAmount: expectedAmounts.indices.contains(index) ? expectedAmounts[index] : expectedAmount,
                 exactExpectedAmount: nil,
                 paidDuration: "8h",
+                workTypeName: "Day",
                 unpaidBreak: nil,
                 unpaidBreakTimeRange: nil,
                 appliedRate: "€20 / h",

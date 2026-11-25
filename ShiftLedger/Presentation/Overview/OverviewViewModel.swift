@@ -17,6 +17,7 @@ final class OverviewViewModel {
         let railPeriods: [RailPeriod]
         let expectedBreakdown: ExpectedGrossBreakdown?
         let shiftHistoryBreakdowns: [ShiftPayBreakdown]
+        let workTypeNames: [UUID: String]
         let selectedShiftID: UUID?
         let expandedShiftID: UUID?
         let canNavigatePrevious: Bool
@@ -293,6 +294,10 @@ final class OverviewViewModel {
         return payPeriod
     }
 
+    private var workTypeNames: [UUID: String] {
+        Dictionary(uniqueKeysWithValues: job.workTypes.map { ($0.id, $0.name ?? AddShiftStrings.unnamedWorkType) })
+    }
+
     private func publishScheduledContent(
         selectedPayPeriod: PayPeriod,
         currentPayPeriod: PayPeriod
@@ -308,6 +313,7 @@ final class OverviewViewModel {
             railPeriods: scheduledRailPeriods(selectedPayPeriod, currentPayPeriod: currentPayPeriod),
             expectedBreakdown: breakdown,
             shiftHistoryBreakdowns: shiftHistoryBreakdowns,
+            workTypeNames: workTypeNames,
             selectedShiftID: selection.selectedShiftID,
             expandedShiftID: selection.expandedShiftID,
             canNavigatePrevious: true,
@@ -325,6 +331,7 @@ final class OverviewViewModel {
                 railPeriods: [],
                 expectedBreakdown: nil,
                 shiftHistoryBreakdowns: [],
+                workTypeNames: [:],
                 selectedShiftID: nil,
                 expandedShiftID: nil,
                 canNavigatePrevious: false,
@@ -346,6 +353,7 @@ final class OverviewViewModel {
             railPeriods: [],
             expectedBreakdown: breakdown,
             shiftHistoryBreakdowns: shiftHistoryBreakdowns,
+            workTypeNames: workTypeNames,
             selectedShiftID: selectedShift.id,
             expandedShiftID: selectedShiftID == selectedShift.id && expandedShiftID == selectedShift.id
                 ? selectedShift.id : nil,
@@ -431,6 +439,7 @@ private extension OverviewViewModel.Content {
             railPeriods: railPeriods,
             expectedBreakdown: expectedBreakdown,
             shiftHistoryBreakdowns: shiftHistoryBreakdowns,
+            workTypeNames: workTypeNames,
             selectedShiftID: selectedShiftID,
             expandedShiftID: expandedShiftID,
             canNavigatePrevious: canNavigatePrevious,

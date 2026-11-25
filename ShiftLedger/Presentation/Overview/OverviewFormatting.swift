@@ -132,10 +132,16 @@ enum OverviewFormatting {
         formatter.locale = locale
         formatter.numberStyle = .currency
         formatter.currencyCode = currencyCode
-        let standardDigits = formatter.maximumFractionDigits
-        formatter.minimumFractionDigits = standardDigits
-        formatter.maximumFractionDigits = 38
-        return formatter.string(from: NSDecimalNumber(decimal: amount))
+        guard !amount.isNaN else { return formatter.string(from: NSDecimalNumber.notANumber) }
+
+        let minimumDigits = formatter.minimumFractionDigits
+        // Decimal's exponent describes scale, which can exceed the number of significant digits.
+        let scale = max(minimumDigits, -Int(amount.exponent))
+        return amount.formatted(
+            .currency(code: currencyCode)
+                .precision(.fractionLength(minimumDigits...scale))
+                .locale(locale)
+        )
     }
 
     /// The numeric value represented by `currency`, without parsing localized text.

@@ -128,7 +128,7 @@ struct JobStorageTests {
             NSFetchRequest<WorkTypeEntity>(entityName: "WorkTypeEntity")
         )
         let persistedPayRates = try stackA.viewContext.fetch(
-            NSFetchRequest<PayRateEntity>(entityName: "PayRateEntity")
+            NSFetchRequest<PayRateV7Entity>(entityName: "PayRateEntity")
         )
         let persistedJob = try #require(persistedJobs.first)
         let persistedFirst = try #require(
@@ -149,11 +149,11 @@ struct JobStorageTests {
         #expect(persistedFirst.job.objectID == persistedJob.objectID)
         #expect(persistedSecond.job.objectID == persistedJob.objectID)
         #expect(
-            Set(persistedFirst.payRates?.compactMap { ($0 as? PayRateEntity)?.id } ?? [])
+            Set(persistedFirst.payRates?.compactMap { ($0 as? PayRateV7Entity)?.id } ?? [])
                 == Set([firstInitialRateID, firstDatedRateID])
         )
         #expect(
-            Set(persistedSecond.payRates?.compactMap { ($0 as? PayRateEntity)?.id } ?? [])
+            Set(persistedSecond.payRates?.compactMap { ($0 as? PayRateV7Entity)?.id } ?? [])
                 == Set([secondInitialRateID, secondDatedRateID])
         )
         #expect(persistedPayRates.allSatisfy { $0.job.objectID == persistedJob.objectID })
@@ -244,7 +244,7 @@ struct JobStorageTests {
         let targetObjectID = targetBefore.objectID
         let otherObjectID = otherBefore.objectID
         let rateStatesBefore = storedRateStates(try context.fetch(
-            NSFetchRequest<PayRateEntity>(entityName: "PayRateEntity")
+            NSFetchRequest<PayRateV7Entity>(entityName: "PayRateEntity")
         ))
         #expect(rateStatesBefore.count == 3)
         #expect(Set(rateStatesBefore.keys) == Set([
@@ -281,7 +281,7 @@ struct JobStorageTests {
         let targetAfter = try #require(workTypesAfter.first { $0.id == renameTargetID })
         let otherAfter = try #require(workTypesAfter.first { $0.id == renameOtherID })
         let rateStatesAfter = storedRateStates(try context.fetch(
-            NSFetchRequest<PayRateEntity>(entityName: "PayRateEntity")
+            NSFetchRequest<PayRateV7Entity>(entityName: "PayRateEntity")
         ))
         #expect(jobsAfter.count == 1)
         #expect(workTypesAfter.count == 2)
@@ -370,7 +370,7 @@ struct JobStorageTests {
         let otherObjectID = otherBefore.objectID
         let shiftObjectID = storedShiftBefore.objectID
         let rateStatesBefore = storedRateStates(try context.fetch(
-            NSFetchRequest<PayRateEntity>(entityName: "PayRateEntity")
+            NSFetchRequest<PayRateV7Entity>(entityName: "PayRateEntity")
         ))
 
         let archivedJob = try storage.archiveWorkType(id: renameTargetID, inJobID: renameJobID)
@@ -415,7 +415,7 @@ struct JobStorageTests {
         #expect(storedShiftAfter.workType?.objectID == targetObjectID)
         #expect(storedShiftAfter.job?.objectID == jobObjectID)
         #expect(storedRateStates(try context.fetch(
-            NSFetchRequest<PayRateEntity>(entityName: "PayRateEntity")
+            NSFetchRequest<PayRateV7Entity>(entityName: "PayRateEntity")
         )) == rateStatesBefore)
         #expect(context.hasChanges == false)
 
@@ -453,7 +453,7 @@ struct JobStorageTests {
             result[entity.id] = entity.objectID
         }
         let rateStatesBefore = storedRateStates(try context.fetch(
-            NSFetchRequest<PayRateEntity>(entityName: "PayRateEntity")
+            NSFetchRequest<PayRateV7Entity>(entityName: "PayRateEntity")
         ))
 
         do {
@@ -481,7 +481,7 @@ struct JobStorageTests {
         #expect(workTypesAfter.first { $0.id == renameOtherID }?.isArchived == false)
         #expect(Dictionary(uniqueKeysWithValues: workTypesAfter.map { ($0.id, $0.objectID) }) == objectIDsBefore)
         #expect(storedRateStates(try context.fetch(
-            NSFetchRequest<PayRateEntity>(entityName: "PayRateEntity")
+            NSFetchRequest<PayRateV7Entity>(entityName: "PayRateEntity")
         )) == rateStatesBefore)
         #expect(context.hasChanges == false)
     }
@@ -561,7 +561,7 @@ struct JobStorageTests {
         let targetObjectID = targetEntity.objectID
         let otherObjectID = otherEntity.objectID
         let rateStatesBefore = storedRateStates(try context.fetch(
-            NSFetchRequest<PayRateEntity>(entityName: "PayRateEntity")
+            NSFetchRequest<PayRateV7Entity>(entityName: "PayRateEntity")
         ))
 
         let updated = try storage.addPayRate(added, toWorkTypeID: renameTargetID, inJobID: renameJobID)
@@ -591,7 +591,7 @@ struct JobStorageTests {
         let workTypesAfter = try context.fetch(
             NSFetchRequest<WorkTypeEntity>(entityName: "WorkTypeEntity")
         )
-        let ratesAfter = try context.fetch(NSFetchRequest<PayRateEntity>(entityName: "PayRateEntity"))
+        let ratesAfter = try context.fetch(NSFetchRequest<PayRateV7Entity>(entityName: "PayRateEntity"))
         let rateStatesAfter = storedRateStates(ratesAfter)
         #expect(jobsAfter.count == 1)
         #expect(jobsAfter.first?.objectID == jobObjectID)
@@ -631,7 +631,7 @@ struct JobStorageTests {
         try storage.save(original)
         let context = stack.viewContext
         let rateStatesBefore = storedRateStates(try context.fetch(
-            NSFetchRequest<PayRateEntity>(entityName: "PayRateEntity")
+            NSFetchRequest<PayRateV7Entity>(entityName: "PayRateEntity")
         ))
         let duplicateDate = try PayRate(
             id: addedRateID,
@@ -699,7 +699,7 @@ struct JobStorageTests {
         #expect(rejectedUnknownID)
         #expect(try storage.load() == original)
         #expect(storedRateStates(try context.fetch(
-            NSFetchRequest<PayRateEntity>(entityName: "PayRateEntity")
+            NSFetchRequest<PayRateV7Entity>(entityName: "PayRateEntity")
         )) == rateStatesBefore)
         #expect(context.hasChanges == false)
     }
@@ -731,7 +731,7 @@ struct JobStorageTests {
         #expect(rejectedMissingJob)
         #expect(try context.fetch(NSFetchRequest<JobEntity>(entityName: "JobEntity")).isEmpty)
         #expect(try context.fetch(NSFetchRequest<WorkTypeEntity>(entityName: "WorkTypeEntity")).isEmpty)
-        #expect(try context.fetch(NSFetchRequest<PayRateEntity>(entityName: "PayRateEntity")).isEmpty)
+        #expect(try context.fetch(NSFetchRequest<PayRateV7Entity>(entityName: "PayRateEntity")).isEmpty)
         #expect(context.hasChanges == false)
     }
 
@@ -753,7 +753,7 @@ struct JobStorageTests {
         let targetObjectID = target.objectID
         let originalName = target.name
         let rateStatesBefore = storedRateStates(try context.fetch(
-            NSFetchRequest<PayRateEntity>(entityName: "PayRateEntity")
+            NSFetchRequest<PayRateV7Entity>(entityName: "PayRateEntity")
         ))
 
         var receivedExpectedError = false
@@ -771,7 +771,7 @@ struct JobStorageTests {
         #expect(target.objectID == targetObjectID)
         #expect(target.name == originalName)
         #expect(storedRateStates(try context.fetch(
-            NSFetchRequest<PayRateEntity>(entityName: "PayRateEntity")
+            NSFetchRequest<PayRateV7Entity>(entityName: "PayRateEntity")
         )) == rateStatesBefore)
         #expect(context.hasChanges == false)
 
@@ -799,7 +799,7 @@ struct JobStorageTests {
             NSFetchRequest<WorkTypeEntity>(entityName: "WorkTypeEntity")
         ).count
         let rateStatesBefore = storedRateStates(try context.fetch(
-            NSFetchRequest<PayRateEntity>(entityName: "PayRateEntity")
+            NSFetchRequest<PayRateV7Entity>(entityName: "PayRateEntity")
         ))
 
         var receivedExpectedError = false
@@ -820,7 +820,7 @@ struct JobStorageTests {
             NSFetchRequest<WorkTypeEntity>(entityName: "WorkTypeEntity")
         ).count == workTypeCount)
         #expect(storedRateStates(try context.fetch(
-            NSFetchRequest<PayRateEntity>(entityName: "PayRateEntity")
+            NSFetchRequest<PayRateV7Entity>(entityName: "PayRateEntity")
         )) == rateStatesBefore)
         #expect(context.hasChanges == false)
     }
@@ -852,7 +852,7 @@ struct JobStorageTests {
             NSFetchRequest<WorkTypeEntity>(entityName: "WorkTypeEntity")
         ).isEmpty)
         #expect(try context.fetch(
-            NSFetchRequest<PayRateEntity>(entityName: "PayRateEntity")
+            NSFetchRequest<PayRateV7Entity>(entityName: "PayRateEntity")
         ).isEmpty)
         #expect(context.hasChanges == false)
     }
@@ -969,7 +969,7 @@ struct JobStorageTests {
             ).first
         )
         let originalPersistedPayRates = try stackA.viewContext.fetch(
-            NSFetchRequest<PayRateEntity>(entityName: "PayRateEntity")
+            NSFetchRequest<PayRateV7Entity>(entityName: "PayRateEntity")
         )
         let originalWorkTypeObjectID = originalPersistedWorkType.objectID
         let originalPayRateObjectIDs = Set(originalPersistedPayRates.map(\.objectID))
@@ -992,7 +992,7 @@ struct JobStorageTests {
             NSFetchRequest<WorkTypeEntity>(entityName: "WorkTypeEntity")
         )
         let persistedPayRates = try stackA.viewContext.fetch(
-            NSFetchRequest<PayRateEntity>(entityName: "PayRateEntity")
+            NSFetchRequest<PayRateV7Entity>(entityName: "PayRateEntity")
         )
         let persistedJob = try #require(persistedJobs.first)
         let persistedLectures = try #require(
@@ -1038,24 +1038,24 @@ struct JobStorageTests {
         #expect(persistedLectures.basePayKind == "hourly")
         #expect(persistedLectures.job.objectID == persistedJob.objectID)
         #expect(
-            Set(persistedLectures.payRates?.compactMap { ($0 as? PayRateEntity)?.id } ?? [])
+            Set(persistedLectures.payRates?.compactMap { ($0 as? PayRateV7Entity)?.id } ?? [])
                 == Set([lecturesInitialRateID, lecturesDatedRateID])
         )
-        #expect(persistedLecturesInitialRate.amount.decimalValue == 100)
+        #expect(NSDecimalNumber(string: persistedLecturesInitialRate.amount, locale: Locale(identifier: "en_US_POSIX")).decimalValue == 100)
         #expect(persistedLecturesInitialRate.effectiveFrom == nil)
-        #expect(persistedLecturesDatedRate.amount.decimalValue == 125)
+        #expect(NSDecimalNumber(string: persistedLecturesDatedRate.amount, locale: Locale(identifier: "en_US_POSIX")).decimalValue == 125)
         #expect(persistedLecturesDatedRate.effectiveFrom == persistedLecturesEffectiveFrom)
         #expect(persistedExams.id == examsID)
         #expect(persistedExams.name == "Exams")
         #expect(persistedExams.basePayKind == "fixedPerShift")
         #expect(persistedExams.job.objectID == persistedJob.objectID)
         #expect(
-            Set(persistedExams.payRates?.compactMap { ($0 as? PayRateEntity)?.id } ?? [])
+            Set(persistedExams.payRates?.compactMap { ($0 as? PayRateV7Entity)?.id } ?? [])
                 == Set([examsInitialRateID, examsDatedRateID])
         )
-        #expect(persistedExamsInitialRate.amount.decimalValue == 500)
+        #expect(NSDecimalNumber(string: persistedExamsInitialRate.amount, locale: Locale(identifier: "en_US_POSIX")).decimalValue == 500)
         #expect(persistedExamsInitialRate.effectiveFrom == nil)
-        #expect(persistedExamsDatedRate.amount.decimalValue == 650)
+        #expect(NSDecimalNumber(string: persistedExamsDatedRate.amount, locale: Locale(identifier: "en_US_POSIX")).decimalValue == 650)
         #expect(persistedExamsDatedRate.effectiveFrom == persistedExamsEffectiveFrom)
         #expect(
             persistedPayRates
@@ -1134,7 +1134,7 @@ struct JobStorageTests {
             NSFetchRequest<WorkTypeEntity>(entityName: "WorkTypeEntity")
         )
         let persistedPayRates = try stackA.viewContext.fetch(
-            NSFetchRequest<PayRateEntity>(entityName: "PayRateEntity")
+            NSFetchRequest<PayRateV7Entity>(entityName: "PayRateEntity")
         )
         let persistedJob = try #require(persistedJobs.first)
 
@@ -1201,7 +1201,7 @@ struct JobStorageTests {
         )
         #expect(
             try stack.viewContext.fetch(
-                NSFetchRequest<PayRateEntity>(entityName: "PayRateEntity")
+                NSFetchRequest<PayRateV7Entity>(entityName: "PayRateEntity")
             ).isEmpty
         )
         #expect(stack.viewContext.hasChanges == false)
@@ -1353,14 +1353,14 @@ struct JobStorageTests {
         duplicateWorkType.basePayKind = "fixedPerShift"
         duplicateWorkType.job = persisted.job
 
-        let duplicateWorkTypeRate = PayRateEntity(
+        let duplicateWorkTypeRate = PayRateV7Entity(
             entity: payRateEntityDescription,
             insertInto: stack.viewContext
         )
         duplicateWorkTypeRate.id = try #require(
             UUID(uuidString: "7B000000-0000-0000-0000-000000000004")
         )
-        duplicateWorkTypeRate.amount = NSDecimalNumber(decimal: 500)
+        duplicateWorkTypeRate.amount = String(describing: 500)
         duplicateWorkTypeRate.effectiveFrom = nil
         duplicateWorkTypeRate.job = persisted.job
         duplicateWorkTypeRate.workType = duplicateWorkType
@@ -1489,7 +1489,7 @@ struct JobStorageTests {
             NSFetchRequest<WorkTypeEntity>(entityName: "WorkTypeEntity")
         )
         let persistedPayRates = try stackA.viewContext.fetch(
-            NSFetchRequest<PayRateEntity>(entityName: "PayRateEntity")
+            NSFetchRequest<PayRateV7Entity>(entityName: "PayRateEntity")
         )
         let persistedJob = try #require(persistedJobs.first)
         let persistedWorkType = try #require(persistedWorkTypes.first)
@@ -1514,7 +1514,7 @@ struct JobStorageTests {
         #expect(persistedWorkType.job.objectID == persistedJob.objectID)
         #expect(persistedJob.basePayKind == "hourly")
         #expect(
-            Set(persistedWorkType.payRates?.compactMap { ($0 as? PayRateEntity)?.id } ?? [])
+            Set(persistedWorkType.payRates?.compactMap { ($0 as? PayRateV7Entity)?.id } ?? [])
                 == Set(job.soleWorkType?.payRates.map(\.id) ?? [])
         )
         #expect(
@@ -1527,11 +1527,11 @@ struct JobStorageTests {
                 $0.job.objectID == persistedJob.objectID
             }
         )
-        #expect(persistedInitialRate.amount.decimalValue == 100)
+        #expect(NSDecimalNumber(string: persistedInitialRate.amount, locale: Locale(identifier: "en_US_POSIX")).decimalValue == 100)
         #expect(persistedInitialRate.effectiveFrom == nil)
-        #expect(persistedEarlierRate.amount.decimalValue == earlierAmount)
+        #expect(NSDecimalNumber(string: persistedEarlierRate.amount, locale: Locale(identifier: "en_US_POSIX")).decimalValue == earlierAmount)
         #expect(persistedEarlierRate.effectiveFrom == persistedEarlierEffectiveFrom)
-        #expect(persistedLaterRate.amount.decimalValue == laterAmount)
+        #expect(NSDecimalNumber(string: persistedLaterRate.amount, locale: Locale(identifier: "en_US_POSIX")).decimalValue == laterAmount)
         #expect(persistedLaterRate.effectiveFrom == persistedLaterEffectiveFrom)
 
         try close(stackA)
@@ -1691,10 +1691,10 @@ struct JobStorageTests {
                 }
             }
             #expect(current.viewContext.hasChanges == false)
-            let request = NSFetchRequest<PayRateEntity>(entityName: "PayRateEntity")
+            let request = NSFetchRequest<PayRateV7Entity>(entityName: "PayRateEntity")
             let rate = try #require(current.viewContext.fetch(request).first { $0.id == rateID })
             #expect(rate.effectiveFrom == storedDate)
-            #expect(rate.amount.decimalValue == 0)
+            #expect(NSDecimalNumber(string: rate.amount, locale: Locale(identifier: "en_US_POSIX")).decimalValue == 0)
             try close(current)
         }
     }
@@ -1723,7 +1723,7 @@ struct JobStorageTests {
         do {
             _ = try JobStorage(stack: stack).load()
             Issue.record("Некорректная сумма ставки была принята")
-        } catch JobStorageError.corruptedData(.invalidPayRate(underlying: .nonPositiveAmount)) {
+        } catch JobStorageError.corruptedData(.invalidCanonicalPayRateAmount(payRateID: _, underlying: .nonFiniteOrNonPositive)) {
         } catch {
             Issue.record("Некорректная сумма ставки вернула неверную ошибку")
         }
@@ -1819,9 +1819,9 @@ struct JobStorageTests {
         let payRateEntityDescription = try #require(
             NSEntityDescription.entity(forEntityName: "PayRateEntity", in: stack.viewContext)
         )
-        let duplicatePayRateEntity = PayRateEntity(entity: payRateEntityDescription, insertInto: stack.viewContext)
+        let duplicatePayRateEntity = PayRateV7Entity(entity: payRateEntityDescription, insertInto: stack.viewContext)
         duplicatePayRateEntity.id = duplicatePayRateID
-        duplicatePayRateEntity.amount = NSDecimalNumber(decimal: 130)
+        duplicatePayRateEntity.amount = String(describing: 130)
         duplicatePayRateEntity.effectiveFrom = try secondEffectiveFrom.startOfDay(in: timeZone)
         duplicatePayRateEntity.job = jobEntity
         duplicatePayRateEntity.workType = workTypeEntity
@@ -1990,7 +1990,7 @@ struct JobStorageTests {
         currentTime = shift.start
         let added = try PayRate(id: addedRateID, amount: 150, effectiveFrom: LocalDate(year: 2026, month: 3, day: 1))
         let context = stack.viewContext
-        let before = storedRateStates(try context.fetch(NSFetchRequest<PayRateEntity>(entityName: "PayRateEntity")))
+        let before = storedRateStates(try context.fetch(NSFetchRequest<PayRateV7Entity>(entityName: "PayRateEntity")))
         var rejected = false
         do {
             _ = try storage.addPayRate(added, toWorkTypeID: renameTargetID, inJobID: renameJobID)
@@ -2003,7 +2003,7 @@ struct JobStorageTests {
         #expect(rejected)
         #expect(clockCalls == 1)
         #expect(try storage.load() == original)
-        #expect(storedRateStates(try context.fetch(NSFetchRequest<PayRateEntity>(entityName: "PayRateEntity"))) == before)
+        #expect(storedRateStates(try context.fetch(NSFetchRequest<PayRateV7Entity>(entityName: "PayRateEntity"))) == before)
         #expect(context.hasChanges == false)
         try close(stack)
         let reopened = try await CoreDataStack.load(storeURL: storeURL)
@@ -2060,7 +2060,7 @@ struct JobStorageTests {
         let updated = try storage.addPayRate(added, toWorkTypeID: renameTargetID, inJobID: renameJobID)
         #expect(try updated.applicablePayRate(for: shift) == added)
         #expect(try updated.basePay(for: shift) == 250)
-        let rates = try stack.viewContext.fetch(NSFetchRequest<PayRateEntity>(entityName: "PayRateEntity"))
+        let rates = try stack.viewContext.fetch(NSFetchRequest<PayRateV7Entity>(entityName: "PayRateEntity"))
         #expect(rates.filter { $0.id == addedRateID }.count == 1)
         #expect(stack.viewContext.hasChanges == false)
     }
@@ -2085,7 +2085,7 @@ struct JobStorageTests {
         let entity = try #require(try context.fetch(NSFetchRequest<ShiftEntity>(entityName: "ShiftEntity")).first)
         entity.workType = nil
         try context.save()
-        let before = storedRateStates(try context.fetch(NSFetchRequest<PayRateEntity>(entityName: "PayRateEntity")))
+        let before = storedRateStates(try context.fetch(NSFetchRequest<PayRateV7Entity>(entityName: "PayRateEntity")))
         let added = try PayRate(id: addedRateID, amount: 150, effectiveFrom: LocalDate(year: 2026, month: 3, day: 1))
         var rejected = false
         do {
@@ -2098,7 +2098,7 @@ struct JobStorageTests {
         #expect(rejected)
         #expect(clockCalls == 0)
         #expect(try storage.load() == original)
-        #expect(storedRateStates(try context.fetch(NSFetchRequest<PayRateEntity>(entityName: "PayRateEntity"))) == before)
+        #expect(storedRateStates(try context.fetch(NSFetchRequest<PayRateV7Entity>(entityName: "PayRateEntity"))) == before)
         #expect(context.hasChanges == false)
     }
 
@@ -2111,15 +2111,16 @@ struct JobStorageTests {
         stacks.append(stack)
         let original = try makeRenameJob()
         try JobStorage(stack: stack).save(original)
+        let selectedURL = try #require(stack.viewContext.persistentStoreCoordinator?.persistentStores.first?.url)
         try close(stack)
         let context = stack.viewContext
         let coordinator = try #require(context.persistentStoreCoordinator)
         _ = try coordinator.addPersistentStore(
-            ofType: NSSQLiteStoreType, configurationName: nil, at: storeURL,
+            ofType: NSSQLiteStoreType, configurationName: nil, at: selectedURL,
             options: [NSReadOnlyPersistentStoreOption: true]
         )
         let storage = JobStorage(stack: stack, now: { Date(timeIntervalSinceReferenceDate: 0) })
-        let before = storedRateStates(try context.fetch(NSFetchRequest<PayRateEntity>(entityName: "PayRateEntity")))
+        let before = storedRateStates(try context.fetch(NSFetchRequest<PayRateV7Entity>(entityName: "PayRateEntity")))
         let added = try PayRate(id: addedRateID, amount: 150, effectiveFrom: LocalDate(year: 2026, month: 3, day: 1))
         var rejected = false
         do {
@@ -2131,7 +2132,7 @@ struct JobStorageTests {
         #expect(rejected)
         #expect(context.hasChanges == false)
         #expect(try storage.load() == original)
-        #expect(storedRateStates(try context.fetch(NSFetchRequest<PayRateEntity>(entityName: "PayRateEntity"))) == before)
+        #expect(storedRateStates(try context.fetch(NSFetchRequest<PayRateV7Entity>(entityName: "PayRateEntity"))) == before)
     }
 
     @Test("Job rename rejects pending metadata without saving or rolling back it",
@@ -2144,10 +2145,11 @@ struct JobStorageTests {
         stacks.append(stack)
         try seedScopedJobs(in: stack.viewContext)
         if readOnly {
+            let selectedURL = try #require(stack.viewContext.persistentStoreCoordinator?.persistentStores.first?.url)
             try close(stack)
             let coordinator = try #require(stack.viewContext.persistentStoreCoordinator)
             _ = try coordinator.addPersistentStore(
-                ofType: NSSQLiteStoreType, configurationName: nil, at: url,
+                ofType: NSSQLiteStoreType, configurationName: nil, at: selectedURL,
                 options: [NSReadOnlyPersistentStoreOption: true]
             )
         }
@@ -2181,7 +2183,7 @@ struct JobStorageTests {
         }
         #expect(try storage.load(forJobID: renameOtherID) == originalB)
         #expect(try context.fetch(NSFetchRequest<WorkTypeEntity>(entityName: "WorkTypeEntity")).count == 2)
-        #expect(try context.fetch(NSFetchRequest<PayRateEntity>(entityName: "PayRateEntity")).count == 2)
+        #expect(try context.fetch(NSFetchRequest<PayRateV7Entity>(entityName: "PayRateEntity")).count == 2)
         try close(stack)
         let reopened = try await CoreDataStack.load(storeURL: url)
         stacks.append(reopened)
@@ -2207,7 +2209,7 @@ struct JobStorageTests {
         try storage.save(original)
         let context = stack.viewContext
         let sentinel = try #require(context.fetch(NSFetchRequest<JobEntity>(entityName: "JobEntity")).first)
-        let ratesBefore = storedRateStates(try context.fetch(NSFetchRequest<PayRateEntity>(entityName: "PayRateEntity")))
+        let ratesBefore = storedRateStates(try context.fetch(NSFetchRequest<PayRateV7Entity>(entityName: "PayRateEntity")))
         #expect(!context.hasChanges)
         sentinel.name = "Pending Job metadata"
         #expect(context.hasChanges)
@@ -2238,7 +2240,7 @@ struct JobStorageTests {
         #expect(try storage.load(forJobID: original.id) == original)
         #expect(try context.fetch(NSFetchRequest<JobEntity>(entityName: "JobEntity")).count == 1)
         #expect(try context.fetch(NSFetchRequest<WorkTypeEntity>(entityName: "WorkTypeEntity")).count == original.workTypes.count)
-        #expect(storedRateStates(try context.fetch(NSFetchRequest<PayRateEntity>(entityName: "PayRateEntity"))) == ratesBefore)
+        #expect(storedRateStates(try context.fetch(NSFetchRequest<PayRateV7Entity>(entityName: "PayRateEntity"))) == ratesBefore)
         try close(stack)
         let reopened = try await CoreDataStack.load(storeURL: url)
         stacks.append(reopened)
@@ -2296,7 +2298,7 @@ struct JobStorageTests {
         let committedHistory = operation == 0 ? [] : [shift]
         #expect(try history.loadAll(forJobID: renameJobID) == committedHistory)
         let context = stack.viewContext
-        let ratesBefore = try context.fetch(NSFetchRequest<PayRateEntity>(entityName: "PayRateEntity")).count
+        let ratesBefore = try context.fetch(NSFetchRequest<PayRateV7Entity>(entityName: "PayRateEntity")).count
         #expect(!context.hasChanges)
         var pendingHistory: [Shift] = []
         if operation == 0 {
@@ -2347,7 +2349,7 @@ struct JobStorageTests {
         #expect(context.updatedObjects == updated)
         #expect(context.deletedObjects == deleted)
         #expect(try history.loadAll(forJobID: renameJobID) == pendingHistory)
-        let ratesAfter = try context.fetch(NSFetchRequest<PayRateEntity>(entityName: "PayRateEntity"))
+        let ratesAfter = try context.fetch(NSFetchRequest<PayRateV7Entity>(entityName: "PayRateEntity"))
         #expect(ratesAfter.count == ratesBefore)
         #expect(!ratesAfter.contains { $0.id == rate.id })
         #expect(try storage.load(forJobID: renameJobID) == original)
@@ -2360,7 +2362,7 @@ struct JobStorageTests {
                 == committedHistory)
         #expect(try reopened.viewContext.fetch(NSFetchRequest<ShiftEntity>(entityName: "ShiftEntity")).count
                 == committedHistory.count)
-        #expect(try reopened.viewContext.fetch(NSFetchRequest<PayRateEntity>(entityName: "PayRateEntity")).count
+        #expect(try reopened.viewContext.fetch(NSFetchRequest<PayRateV7Entity>(entityName: "PayRateEntity")).count
                 == ratesBefore)
         #expect(!reopened.viewContext.hasChanges)
     }
@@ -2446,7 +2448,7 @@ struct JobStorageTests {
         let grossA = try updatedA.basePay(for: a)
         #expect(grossA == exactRate)
         let ratesBefore = storedRateStates(try stack.viewContext.fetch(
-            NSFetchRequest<PayRateEntity>(entityName: "PayRateEntity")))
+            NSFetchRequest<PayRateV7Entity>(entityName: "PayRateEntity")))
         do {
             _ = try storage.addPayRate(PayRate(id: renameTargetID, amount: 140,
                                               effectiveFrom: LocalDate(year: 2026, month: 1, day: 6)),
@@ -2459,7 +2461,7 @@ struct JobStorageTests {
         #expect(clockReads == 2)
         #expect(!stack.viewContext.hasChanges)
         #expect(storedRateStates(try stack.viewContext.fetch(
-            NSFetchRequest<PayRateEntity>(entityName: "PayRateEntity"))) == ratesBefore)
+            NSFetchRequest<PayRateV7Entity>(entityName: "PayRateEntity"))) == ratesBefore)
         let same = try storage.addPayRate(PayRate(id: renameTargetID, amount: exactRate,
                                                  effectiveFrom: LocalDate(year: 2026, month: 1, day: 7)),
                                           toWorkTypeID: renameTargetID, inJobID: a.jobID)
@@ -2554,7 +2556,7 @@ struct JobStorageTests {
         let a = try #require(jobs.first { $0.id == renameJobID })
         let b = try #require(jobs.first { $0.id == renameOtherID })
         let type = try #require(a.workTypes?.allObjects.first as? WorkTypeEntity)
-        let rate = try #require(type.payRates?.allObjects.first as? PayRateEntity)
+        let rate = try #require(type.payRates?.allObjects.first as? PayRateV7Entity)
         // Simulate an inconsistent persisted inverse without Core Data repairing it.
         if corruption < 2 {
             type.setPrimitiveValue(corruption == 0 ? nil : b, forKey: "job")
@@ -2683,7 +2685,7 @@ struct JobStorageTests {
         newest.timeZoneIdentifier = "Invalid/Zone"
         try stack.viewContext.save()
         let beforeRates = storedRateStates(try stack.viewContext.fetch(
-            NSFetchRequest<PayRateEntity>(entityName: "PayRateEntity")))
+            NSFetchRequest<PayRateV7Entity>(entityName: "PayRateEntity")))
         for _ in 0..<2 {
             do {
                 _ = try JobStorage(stack: stack).loadCatalog()
@@ -2694,7 +2696,7 @@ struct JobStorageTests {
         }
         #expect(!stack.viewContext.hasChanges)
         #expect(storedRateStates(try stack.viewContext.fetch(
-            NSFetchRequest<PayRateEntity>(entityName: "PayRateEntity"))) == beforeRates)
+            NSFetchRequest<PayRateV7Entity>(entityName: "PayRateEntity"))) == beforeRates)
         stack.viewContext.reset()
         let persisted = try stack.viewContext.fetch(request)
         #expect(persisted.count == 4)
@@ -2832,13 +2834,13 @@ struct JobStorageTests {
         )
     }
 
-    private func storedRateStates(_ payRates: [PayRateEntity]) -> [UUID: StoredRateState] {
+    private func storedRateStates(_ payRates: [PayRateV7Entity]) -> [UUID: StoredRateState] {
         Dictionary(uniqueKeysWithValues: payRates.map { payRate in
             (
                 payRate.id,
                 StoredRateState(
                     objectID: payRate.objectID,
-                    amount: payRate.amount.decimalValue,
+                    amount: NSDecimalNumber(string: payRate.amount, locale: Locale(identifier: "en_US_POSIX")).decimalValue,
                     effectiveFrom: payRate.effectiveFrom,
                     jobID: payRate.job.id,
                     workTypeID: payRate.workType?.id
@@ -2933,7 +2935,7 @@ struct JobStorageTests {
         payPeriodKind: String = "weekly",
         payPeriodAnchorDate: Date?,
         in context: NSManagedObjectContext
-    ) throws -> (job: JobEntity, workType: WorkTypeEntity?, payRates: [PayRateEntity]) {
+    ) throws -> (job: JobEntity, workType: WorkTypeEntity?, payRates: [PayRateV7Entity]) {
         let jobEntityDescription = try #require(
             NSEntityDescription.entity(forEntityName: "JobEntity", in: context)
         )
@@ -2967,18 +2969,18 @@ struct JobStorageTests {
             workTypeEntity = nil
         }
 
-        let payRateEntity = PayRateEntity(entity: payRateEntityDescription, insertInto: context)
+        let payRateEntity = PayRateV7Entity(entity: payRateEntityDescription, insertInto: context)
         payRateEntity.id = payRateID
-        payRateEntity.amount = NSDecimalNumber(decimal: payRateAmount)
+        payRateEntity.amount = String(describing: payRateAmount)
         payRateEntity.effectiveFrom = payRateEffectiveFrom
         payRateEntity.job = jobEntity
         payRateEntity.workType = workTypeEntity
         var payRateEntities = [payRateEntity]
 
         if includeInitialPayRate && payRateEffectiveFrom != nil {
-            let initialPayRateEntity = PayRateEntity(entity: payRateEntityDescription, insertInto: context)
+            let initialPayRateEntity = PayRateV7Entity(entity: payRateEntityDescription, insertInto: context)
             initialPayRateEntity.id = UUID()
-            initialPayRateEntity.amount = NSDecimalNumber(decimal: 121)
+            initialPayRateEntity.amount = String(describing: 121)
             initialPayRateEntity.effectiveFrom = nil
             initialPayRateEntity.job = jobEntity
             initialPayRateEntity.workType = workTypeEntity
@@ -2986,9 +2988,9 @@ struct JobStorageTests {
         }
 
         if additionalInitialPayRate {
-            let initialPayRateEntity = PayRateEntity(entity: payRateEntityDescription, insertInto: context)
+            let initialPayRateEntity = PayRateV7Entity(entity: payRateEntityDescription, insertInto: context)
             initialPayRateEntity.id = UUID()
-            initialPayRateEntity.amount = NSDecimalNumber(decimal: 121)
+            initialPayRateEntity.amount = String(describing: 121)
             initialPayRateEntity.effectiveFrom = nil
             initialPayRateEntity.job = jobEntity
             initialPayRateEntity.workType = workTypeEntity

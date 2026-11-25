@@ -190,6 +190,7 @@ final class OverviewViewController: UIViewController {
         do {
             return try shiftCardMapper.map(
                 content.shiftHistoryBreakdowns,
+                workTypeNames: content.workTypeNames,
                 selectedShiftID: content.selectedShiftID,
                 expandedShiftID: content.expandedShiftID
             )

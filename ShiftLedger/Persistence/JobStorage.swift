@@ -78,16 +78,15 @@ final class JobStorage {
         jobEntity.payPeriodKind = storedPayPeriod.kind.rawValue
         jobEntity.payPeriodAnchorDate = storedPayPeriod.anchorDate
 
-        for storedWorkType in storedWorkTypes {
-            insert(
-                storedWorkType,
-                into: jobEntity,
-                workTypeEntityDescription: workTypeEntityDescription,
-                payRateEntityDescription: payRateEntityDescription
-            )
-        }
-
         do {
+            for storedWorkType in storedWorkTypes {
+                try insert(
+                    storedWorkType,
+                    into: jobEntity,
+                    workTypeEntityDescription: workTypeEntityDescription,
+                    payRateEntityDescription: payRateEntityDescription
+                )
+            }
             try context.save()
         } catch {
             context.rollback()
@@ -136,15 +135,14 @@ final class JobStorage {
             )
         }
 
-        insert(
-            storedWorkType,
-            into: jobEntity,
-            workTypeEntityDescription: workTypeEntityDescription,
-            payRateEntityDescription: payRateEntityDescription
-        )
-        jobEntity.basePayKind = nil
-
         do {
+            try insert(
+                storedWorkType,
+                into: jobEntity,
+                workTypeEntityDescription: workTypeEntityDescription,
+                payRateEntityDescription: payRateEntityDescription
+            )
+            jobEntity.basePayKind = nil
             try context.save()
         } catch {
             context.rollback()
@@ -250,14 +248,9 @@ final class JobStorage {
             )
         }
 
-        let payRateEntity = PayRateEntity(entity: payRateEntityDescription, insertInto: context)
-        payRateEntity.id = storedPayRate.payRate.id
-        payRateEntity.amount = NSDecimalNumber(decimal: storedPayRate.payRate.amount)
-        payRateEntity.effectiveFrom = storedPayRate.effectiveFrom
-        payRateEntity.job = jobEntity
-        payRateEntity.workType = workTypeEntity
-
         do {
+            try insert(storedPayRate, into: jobEntity, workType: workTypeEntity,
+                       entityDescription: payRateEntityDescription)
             try context.save()
         } catch {
             context.rollback()
@@ -409,7 +402,7 @@ final class JobStorage {
         into jobEntity: JobEntity,
         workTypeEntityDescription: NSEntityDescription,
         payRateEntityDescription: NSEntityDescription
-    ) {
+    ) throws {
         let workTypeEntity = WorkTypeEntity(
             entity: workTypeEntityDescription,
             insertInto: context
@@ -421,14 +414,24 @@ final class JobStorage {
         workTypeEntity.job = jobEntity
 
         for storedPayRate in storedWorkType.payRates {
-            let payRate = storedPayRate.payRate
-            let payRateEntity = PayRateEntity(entity: payRateEntityDescription, insertInto: context)
-            payRateEntity.id = payRate.id
-            payRateEntity.amount = NSDecimalNumber(decimal: payRate.amount)
-            payRateEntity.effectiveFrom = storedPayRate.effectiveFrom
-            payRateEntity.job = jobEntity
-            payRateEntity.workType = workTypeEntity
+            try insert(storedPayRate, into: jobEntity, workType: workTypeEntity,
+                       entityDescription: payRateEntityDescription)
         }
+    }
+
+    private func insert(
+        _ storedRate: JobPersistenceValues.StoredPayRate,
+        into job: JobEntity,
+        workType: WorkTypeEntity,
+        entityDescription: NSEntityDescription
+    ) throws {
+        let amount = try PayRateDecimalCodec.encode(storedRate.payRate.amount)
+        let entity = PayRateV7Entity(entity: entityDescription, insertInto: context)
+        entity.id = storedRate.payRate.id
+        entity.amount = amount
+        entity.effectiveFrom = storedRate.effectiveFrom
+        entity.job = job
+        entity.workType = workType
     }
 
     private func workTypeEntities(for jobEntity: JobEntity) throws -> [WorkTypeEntity] {
@@ -508,10 +511,10 @@ final class JobStorage {
         )
     }
 
-    private func payRateEntities(for workTypeEntity: WorkTypeEntity) throws -> [PayRateEntity] {
-        var payRates: [PayRateEntity] = []
+    private func payRateEntities(for workTypeEntity: WorkTypeEntity) throws -> [PayRateV7Entity] {
+        var payRates: [PayRateV7Entity] = []
         for object in workTypeEntity.payRates ?? NSSet() {
-            guard let payRateEntity = object as? PayRateEntity else {
+            guard let payRateEntity = object as? PayRateV7Entity else {
                 throw JobStorageError.corruptedData(.invalidWorkTypePayRatesRelationship)
             }
             payRates.append(payRateEntity)
@@ -532,8 +535,8 @@ final class JobStorage {
     }
 
     private func isPayRateEntityOrderedBefore(
-        _ lhs: PayRateEntity,
-        _ rhs: PayRateEntity
+        _ lhs: PayRateV7Entity,
+        _ rhs: PayRateV7Entity
     ) -> Bool {
         if lhs.id != rhs.id {
             return lhs.id.uuidString < rhs.id.uuidString
@@ -572,24 +575,26 @@ final class JobStorage {
     }
 
     private func makePayRate(
-        from payRateEntity: PayRateEntity,
+        from payRateEntity: PayRateV7Entity,
         timeZone: TimeZone
     ) throws -> PayRate {
-        guard let storedEffectiveFrom = payRateEntity.effectiveFrom else {
-            return try JobPersistenceValues.makePayRate(
-                id: payRateEntity.id,
-                amount: payRateEntity.amount.decimalValue,
-                effectiveFrom: nil
-            )
+        let effectiveFrom = try payRateEntity.effectiveFrom.map {
+            try JobPersistenceValues.makePayRateEffectiveFrom(from: $0, timeZone: timeZone)
         }
-
-        let effectiveFrom = try JobPersistenceValues.makePayRateEffectiveFrom(
-            from: storedEffectiveFrom,
-            timeZone: timeZone
-        )
+        let amount: Decimal
+        do {
+            guard let canonical = payRateEntity.value(forKey: "amount") as? String else {
+                throw PayRateDecimalCodec.Failure.nonCanonical
+            }
+            amount = try PayRateDecimalCodec.decode(canonical)
+        } catch let error as PayRateDecimalCodec.Failure {
+            throw JobStorageError.corruptedData(.invalidCanonicalPayRateAmount(
+                payRateID: payRateEntity.id, underlying: error
+            ))
+        }
         return try JobPersistenceValues.makePayRate(
             id: payRateEntity.id,
-            amount: payRateEntity.amount.decimalValue,
+            amount: amount,
             effectiveFrom: effectiveFrom
         )
     }

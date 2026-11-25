@@ -11,7 +11,7 @@ struct CoreDataV5MigrationTests {
     private let datedRateID = UUID(uuid: (0x45, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4))
     private let shiftID = UUID(uuid: (0x45, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5))
 
-    @Test("V4 SQLite migrates to V5 with active WorkTypes and preserves the graph")
+    @Test("V4 SQLite migrates through V6 to V7 with active WorkTypes and preserves the graph")
     func migratesV4StoreWithDefaultArchiveStateAndReopens() async throws {
         let storeURL = try makeTemporaryStoreURL()
         var containers: [NSPersistentContainer] = []
@@ -108,27 +108,27 @@ struct CoreDataV5MigrationTests {
         try v4Context.save()
         try close(v4Container)
 
-        let firstV5Stack = try await CoreDataStack.load(storeURL: storeURL)
-        stacks.append(firstV5Stack)
-        try verifyMigratedV5(
-            in: firstV5Stack,
+        let firstV7Stack = try await CoreDataStack.load(storeURL: storeURL)
+        stacks.append(firstV7Stack)
+        try verifyMigratedV7(
+            in: firstV7Stack,
             expectedJob: expectedJob,
             expectedShift: expectedShift,
             expectedGross: expectedGross
         )
-        try close(firstV5Stack)
+        try close(firstV7Stack)
 
-        let reopenedV5Stack = try await CoreDataStack.load(storeURL: storeURL)
-        stacks.append(reopenedV5Stack)
-        try verifyMigratedV5(
-            in: reopenedV5Stack,
+        let reopenedV7Stack = try await CoreDataStack.load(storeURL: storeURL)
+        stacks.append(reopenedV7Stack)
+        try verifyMigratedV7(
+            in: reopenedV7Stack,
             expectedJob: expectedJob,
             expectedShift: expectedShift,
             expectedGross: expectedGross
         )
     }
 
-    private func verifyMigratedV5(
+    private func verifyMigratedV7(
         in stack: CoreDataStack,
         expectedJob: Job,
         expectedShift: Shift,
@@ -140,7 +140,7 @@ struct CoreDataV5MigrationTests {
             NSFetchRequest<WorkTypeEntity>(entityName: "WorkTypeEntity")
         )
         let payRates = try context.fetch(
-            NSFetchRequest<PayRateEntity>(entityName: "PayRateEntity")
+            NSFetchRequest<PayRateV7Entity>(entityName: "PayRateEntity")
         )
         let shifts = try context.fetch(NSFetchRequest<ShiftEntity>(entityName: "ShiftEntity"))
         let job = try #require(jobs.first)
@@ -154,8 +154,8 @@ struct CoreDataV5MigrationTests {
         #expect(workType.isArchived == false)
         #expect(workType.job.objectID == job.objectID)
         #expect(Set(payRates.map(\.id)) == Set([initialRateID, datedRateID]))
-        #expect(payRates.first { $0.id == initialRateID }?.amount.decimalValue == Decimal(100))
-        #expect(payRates.first { $0.id == datedRateID }?.amount.decimalValue == Decimal(125))
+        #expect(payRates.first { $0.id == initialRateID }?.amount == "100")
+        #expect(payRates.first { $0.id == datedRateID }?.amount == "125")
         #expect(shift.id == expectedShift.id)
         #expect(shift.workType?.objectID == workType.objectID)
         #expect(shift.job?.objectID == job.objectID)

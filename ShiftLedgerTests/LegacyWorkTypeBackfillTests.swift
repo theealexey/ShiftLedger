@@ -350,7 +350,7 @@ struct LegacyWorkTypeBackfillTests {
         #expect(valid.payRates.allSatisfy { $0.workType == nil })
         #expect(FileManager.default.fileExists(atPath: store.storeURL.path))
 
-        try close(store.stack)
+        try close(store.stack.viewContext)
         do {
             _ = try await CoreDataStack.load(storeURL: store.storeURL)
             Issue.record("CoreDataStack вернул stack после backfill conflict")
@@ -375,7 +375,7 @@ struct LegacyWorkTypeBackfillTests {
         #expect(actualLegacyGraph == expectedLegacyGraph)
 
         let jobs = try context.fetch(NSFetchRequest<JobEntity>(entityName: "JobEntity"))
-        let payRates = try context.fetch(NSFetchRequest<PayRateEntity>(entityName: "PayRateEntity"))
+        let payRates = try context.fetch(NSFetchRequest<PayRateV7Entity>(entityName: "PayRateEntity"))
         let workTypes = try fetchWorkTypes(in: context)
         let job = try #require(jobs.first)
         let workType = try #require(workTypes.first)
@@ -387,12 +387,12 @@ struct LegacyWorkTypeBackfillTests {
         #expect(workType.job.objectID == job.objectID)
         #expect(job.workTypes?.count == 1)
         #expect(
-            Set(workType.payRates?.compactMap { ($0 as? PayRateEntity)?.id } ?? [])
+            Set(workType.payRates?.compactMap { ($0 as? PayRateV7Entity)?.id } ?? [])
                 == Set(payRates.map(\.id))
         )
         #expect(payRates.allSatisfy { $0.job.objectID == job.objectID })
         #expect(payRates.allSatisfy { $0.workType?.objectID == workType.objectID })
-        #expect(Dictionary(uniqueKeysWithValues: payRates.map { ($0.id, $0.amount.decimalValue) }) == [
+        #expect(Dictionary(uniqueKeysWithValues: try payRates.map { ($0.id, try PayRateDecimalCodec.decode($0.amount)) }) == [
             fixture.identifiers.initialPayRate: try decimal("1234.56"),
             fixture.identifiers.earlierPayRate: try decimal("1299.875"),
             fixture.identifiers.laterPayRate: try decimal("1375.125")
@@ -442,9 +442,7 @@ struct LegacyWorkTypeBackfillTests {
             let relatedJob = try #require(payRate.value(forKey: "job") as? NSManagedObject)
             return PayRateSnapshot(
                 id: try requiredUUID(payRate, key: "id"),
-                amount: try #require(
-                    payRate.value(forKey: "amount") as? NSDecimalNumber
-                ).decimalValue,
+                amount: try storedAmount(payRate),
                 effectiveFrom: payRate.value(forKey: "effectiveFrom") as? Date,
                 jobID: try requiredUUID(relatedJob, key: "id")
             )
@@ -495,6 +493,13 @@ struct LegacyWorkTypeBackfillTests {
         })
     }
 
+    private static func storedAmount(_ row: NSManagedObject) throws -> Decimal {
+        if let canonical = row.value(forKey: "amount") as? String {
+            return try PayRateDecimalCodec.decode(canonical)
+        }
+        return try #require(row.value(forKey: "amount") as? NSDecimalNumber).decimalValue
+    }
+
     private static func requiredUUID(
         _ object: NSManagedObject,
         key: String
@@ -517,7 +522,7 @@ struct LegacyWorkTypeBackfillTests {
     }
 
     private struct EmptyStore {
-        let stack: CoreDataStack
+        let stack: NSPersistentContainer
         let storeURL: URL
     }
 
@@ -533,10 +538,9 @@ struct LegacyWorkTypeBackfillTests {
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let storeURL = directory.appendingPathComponent("ShiftLedger.sqlite")
-        return EmptyStore(
-            stack: try await CoreDataStack.load(storeURL: storeURL),
-            storeURL: storeURL
-        )
+        let container = NSPersistentContainer(name: "ShiftLedger", managedObjectModel: try PayRateStoreMigrator.model(version: 6))
+        _ = try container.persistentStoreCoordinator.addPersistentStore(type: .sqlite, at: storeURL)
+        return EmptyStore(stack: container, storeURL: storeURL)
     }
 
     private func insertJob(
@@ -607,7 +611,10 @@ struct LegacyWorkTypeBackfillTests {
 
     @MainActor
     private func close(_ stack: CoreDataStack) throws {
-        let context = stack.viewContext
+        try close(stack.viewContext)
+    }
+
+    private func close(_ context: NSManagedObjectContext) throws {
         context.reset()
         let coordinator = try #require(context.persistentStoreCoordinator)
         for store in coordinator.persistentStores {
@@ -626,7 +633,7 @@ struct LegacyWorkTypeBackfillTests {
     @MainActor
     private func removeStore(_ store: EmptyStore) {
         do {
-            try close(store.stack)
+            try close(store.stack.viewContext)
             try FileManager.default.removeItem(at: store.storeURL.deletingLastPathComponent())
         } catch {
             Issue.record(error)

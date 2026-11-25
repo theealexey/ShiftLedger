@@ -34,7 +34,7 @@ final class ShiftLedgerUITests: XCTestCase {
     @MainActor
     private func verifySettings(language: String, locale: String, title: String, currency: String,
                                 history: String, size: String, screenshot: String) throws {
-        let app = XCUIApplication()
+        let app = isolatedApplication()
         app.launchArguments = [
             "-ui-testing-seed-job", "-AppleLanguages", "(\(language))",
             "-AppleLocale", locale, "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategory\(size)"
@@ -146,7 +146,7 @@ final class ShiftLedgerUITests: XCTestCase {
 
     @MainActor
     func testEnglishTabsStayDarkWhenSystemIsLight() {
-        let app = XCUIApplication()
+        let app = isolatedApplication()
         app.launchArguments = ["-ui-testing-seed-job", "-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
         app.launch()
         let tabs = app.tabBars.firstMatch
@@ -157,7 +157,7 @@ final class ShiftLedgerUITests: XCTestCase {
 
     @MainActor
     private func launchRussianTabs(size: String) -> XCUIApplication {
-        let app = XCUIApplication()
+        let app = isolatedApplication()
         app.launchArguments = [
             "-ui-testing-seed-job", "-AppleLanguages", "(ru)", "-AppleLocale", "ru_RU",
             "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategory\(size)"
@@ -210,7 +210,7 @@ final class ShiftLedgerUITests: XCTestCase {
 
     @MainActor
     func testSL558UnpaidBreakDatesPersist() throws {
-        let app = XCUIApplication()
+        let app = isolatedApplication()
         app.launchArguments = ["-ui-testing-reset-store", "-ui-testing-seed-job",
                                "-AppleLanguages", "(ru)", "-AppleLocale", "ru_RU",
                                "-AppleICUForce24HourTime", "NO", "-AppleICUForce12HourTime", "YES"]
@@ -263,7 +263,7 @@ final class ShiftLedgerUITests: XCTestCase {
 
     @MainActor
     func testSL565ExpandedUnpaidBreak() throws {
-        let seed = XCUIApplication()
+        let seed = isolatedApplication()
         seed.launchArguments = ["-ui-testing-reset-store", "-ui-testing-seed-job", "-AppleLanguages", "(ru)", "-AppleLocale", "ru_RU", "-AppleICUForce24HourTime", "NO", "-AppleICUForce12HourTime", "YES"]
         seed.launch()
         try scrollToHittable(requerying: { seed.buttons["overview.addShift"] }, in: seed, direction: .towardBottom, message: "Add shift").tap()
@@ -287,7 +287,7 @@ final class ShiftLedgerUITests: XCTestCase {
         seed.terminate()
 
         for (language, locale, size, tab) in [("ru", "ru_RU", "L", "Смены"), ("ru", "ru_RU", "AccessibilityXXXL", "Смены"), ("en", "en_US", "L", "Shifts")] {
-            let app = XCUIApplication()
+            let app = isolatedApplication()
             app.launchArguments = ["-ui-testing-seed-job", "-AppleLanguages", "(\(language))", "-AppleLocale", locale, "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategory\(size)"]
             app.launch()
             let shifts = app.tabBars.buttons[tab]
@@ -320,6 +320,86 @@ final class ShiftLedgerUITests: XCTestCase {
             XCTAssertTrue(app.buttons[identifier + ".edit"].waitForExistence(timeout: 5))
             app.terminate()
         }
+    }
+
+    @MainActor
+    func testSL566ExpandedWorkTypeAndExactContribution() throws {
+        let name = "Production equipment inspection and preventive maintenance"
+        let exact = "1.00412345678901234567890123456789"
+        let app = makeApplication(resetStore: true)
+        app.launch()
+        try completeFixedPerShiftOnboarding(in: app, name: name, pay: exact)
+        try addShift(start: ShiftTime(hour: 8, minute: 0, meridiem: "AM"),
+                     end: ShiftTime(hour: 9, minute: 0, meridiem: "AM"), in: app)
+        try addShift(start: ShiftTime(hour: 10, minute: 0, meridiem: "AM"),
+                     end: ShiftTime(hour: 11, minute: 0, meridiem: "AM"), in: app)
+
+        app.tabBars.buttons["Shifts"].tap()
+        let cards = app.buttons.matching(
+            NSPredicate(format: "identifier MATCHES %@", "overview[.]shift[.][0-9A-Fa-f-]{36}")
+        )
+        let newest = try requireElement(cards.element(boundBy: 0), message: "Newest persisted Shift")
+        let older = try requireElement(cards.element(boundBy: 1), message: "Older persisted Shift")
+        let newestID = newest.identifier
+        let olderID = older.identifier
+        XCTAssertEqual(newest.value as? String, "Collapsed")
+        XCTAssertFalse(newest.label.contains(name))
+        attachScreenshot(named: "SL566-en-L-collapsed", from: app)
+        newest.tap()
+        XCTAssertTrue(app.buttons[newestID + ".edit"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.buttons[newestID].value as? String, "Expanded")
+        XCTAssertTrue(app.buttons[newestID].label.contains("Work type: " + name))
+        XCTAssertTrue(app.buttons[newestID].label.contains("Exact contribution: €" + exact))
+        attachScreenshot(named: "SL566-en-L-fixed-exact", from: app)
+
+        try scrollToHittable(requerying: { app.buttons[olderID] }, in: app, direction: .towardBottom,
+                             message: "Older Shift must be reachable").tap()
+        XCTAssertTrue(app.buttons[olderID + ".edit"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons[newestID + ".edit"].exists)
+        XCTAssertEqual(app.buttons[olderID].value as? String, "Expanded")
+        app.terminate()
+
+        let russian = isolatedApplication()
+        russian.launchArguments = ["-AppleLanguages", "(ru)", "-AppleLocale", "ru_RU",
+                                   "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"]
+        russian.launch()
+        russian.tabBars.buttons["Смены"].tap()
+        let shifted = try scrollToHittable(requerying: { russian.buttons[newestID] }, in: russian,
+                                           direction: .towardBottom, message: "Same persisted Shift in RU")
+        shifted.tap()
+        let expanded = russian.buttons[newestID]
+        XCTAssertEqual(expanded.value as? String, "Развернута")
+        XCTAssertTrue(expanded.label.contains("Вид работы: " + name))
+        let localizedExact = exact.replacingOccurrences(of: ".", with: ",")
+        XCTAssertTrue(expanded.label.contains(localizedExact + "\u{00A0}€"))
+        attachScreenshot(named: "SL566-ru-AXXXL-work-type", from: russian)
+        let edit = try scrollToHittable(requerying: { russian.buttons[newestID + ".edit"] }, in: russian,
+                                       direction: .towardBottom, message: "Edit below the expanded fields")
+        XCTAssertTrue(edit.isHittable)
+        attachScreenshot(named: "SL566-ru-AXXXL-exact-edit", from: russian)
+    }
+
+    @MainActor
+    func testSL566PersistedMinuteShowsExactHourlyContribution() throws {
+        let seed = makeApplication(resetStore: true)
+        seed.launchArguments.append("-ui-testing-seed-job")
+        seed.launch()
+        try addShift(start: ShiftTime(hour: 8, minute: 0, meridiem: "AM"),
+                     end: ShiftTime(hour: 8, minute: 1, meridiem: "AM"), in: seed)
+        seed.terminate()
+
+        let russian = launchRussianTabs(size: "L")
+        russian.tabBars.buttons["Смены"].tap()
+        let row = try requireElement(russian.buttons.matching(
+            NSPredicate(format: "identifier MATCHES %@", "overview[.]shift[.][0-9A-Fa-f-]{36}")
+        ).firstMatch, message: "Persisted one-minute Shift")
+        let identifier = row.identifier
+        row.tap()
+        XCTAssertTrue(russian.buttons[identifier + ".edit"].waitForExistence(timeout: 5))
+        XCTAssertTrue(row.label.contains("Вид работы: Вид работы без названия"))
+        XCTAssertTrue(row.label.contains("1,6666666666666666666666666666666666666\u{00A0}SEK"))
+        XCTAssertTrue(row.label.contains("100,00\u{00A0}SEK"))
+        attachScreenshot(named: "SL566-ru-L-hourly-exact", from: russian)
     }
 
     @MainActor
@@ -381,7 +461,7 @@ final class ShiftLedgerUITests: XCTestCase {
         ]
 
         for scenario in scenarios {
-            let app = XCUIApplication()
+            let app = isolatedApplication()
             app.launchArguments = [
                 "-ui-testing-seed-job",
                 "-AppleLanguages", "(\(scenario.language))",
@@ -460,7 +540,7 @@ final class ShiftLedgerUITests: XCTestCase {
         ]
 
         for scenario in scenarios {
-            let app = XCUIApplication()
+            let app = isolatedApplication()
             app.launchArguments = [
                 "-ui-testing-seed-job",
                 "-AppleLanguages", "(\(scenario.language))",
@@ -525,7 +605,7 @@ final class ShiftLedgerUITests: XCTestCase {
             ("ru", "ru_RU", "AccessibilityXXXL", "editShift"),
             ("en", "en_US", "AccessibilityXXXL", "editShift")
         ] {
-            let app = XCUIApplication()
+            let app = isolatedApplication()
             app.launchArguments = [
                 "-ui-testing-seed-job", "-AppleLanguages", "(\(language))", "-AppleLocale", locale,
                 "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategory\(size)"
@@ -561,7 +641,7 @@ final class ShiftLedgerUITests: XCTestCase {
 
     @MainActor
     func testFreshLaunchShowsJobSetup() {
-        let app = XCUIApplication()
+        let app = isolatedApplication()
         app.launchArguments.append("-ui-testing-reset-store")
         app.launch()
 
@@ -571,7 +651,7 @@ final class ShiftLedgerUITests: XCTestCase {
 
     @MainActor
     func testPersistedJobRelaunchShowsOverview() {
-        let firstLaunch = XCUIApplication()
+        let firstLaunch = isolatedApplication()
         firstLaunch.launchArguments.append(contentsOf: [
             "-ui-testing-reset-store",
             "-ui-testing-seed-job"
@@ -582,7 +662,7 @@ final class ShiftLedgerUITests: XCTestCase {
         XCTAssertTrue(firstOverviewScreen.waitForExistence(timeout: 5))
         firstLaunch.terminate()
 
-        let secondLaunch = XCUIApplication()
+        let secondLaunch = isolatedApplication()
         secondLaunch.launch()
 
         let secondOverviewScreen = secondLaunch.otherElements["overview.screen"]
@@ -1767,7 +1847,9 @@ final class ShiftLedgerUITests: XCTestCase {
     @MainActor
     private func completeFixedPerShiftOnboarding(
         in app: XCUIApplication,
-        scheduledPayroll: Bool = true
+        scheduledPayroll: Bool = true,
+        name: String = "Runtime shift",
+        pay: String = "1.004"
     ) throws {
         attachScreenshot(named: "00-onboarding-initial", from: app)
 
@@ -1783,7 +1865,7 @@ final class ShiftLedgerUITests: XCTestCase {
         attachScreenshot(named: "00-onboarding-work-type-reachable", from: app)
 
         workTypeName.tap()
-        workTypeName.typeText("Runtime shift")
+        workTypeName.typeText(name)
 
         // Production JobSetupView.textFieldShouldReturn calls endEditing(true).
         workTypeName.typeText("\n")
@@ -1820,7 +1902,7 @@ final class ShiftLedgerUITests: XCTestCase {
         )
 
         reachableAmount.tap()
-        reachableAmount.typeText("1.004")
+        reachableAmount.typeText(pay)
 
         // decimalPad has no Return button.
         // Move first-responder back to the normal text field, then use its
@@ -2681,10 +2763,17 @@ final class ShiftLedgerUITests: XCTestCase {
     // MARK: - Application
 
     @MainActor
+    private func isolatedApplication() -> XCUIApplication {
+        let app = XCUIApplication()
+        app.launchEnvironment["SHIFTLEDGER_UI_TEST_STORE"] = "1"
+        return app
+    }
+
+    @MainActor
     private func makeApplication(
         resetStore: Bool = false
     ) -> XCUIApplication {
-        let app = XCUIApplication()
+        let app = isolatedApplication()
 
         app.launchArguments = [
             "-AppleLanguages",

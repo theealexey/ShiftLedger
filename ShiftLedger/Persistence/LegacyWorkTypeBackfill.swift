@@ -29,7 +29,7 @@ enum LegacyWorkTypeBackfillError: Error {
     case saveFailed(underlying: Error)
 }
 
-@MainActor
+// The caller owns the context and must run this on its queue.
 enum LegacyWorkTypeBackfill {
     static func run(
         in context: NSManagedObjectContext

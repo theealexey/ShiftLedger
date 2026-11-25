@@ -402,7 +402,7 @@ struct LegacyShiftWorkTypeBackfillTests {
 
         let jobs = try context.fetch(NSFetchRequest<JobEntity>(entityName: "JobEntity"))
         let workTypes = try fetchWorkTypes(in: context)
-        let payRates = try context.fetch(NSFetchRequest<PayRateEntity>(entityName: "PayRateEntity"))
+        let payRates = try context.fetch(NSFetchRequest<PayRateV7Entity>(entityName: "PayRateEntity"))
         let shifts = try fetchShifts(in: context)
         let job = try #require(jobs.first)
         let workType = try #require(workTypes.first)
@@ -420,7 +420,7 @@ struct LegacyShiftWorkTypeBackfillTests {
             Set(workType.shifts?.compactMap { ($0 as? ShiftEntity)?.id } ?? [])
                 == Set(shifts.map(\.id))
         )
-        #expect(Dictionary(uniqueKeysWithValues: payRates.map { ($0.id, $0.amount.decimalValue) }) == [
+        #expect(Dictionary(uniqueKeysWithValues: try payRates.map { ($0.id, try PayRateDecimalCodec.decode($0.amount)) }) == [
             fixture.identifiers.initialPayRate: try decimal("1234.56"),
             fixture.identifiers.earlierPayRate: try decimal("1299.875"),
             fixture.identifiers.laterPayRate: try decimal("1375.125")
@@ -489,9 +489,7 @@ struct LegacyShiftWorkTypeBackfillTests {
                 let relatedJob = try #require(payRate.value(forKey: "job") as? NSManagedObject)
                 return LegacyPayRateSnapshot(
                     id: try requiredUUID(payRate, key: "id"),
-                    amount: try #require(
-                        payRate.value(forKey: "amount") as? NSDecimalNumber
-                    ).decimalValue,
+                    amount: try storedAmount(payRate),
                     effectiveFrom: payRate.value(forKey: "effectiveFrom") as? Date,
                     jobID: try requiredUUID(relatedJob, key: "id")
                 )
@@ -678,6 +676,13 @@ struct LegacyShiftWorkTypeBackfillTests {
             let managedObject = try #require(object as? NSManagedObject)
             return try requiredUUID(managedObject, key: "id")
         })
+    }
+
+    private static func storedAmount(_ row: NSManagedObject) throws -> Decimal {
+        if let canonical = row.value(forKey: "amount") as? String {
+            return try PayRateDecimalCodec.decode(canonical)
+        }
+        return try #require(row.value(forKey: "amount") as? NSDecimalNumber).decimalValue
     }
 
     private static func requiredUUID(
