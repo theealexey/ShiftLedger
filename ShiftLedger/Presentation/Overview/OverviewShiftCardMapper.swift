@@ -26,7 +26,7 @@ struct OverviewShiftCardMapper {
         selectedShiftID: UUID?,
         expandedShiftID: UUID?
     ) throws -> [OverviewView.ShiftCard] {
-        try shiftBreakdowns.reversed().map { shiftBreakdown in
+        try shiftBreakdowns.map { shiftBreakdown in
             let shift = shiftBreakdown.shift
             guard let workTypeName = workTypeNames[shift.workTypeID] else {
                 throw MappingError.missingWorkType

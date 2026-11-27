@@ -32,8 +32,22 @@ final class OverviewViewModel {
 
     private(set) var state: State = .idle
 
+    struct History: Equatable {
+        var query = ShiftHistoryQuery()
+        var visible: [ShiftPayBreakdown] = []
+        var totalCount = 0
+        var selectedID: UUID?
+        var expandedID: UUID?
+    }
+
+    private(set) var history = History()
+    var showsShiftHistoryOnly = false
+    var historyTimeZone: TimeZone? { TimeZone(identifier: job.timeZoneIdentifier) }
+    var historyCurrencyCode: String { job.currencyCode }
+    var historyReferenceDate: Date { currentDate() }
+
     private var job: Job
-    private let loadShifts: @MainActor () throws -> [Shift]
+    private let loadShifts: @MainActor (UUID) throws -> [Shift]
     private let currentDate: @MainActor () -> Date
 
     private var shifts: [Shift] = []
@@ -41,13 +55,21 @@ final class OverviewViewModel {
     private var selectedShiftID: UUID?
     private var expandedShiftID: UUID?
 
-    init(
+    convenience init(
         job: Job,
         loadShifts: @escaping @MainActor () throws -> [Shift],
         currentDate: @escaping @MainActor () -> Date
     ) {
+        self.init(job: job, loadShiftsForJob: { _ in try loadShifts() }, currentDate: currentDate)
+    }
+
+    init(
+        job: Job,
+        loadShiftsForJob: @escaping @MainActor (UUID) throws -> [Shift],
+        currentDate: @escaping @MainActor () -> Date
+    ) {
         self.job = job
-        self.loadShifts = loadShifts
+        self.loadShifts = loadShiftsForJob
         self.currentDate = currentDate
     }
 
@@ -64,8 +86,38 @@ final class OverviewViewModel {
     }
 
     func reload(job: Job) {
+        let sameJob = self.job.id == job.id
+        if !sameJob { history = History() }
         self.job = job
-        refresh(preservingSelection: true)
+        refresh(preservingSelection: sameJob)
+    }
+
+    func historyWorkTypes(locale: Locale) -> [ShiftHistoryQuery.WorkTypeOption] {
+        guard case let .content(content) = state else { return [] }
+        return ShiftHistoryQuery.workTypeOptions(
+            for: job, history: content.shiftHistoryBreakdowns, selected: history.query.workTypeIDs, locale: locale
+        )
+    }
+
+    @discardableResult
+    func applyHistoryQuery(_ query: ShiftHistoryQuery) -> Bool {
+        guard showsShiftHistoryOnly, case let .content(content) = state, let timeZone = historyTimeZone,
+              let visible = try? query.results(content.shiftHistoryBreakdowns, now: currentDate(), timeZone: timeZone)
+        else { return false }
+        history.query = query
+        history.visible = visible
+        history.totalCount = content.shiftHistoryBreakdowns.count
+        if !visible.contains(where: { $0.shift.id == history.selectedID }) {
+            history.selectedID = nil
+            history.expandedID = nil
+        }
+        return true
+    }
+
+    func tapHistoryRow(_ id: UUID) {
+        guard history.visible.contains(where: { $0.shift.id == id }) else { return }
+        history.selectedID = id
+        history.expandedID = history.expandedID == id ? nil : id
     }
 
     func navigateToPreviousPeriod() {
@@ -190,7 +242,7 @@ final class OverviewViewModel {
     ) {
         let loadedShifts: [Shift]
         do {
-            loadedShifts = try loadShifts()
+            loadedShifts = try loadShifts(job.id)
         } catch {
             state = .failure(.loading)
             return
@@ -215,6 +267,19 @@ final class OverviewViewModel {
             }
         } catch {
             state = .failure(.calculation)
+        }
+
+        if showsShiftHistoryOnly, case let .content(content) = state {
+            if let selectingShiftID {
+                history.selectedID = selectingShiftID
+                history.expandedID = nil
+            } else if !preservingSelection {
+                history.selectedID = content.selectedShiftID
+                history.expandedID = nil
+            }
+            var query = history.query
+            query.workTypeIDs.formIntersection(job.workTypes.map(\.id))
+            if !applyHistoryQuery(query) { state = .failure(.calculation) }
         }
     }
 

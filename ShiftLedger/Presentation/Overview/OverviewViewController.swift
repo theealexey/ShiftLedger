@@ -57,6 +57,7 @@ final class OverviewViewController: UIViewController {
             navigationController?.tabBarItem.title = tabTitle
             overviewView.accessibilityIdentifier = "shifts.screen"
             overviewView.showsShiftHistoryOnly = true
+            viewModel.showsShiftHistoryOnly = true
         } else {
             let brand = OverviewNavigationBrandLabel()
             navigationItem.title = brand.text
@@ -96,14 +97,36 @@ final class OverviewViewController: UIViewController {
             self?.render()
         }
         overviewView.onShiftCardTapped = { [weak self] id in
-            self?.viewModel.handleShiftCardTap(with: id)
-            self?.render()
+            guard let self else { return }
+            if showsShiftHistoryOnly {
+                viewModel.tapHistoryRow(id)
+                render()
+                if viewModel.history.expandedID == id { overviewView.focusShiftCard(with: id) }
+            } else {
+                viewModel.handleShiftCardTap(with: id)
+                render()
+            }
+        }
+        overviewView.onHistoryFilters = { [weak self] in self?.showHistoryFilters() }
+        overviewView.onHistorySort = { [weak self] sort in
+            guard let self else { return }
+            var query = viewModel.history.query
+            query.sort = sort
+            if viewModel.applyHistoryQuery(query) { render() }
+        }
+        overviewView.onHistoryReset = { [weak self] in
+            guard let self else { return }
+            if viewModel.applyHistoryQuery(ShiftHistoryQuery(sort: viewModel.history.query.sort)) {
+                render()
+                overviewView.focusHistoryFilters()
+                overviewView.announceFilteredCount()
+            }
         }
         overviewView.onEditShiftTapped = { [weak self] id in
             guard
                 let self,
                 case let .content(content) = viewModel.state,
-                let shift = content.shiftHistoryBreakdowns.first(where: {
+                let shift = (showsShiftHistoryOnly ? viewModel.history.visible : content.shiftHistoryBreakdowns).first(where: {
                     $0.shift.id == id
                 })?.shift
             else {
@@ -136,10 +159,18 @@ final class OverviewViewController: UIViewController {
 
     private func renderContent(_ content: OverviewViewModel.Content) {
         if showsShiftHistoryOnly {
-            guard let cards = shiftCards(for: content) else { return }
-            overviewView.renderHistoryOnly(cards)
-            if let expandedShiftID = content.expandedShiftID {
-                overviewView.focusShiftCard(with: expandedShiftID)
+            let history = viewModel.history
+            do {
+                let mapper = OverviewShiftCardMapper(
+                    currencyCode: viewModel.historyCurrencyCode,
+                    timeZoneIdentifier: viewModel.historyTimeZone?.identifier ?? timeZoneIdentifier,
+                    displayLocale: displayLocale
+                )
+                let cards = try mapper.map(history.visible, workTypeNames: content.workTypeNames,
+                                           selectedShiftID: history.selectedID, expandedShiftID: history.expandedID)
+                overviewView.renderHistoryOnly(cards, totalCount: history.totalCount, query: history.query)
+            } catch {
+                renderFailure(.calculation)
             }
             return
         }
@@ -189,7 +220,7 @@ final class OverviewViewController: UIViewController {
     private func shiftCards(for content: OverviewViewModel.Content) -> [OverviewView.ShiftCard]? {
         do {
             return try shiftCardMapper.map(
-                content.shiftHistoryBreakdowns,
+                Array(content.shiftHistoryBreakdowns.reversed()),
                 workTypeNames: content.workTypeNames,
                 selectedShiftID: content.selectedShiftID,
                 expandedShiftID: content.expandedShiftID
@@ -198,6 +229,31 @@ final class OverviewViewController: UIViewController {
             renderFailure(.calculation)
             return nil
         }
+    }
+
+    private func showHistoryFilters() {
+        guard let timeZone = viewModel.historyTimeZone else { return }
+        let sheet = ShiftHistoryFiltersViewController(
+            query: viewModel.history.query, options: viewModel.historyWorkTypes(locale: displayLocale),
+            timeZone: timeZone, currency: viewModel.historyCurrencyCode, locale: displayLocale,
+            now: viewModel.historyReferenceDate
+        )
+        var applied = false
+        sheet.onApply = { [weak self] query in
+            guard let self, viewModel.applyHistoryQuery(query) else { return false }
+            applied = true
+            render()
+            return true
+        }
+        sheet.onDismiss = { [weak self] in
+            self?.overviewView.focusHistoryFilters()
+            if applied { self?.overviewView.announceFilteredCount() }
+        }
+        let navigation = UINavigationController(rootViewController: sheet)
+        navigation.modalPresentationStyle = .pageSheet
+        navigation.sheetPresentationController?.detents = [.large()]
+        navigation.presentationController?.delegate = sheet
+        present(navigation, animated: true)
     }
 
     private func renderFailure(_ failure: OverviewViewModel.Failure) {

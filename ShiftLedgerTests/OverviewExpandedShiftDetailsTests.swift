@@ -33,8 +33,8 @@ struct OverviewExpandedShiftDetailsTests {
 
         model.load()
         let initial = try cards()
-        #expect(initial.map(\.id) == shifts.reversed().map(\.id))
-        #expect(initial.map(\.workTypeName) == [AddShiftStrings.unnamedWorkType, "Former assignment", "Day shift"])
+        #expect(initial.map(\.id) == shifts.map(\.id))
+        #expect(initial.map(\.workTypeName) == ["Day shift", "Former assignment", AddShiftStrings.unnamedWorkType])
         #expect(initial.allSatisfy { $0.exactExpectedAmount == nil })
 
         model.handleShiftCardTap(with: shifts[1].id)
@@ -44,7 +44,7 @@ struct OverviewExpandedShiftDetailsTests {
 
         model.reload(job: try job.renamingWorkType(id: active.id, to: "Updated day shift"))
         let updated = try cards()
-        #expect(updated.map(\.workTypeName) == [AddShiftStrings.unnamedWorkType, "Former assignment", "Updated day shift"])
+        #expect(updated.map(\.workTypeName) == ["Updated day shift", "Former assignment", AddShiftStrings.unnamedWorkType])
         #expect(updated.map(\.expectedAmount) == initial.map(\.expectedAmount))
     }
 

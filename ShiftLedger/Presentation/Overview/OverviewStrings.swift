@@ -57,3 +57,55 @@ enum OverviewStrings {
     static var calculationErrorMessage: String { String(localized: "overview.error.calculation.message", table: "Localizable") }
     static var retry: String { String(localized: "overview.retry", table: "Localizable") }
 }
+
+// Shifts history controls and filter form.
+enum ShiftHistoryStrings {
+    static var filters: String { String(localized: "shifts.history.filters") }
+    static var sort: String { String(localized: "shifts.history.sort") }
+    static var sortCompact: String { String(localized: "shifts.history.sortCompact") }
+    static var newest: String { String(localized: "shifts.history.newest") }
+    static var oldest: String { String(localized: "shifts.history.oldest") }
+    static var highest: String { String(localized: "shifts.history.highest") }
+    static var lowest: String { String(localized: "shifts.history.lowest") }
+    static var noMatches: String { String(localized: "shifts.history.noMatches") }
+    static var reset: String { String(localized: "shifts.history.reset") }
+    static var apply: String { String(localized: "shifts.history.apply") }
+    static var cancel: String { String(localized: "shifts.history.cancel") }
+    static var date: String { String(localized: "shifts.history.date") }
+    static var allDates: String { String(localized: "shifts.history.allDates") }
+    static var thisMonth: String { String(localized: "shifts.history.thisMonth") }
+    static var custom: String { String(localized: "shifts.history.custom") }
+    static var start: String { String(localized: "shifts.history.start") }
+    static var end: String { String(localized: "shifts.history.end") }
+    static var workType: String { String(localized: "shifts.history.workType") }
+    static var allTypes: String { String(localized: "shifts.history.allTypes") }
+    static var minimum: String { String(localized: "shifts.history.minimum") }
+    static var maximum: String { String(localized: "shifts.history.maximum") }
+    static var invalidDate: String { String(localized: "shifts.history.invalidDate") }
+    static var invalidAmount: String { String(localized: "shifts.history.invalidAmount") }
+    static var invalidRange: String { String(localized: "shifts.history.invalidRange") }
+    static func active(_ count: Int) -> String {
+        String.localizedStringWithFormat(String(localized: "shifts.history.active"), count)
+    }
+    static func activeTitle(_ count: Int) -> String {
+        String.localizedStringWithFormat(String(localized: "shifts.history.activeTitle"), count)
+    }
+    static func count(visible: Int, total: Int) -> String {
+        String.localizedStringWithFormat(String(localized: "shifts.history.count"), visible, total)
+    }
+    static func archived(_ name: String) -> String {
+        String.localizedStringWithFormat(String(localized: "shifts.history.archived"), name)
+    }
+    static func amount(_ currency: String) -> String {
+        String.localizedStringWithFormat(String(localized: "shifts.history.amount"), currency)
+    }
+
+    static func title(for sort: ShiftHistoryQuery.Sort) -> String {
+        switch sort {
+        case .newest: newest
+        case .oldest: oldest
+        case .highest: highest
+        case .lowest: lowest
+        }
+    }
+}

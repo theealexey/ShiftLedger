@@ -756,7 +756,7 @@ struct OverviewViewControllerTests {
         #expect(!title.convert(title.bounds, to: root).intersects(count.convert(count.bounds, to: root)))
 
         let empty = OverviewView()
-        empty.renderHistoryOnly([])
+        empty.renderHistoryOnly([], totalCount: 0, query: ShiftHistoryQuery())
         let emptyTitle: UILabel = try requireView(identifier: "overview.shiftCount.label", in: empty)
         let emptyCount: UILabel = try requireView(identifier: "overview.shiftCount.value", in: empty)
         #expect(emptyTitle.text == OverviewStrings.shiftHistoryCountTitle)
@@ -907,10 +907,10 @@ struct OverviewViewControllerTests {
             let cards = try OverviewShiftCardMapper(
                 currencyCode: "EUR", timeZoneIdentifier: job.timeZoneIdentifier, displayLocale: locale
             ).map(breakdown.shiftBreakdowns, workTypeNames: [testWorkTypeID: "Day"], selectedShiftID: nil, expandedShiftID: nil)
-            #expect(cards.map(\.exactExpectedAmount) == [expectedSecond, expectedFirst])
-            #expect(cards[0].appliedRate.hasPrefix(expectedSecond))
-            #expect(cards[1].appliedRate.hasPrefix(expectedFirst))
-            #expect(cards.map(\.appliedRateAmount) == [expectedSecond, expectedFirst])
+            #expect(cards.map(\.exactExpectedAmount) == [expectedFirst, expectedSecond])
+            #expect(cards[0].appliedRate.hasPrefix(expectedFirst))
+            #expect(cards[1].appliedRate.hasPrefix(expectedSecond))
+            #expect(cards.map(\.appliedRateAmount) == [expectedFirst, expectedSecond])
             #expect(OverviewFormatting.displayedCurrencyValue(firstRate, currencyCode: "EUR", locale: locale) == 1)
         }
     }
@@ -1269,6 +1269,8 @@ struct OverviewViewControllerTests {
             }
             if try requireContent(subject.viewModel.state).selectedShiftID != shift.id {
                 row.sendActions(for: .touchUpInside)
+                #expect(try requireContent(subject.viewModel.state).expandedShiftID == shift.id)
+                row.sendActions(for: .touchUpInside)
             }
             #expect(try requireContent(subject.viewModel.state).selectedShiftID == shift.id)
             row.sendActions(for: .touchUpInside)
@@ -1510,8 +1512,8 @@ struct OverviewViewControllerTests {
         let check: UIButton = try requireView(identifier: "overview.checkPaycheck", in: root)
         check.sendActions(for: .touchUpInside)
         #expect(received == initial.selectedPeriod)
-        let selected: UIControl = try requireView(identifier: "overview.shift.\(older.id.uuidString)", in: root)
-        selected.sendActions(for: .touchUpInside)
+        #expect(try requireContent(subject.viewModel.state).selectedShiftID == older.id)
+        #expect(try requireContent(subject.viewModel.state).expandedShiftID == older.id)
         let previous: UIButton = try requireView(identifier: "overview.period.previous", in: root)
         previous.sendActions(for: .touchUpInside)
         window.layoutIfNeeded()
@@ -2111,6 +2113,8 @@ struct OverviewViewControllerTests {
             }
             if try requireContent(subject.viewModel.state).selectedShiftID != shift.id {
                 row.sendActions(for: .touchUpInside)
+                #expect(try requireContent(subject.viewModel.state).expandedShiftID == shift.id)
+                row.sendActions(for: .touchUpInside)
             }
             let selected = try requireContent(subject.viewModel.state)
             #expect(selected.selectedShiftID == shift.id)
@@ -2171,7 +2175,7 @@ struct OverviewViewControllerTests {
         let content = try requireContent(subject.viewModel.state)
         #expect(content.selectedPeriod == .perShift(shiftID: older.id))
         #expect(content.selectedShiftID == older.id)
-        #expect(content.expandedShiftID == nil)
+        #expect(content.expandedShiftID == older.id)
         #expect(content.expectedBreakdown?.shiftBreakdowns.map(\.shift) == [older])
         #expect(content.shiftHistoryBreakdowns.map(\.shift) == [older, newer])
         #expect(shiftCardIdentifiers(in: try requireRootView(subject.viewController)) == [newer.id, older.id])
@@ -2186,7 +2190,7 @@ struct OverviewViewControllerTests {
         let check: UIButton = try requireView(identifier: "overview.checkPaycheck", in: try requireRootView(subject.viewController))
         check.sendActions(for: .touchUpInside)
         #expect(receivedPeriod == .perShift(shiftID: older.id))
-        for expectedExpandedID in [older.id, nil] as [UUID?] {
+        for expectedExpandedID in [nil, older.id] as [UUID?] {
             olderCard.sendActions(for: .touchUpInside)
             let updated = try requireContent(subject.viewModel.state)
             #expect(updated.expandedShiftID == expectedExpandedID)

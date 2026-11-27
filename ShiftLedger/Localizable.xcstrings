@@ -1283,6 +1283,209 @@
         "ru" : { "stringUnit" : { "state" : "translated", "value" : "РАСЧЁТ ЗАРПЛАТЫ" } }
       }
     },
+    "shifts.history.filters" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Filters" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Фильтры" } }
+      }
+    },
+    "shifts.history.sortCompact" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Sort" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Порядок" } }
+      }
+    },
+    "shifts.history.sort" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Sort" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Сортировка" } }
+      }
+    },
+    "shifts.history.newest" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Newest first" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Сначала новые" } }
+      }
+    },
+    "shifts.history.oldest" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Oldest first" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Сначала старые" } }
+      }
+    },
+    "shifts.history.highest" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Highest amount first" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Сначала с большей суммой" } }
+      }
+    },
+    "shifts.history.lowest" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Lowest amount first" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Сначала с меньшей суммой" } }
+      }
+    },
+    "shifts.history.active" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "%lld active filter groups" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Активных групп фильтров: %lld" } }
+      }
+    },
+    "shifts.history.activeTitle" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Filters (%lld)" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Фильтры (%lld)" } }
+      }
+    },
+    "shifts.history.count" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Showing %1$lld of %2$lld" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Показано %1$lld из %2$lld" } }
+      }
+    },
+    "shifts.history.noMatches" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "No shifts match your filters" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Нет смен по выбранным фильтрам" } }
+      }
+    },
+    "shifts.history.reset" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Reset filters" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Сбросить фильтры" } }
+      }
+    },
+    "shifts.history.apply" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Apply" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Применить" } }
+      }
+    },
+    "shifts.history.cancel" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Cancel" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Отмена" } }
+      }
+    },
+    "shifts.history.date" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Date" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Дата" } }
+      }
+    },
+    "shifts.history.allDates" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "All dates" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Все даты" } }
+      }
+    },
+    "shifts.history.thisMonth" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "This month" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Этот месяц" } }
+      }
+    },
+    "shifts.history.custom" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Custom date range" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Свой диапазон" } }
+      }
+    },
+    "shifts.history.start" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "From" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "С даты" } }
+      }
+    },
+    "shifts.history.end" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Through" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "По дату" } }
+      }
+    },
+    "shifts.history.workType" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Work type" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Вид работы" } }
+      }
+    },
+    "shifts.history.allTypes" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "All work types" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Все виды работы" } }
+      }
+    },
+    "shifts.history.archived" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "%@ (archived)" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "%@ (архив)" } }
+      }
+    },
+    "shifts.history.amount" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Expected amount (%@)" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Ожидаемая сумма (%@)" } }
+      }
+    },
+    "shifts.history.minimum" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Minimum" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Минимум" } }
+      }
+    },
+    "shifts.history.maximum" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Maximum" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Максимум" } }
+      }
+    },
+    "shifts.history.invalidDate" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Choose a valid date range." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Укажите допустимый диапазон дат." } }
+      }
+    },
+    "shifts.history.invalidAmount" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Enter a nonnegative amount without rounding." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Введите неотрицательную сумму, которую можно сохранить без округления." } }
+      }
+    },
+    "shifts.history.invalidRange" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Minimum cannot exceed maximum." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Минимум не может быть больше максимума." } }
+      }
+    },
     "overview.receipt.historyScope" : {
       "extractionState" : "manual",
       "localizations" : {
