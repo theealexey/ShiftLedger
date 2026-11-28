@@ -25,8 +25,8 @@ final class OverviewView: UIView, UIScrollViewDelegate {
         let appliedRate: String
         let appliedRateAmount: String
         let payBasis: String
-        let isSelected: Bool
-        let isExpanded: Bool
+        var isSelected: Bool
+        var isExpanded: Bool
         let accessibilityLabel: String
     }
 
@@ -84,12 +84,14 @@ final class OverviewView: UIView, UIScrollViewDelegate {
     private let shiftCountValueLabel = UILabel()
 
     private let shiftHistoryStack = UIStackView()
-    private let historyControls = UIStackView()
-    private let historyFilterButton = UIButton(type: .system)
-    private let historySortButton = UIButton(type: .system)
+    private let historySearch = ShiftHistorySearchField()
     private let historyResetButton = UIButton(type: .system)
+    private let historyClearButton = UIButton(type: .system)
     private let filteredCountLabel = UILabel()
     private let noFilterMatchesLabel = UILabel()
+
+    var onHistorySearch: ((String) -> Void)?
+    var onHistoryClear: (() -> Void)?
     var onHistoryFilters: (() -> Void)?
     var onHistorySort: ((ShiftHistoryQuery.Sort) -> Void)?
     var onHistoryReset: (() -> Void)?
@@ -210,7 +212,6 @@ final class OverviewView: UIView, UIScrollViewDelegate {
         contentStack.layoutIfNeeded()
         updateGrossAmountFont()
         updateShiftHistoryHeading()
-        updateHistoryControlLayout()
         updatePerShiftTimeFont()
         periodRailContainer.layoutIfNeeded()
         periodRailViewport.layoutIfNeeded()
@@ -255,7 +256,16 @@ final class OverviewView: UIView, UIScrollViewDelegate {
         }
     }
 
-    var showsShiftHistoryOnly = false
+    var showsShiftHistoryOnly = false {
+        didSet {
+            guard showsShiftHistoryOnly, !oldValue else { return }
+            scrollView.keyboardDismissMode = .interactive
+            scrollBottomConstraint?.isActive = false
+            scrollBottomConstraint = scrollView.bottomAnchor.constraint(equalTo: keyboardLayoutGuide.topAnchor)
+            scrollBottomConstraint?.isActive = true
+        }
+    }
+    private var scrollBottomConstraint: NSLayoutConstraint?
 
     func installHomeComposition() {
         guard homeShifts == nil else { return }
@@ -286,25 +296,21 @@ final class OverviewView: UIView, UIScrollViewDelegate {
     func renderHistoryOnly(_ cards: [ShiftCard], totalCount: Int, query: ShiftHistoryQuery) {
         shiftCountValueLabel.text = String(totalCount)
         shiftCountStack.accessibilityLabel = "\(OverviewStrings.shiftHistoryCountTitle) \(totalCount)"
-        historyControls.isHidden = false
-        let active = query.activeGroups > 0
-        historyScopeLabel.isHidden = active
+        let filtered = query.activeGroups > 0
+        let searching = query.hasSearch
+        historyScopeLabel.isHidden = filtered || searching
         filteredCountLabel.text = ShiftHistoryStrings.count(visible: cards.count, total: totalCount)
-        filteredCountLabel.isHidden = !active
-        historyFilterButton.configuration?.title = active
-            ? ShiftHistoryStrings.activeTitle(query.activeGroups) : ShiftHistoryStrings.filters
-        historyFilterButton.accessibilityValue = active ? ShiftHistoryStrings.active(query.activeGroups) : nil
-        historySortButton.accessibilityValue = ShiftHistoryStrings.title(for: query.sort)
-        historySortButton.menu = UIMenu(children: ShiftHistoryQuery.Sort.allCases.map { sort in
-            UIAction(title: ShiftHistoryStrings.title(for: sort), state: sort == query.sort ? .on : .off) {
-                [weak self] _ in self?.onHistorySort?(sort)
-            }
-        })
+        filteredCountLabel.isHidden = !filtered && !searching
+        historySearch.render(query)
         renderShiftHistory(cards)
         shiftHistoryEmptyLabel.isHidden = totalCount != 0
         let noMatches = totalCount > 0 && cards.isEmpty
         noFilterMatchesLabel.isHidden = !noMatches
-        historyResetButton.isHidden = !noMatches
+        noFilterMatchesLabel.text = searching
+            ? (filtered ? ShiftHistoryStrings.noCombinedMatches : ShiftHistoryStrings.noSearchMatches)
+            : ShiftHistoryStrings.noMatches
+        historyClearButton.isHidden = !noMatches || !searching
+        historyResetButton.isHidden = !noMatches || !filtered
         setVisible(content: false, shiftHistory: true, checkPaycheck: false,
                    addShift: false, empty: false, error: false)
         setNeedsLayout()
@@ -552,7 +558,7 @@ final class OverviewView: UIView, UIScrollViewDelegate {
         addSubview(scrollView)
         scrollView.addSubview(contentView)
         contentView.addSubview(mainStack)
-        [emptyCard, periodCard, contentCard, historyCard, checkPaycheckButton, addShiftButton, errorCard]
+        [emptyCard, periodCard, contentCard, historySearch, historyCard, checkPaycheckButton, addShiftButton, errorCard]
             .forEach(mainStack.addArrangedSubview)
         periodCard.addSubview(periodStack)
         [periodCaption, periodRailContainer, perShiftHeading].forEach(periodStack.addArrangedSubview)
@@ -571,8 +577,8 @@ final class OverviewView: UIView, UIScrollViewDelegate {
             .forEach(contentStack.addArrangedSubview)
         [shiftCountLabel, shiftCountValueLabel].forEach(shiftCountStack.addArrangedSubview)
 
-        [shiftCountStack, historyScopeLabel, filteredCountLabel, historyControls, shiftStack,
-         shiftHistoryEmptyLabel, noFilterMatchesLabel, historyResetButton]
+        [shiftCountStack, historyScopeLabel, filteredCountLabel, shiftStack,
+         shiftHistoryEmptyLabel, noFilterMatchesLabel, historyClearButton, historyResetButton]
             .forEach(shiftHistoryStack.addArrangedSubview)
         shiftHistoryStack.setCustomSpacing(6, after: shiftCountStack)
         shiftHistoryStack.setCustomSpacing(16, after: historyScopeLabel)
@@ -588,6 +594,8 @@ final class OverviewView: UIView, UIScrollViewDelegate {
     }
 
     private func configureLayout() {
+        scrollBottomConstraint = scrollView.bottomAnchor.constraint(equalTo: bottomAnchor)
+        scrollBottomConstraint?.isActive = true
         for (card, stack) in [(periodCard, periodStack), (contentCard, contentStack),
                               (historyCard, shiftHistoryStack), (emptyCard, emptyStack)] {
             let guide = card.layoutMarginsGuide
@@ -602,7 +610,6 @@ final class OverviewView: UIView, UIScrollViewDelegate {
             scrollView.topAnchor.constraint(equalTo: safeAreaLayoutGuide.topAnchor),
             scrollView.leadingAnchor.constraint(equalTo: leadingAnchor),
             scrollView.trailingAnchor.constraint(equalTo: trailingAnchor),
-            scrollView.bottomAnchor.constraint(equalTo: bottomAnchor),
 
             contentView.topAnchor.constraint(equalTo: scrollView.contentLayoutGuide.topAnchor, constant: 16),
             contentView.leadingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.leadingAnchor),
@@ -769,95 +776,37 @@ final class OverviewView: UIView, UIScrollViewDelegate {
     }
 
     private func configureHistoryControls() {
-        historyControls.spacing = 8
-        historyControls.distribution = .fillEqually
-        [historyFilterButton, historySortButton].forEach(historyControls.addArrangedSubview)
-        historyControls.isHidden = true
+        historySearch.isHidden = true
+        historySearch.onTextChanged = { [weak self] in self?.onHistorySearch?($0) }
+        historySearch.onSettings = { [weak self] in self?.onHistoryFilters?() }
+        historySearch.onSort = { [weak self] in self?.onHistorySort?($0) }
         filteredCountLabel.isHidden = true
         noFilterMatchesLabel.isHidden = true
-        historyResetButton.isHidden = true
         configureLabel(filteredCountLabel, font: ShiftLedgerTypography.callout, color: ShiftLedgerColors.textSecondary)
         filteredCountLabel.accessibilityIdentifier = "shiftHistory.filteredCount"
         configureLabel(noFilterMatchesLabel, font: ShiftLedgerTypography.body, color: ShiftLedgerColors.textSecondary)
-        noFilterMatchesLabel.text = ShiftHistoryStrings.noMatches
         noFilterMatchesLabel.accessibilityIdentifier = "shiftHistory.noMatches"
-
-        let buttons = [
-            (historyFilterButton, ShiftHistoryStrings.filters, "filters", "line.3.horizontal.decrease"),
-            (historySortButton, ShiftHistoryStrings.sort, "sort", "arrow.up.arrow.down"),
-            (historyResetButton, ShiftHistoryStrings.reset, "reset", nil)
-        ]
-        for (button, title, id, icon) in buttons {
+        for (button, title, id) in [
+            (historyResetButton, ShiftHistoryStrings.reset, "reset"),
+            (historyClearButton, ShiftHistoryStrings.clearSearch, "clearResults")
+        ] {
+            button.isHidden = true
             configureActionButton(button, title: title, identifier: "shiftHistory." + id, isPrimary: false)
-            if let icon { button.configuration?.image = UIImage(systemName: icon) }
-            button.configuration?.imagePadding = 8
             button.configuration?.titleLineBreakMode = .byWordWrapping
-            button.configuration?.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { [weak button] incoming in
-                var updated = incoming
-                updated.font = .preferredFont(forTextStyle: .callout, compatibleWith: button?.traitCollection)
-                return updated
-            }
-            let minimumHeight = button.heightAnchor.constraint(greaterThanOrEqualToConstant: 44)
-            minimumHeight.priority = UILayoutPriority(999)
-            minimumHeight.isActive = true
+            let height = button.heightAnchor.constraint(greaterThanOrEqualToConstant: 44)
+            height.priority = UILayoutPriority(999)
+            height.isActive = true
         }
-        historySortButton.showsMenuAsPrimaryAction = true
-        historyFilterButton.addAction(UIAction { [weak self] _ in self?.onHistoryFilters?() }, for: .touchUpInside)
         historyResetButton.addAction(UIAction { [weak self] _ in self?.onHistoryReset?() }, for: .touchUpInside)
+        historyClearButton.addAction(UIAction { [weak self] _ in self?.onHistoryClear?() }, for: .touchUpInside)
     }
 
-    private func updateHistoryControlLayout() {
-        guard !historyControls.isHidden, shiftHistoryStack.bounds.width > 0 else { return }
-        let font = UIFont.preferredFont(forTextStyle: .callout, compatibleWith: traitCollection)
-        if var configuration = historySortButton.configuration {
-            let insets = configuration.contentInsets
-            let fullWidth = shiftHistoryStack.bounds.width - insets.leading - insets.trailing
-            let title = ShiftHistoryStrings.sort
-            let fitsFullWidth = title.split(whereSeparator: \.isWhitespace).allSatisfy {
-                (String($0) as NSString).size(withAttributes: [.font: font]).width <= fullWidth
-            }
-            let visibleTitle = fitsFullWidth ? title : ShiftHistoryStrings.sortCompact
-            if configuration.title != visibleTitle {
-                configuration.title = visibleTitle
-                historySortButton.configuration = configuration
-                historySortButton.invalidateIntrinsicContentSize()
-            }
-        }
-        let available = (shiftHistoryStack.bounds.width - historyControls.spacing) / 2
-        let fits = [historyFilterButton, historySortButton].allSatisfy { button in
-            let title = button.configuration?.title ?? ""
-            let imageWidth = button.configuration?.image?.size.width ?? 0
-            let insets = button.configuration?.contentInsets ?? .zero
-            return (title as NSString).size(withAttributes: [.font: font]).width
-                + imageWidth + 8 + insets.leading + insets.trailing <= available
-        }
-        let vertical = traitCollection.preferredContentSizeCategory.isAccessibilityCategory || !fits
-        let axis: NSLayoutConstraint.Axis = vertical ? .vertical : .horizontal
-        let distribution: UIStackView.Distribution = vertical ? .fill : .fillEqually
-        if historyControls.axis != axis { historyControls.axis = axis }
-        if historyControls.distribution != distribution { historyControls.distribution = distribution }
-        for (button, symbol) in [(historyFilterButton, "line.3.horizontal.decrease"),
-                                 (historySortButton, "arrow.up.arrow.down")] {
-            guard var configuration = button.configuration else { continue }
-            let insets = configuration.contentInsets
-            let titleWidth = shiftHistoryStack.bounds.width - insets.leading - insets.trailing
-            let words = (configuration.title ?? "").split(whereSeparator: \.isWhitespace)
-            let wordsFit = words.allSatisfy {
-                (String($0) as NSString).size(withAttributes: [.font: font]).width <= titleWidth
-            }
-            let image = vertical && !wordsFit ? nil : UIImage(systemName: symbol)
-            let placement: NSDirectionalRectEdge = vertical ? .top : .leading
-            if (configuration.image == nil) != (image == nil) || configuration.imagePlacement != placement {
-                configuration.image = image
-                configuration.imagePlacement = placement
-                button.configuration = configuration
-                button.invalidateIntrinsicContentSize()
-            }
-        }
+    func dismissHistoryKeyboard() {
+        historySearch.resignFirstResponder()
     }
 
     func focusHistoryFilters() {
-        UIAccessibility.post(notification: .layoutChanged, argument: historyFilterButton)
+        historySearch.focusOptionsForAccessibility()
     }
 
     func announceFilteredCount() {
@@ -888,6 +837,10 @@ final class OverviewView: UIView, UIScrollViewDelegate {
         calculationTitle.isHidden = homeShifts == nil || !content
         calculationShiftPicker.isHidden = homeShifts == nil || !content || calculationShiftPicker.menu == nil
         historyCard.isHidden = !shiftHistory || homeShifts != nil
+        let historySearchVisible = shiftHistory && showsShiftHistoryOnly
+        if historySearch.isHidden == historySearchVisible {
+            historySearch.isHidden = !historySearchVisible
+        }
         periodRailContainer.isHidden = !content || !showsPeriodNavigation
         perShiftHeading.isHidden = !content || showsPeriodNavigation
         contentCard.isHidden = !content

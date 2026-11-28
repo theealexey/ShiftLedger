@@ -26,6 +26,20 @@ struct ShiftHistoryQuery: Equatable {
     var minimum: Decimal?
     var maximum: Decimal?
     var sort: Sort = .newest
+    var searchText = ""
+
+    var hasSearch: Bool { !Self.normalized(searchText).isEmpty }
+
+    mutating func resetFilters() {
+        applyFilters(from: Self())
+    }
+
+    mutating func applyFilters(from draft: Self) {
+        dates = draft.dates
+        workTypeIDs = draft.workTypeIDs
+        minimum = draft.minimum
+        maximum = draft.maximum
+    }
 
     var activeGroups: Int {
         (dates == .all ? 0 : 1) + (workTypeIDs.isEmpty ? 0 : 1) + (minimum == nil && maximum == nil ? 0 : 1)
@@ -50,17 +64,27 @@ struct ShiftHistoryQuery: Equatable {
         }
     }
 
-    func results(_ history: [ShiftPayBreakdown], now: Date, timeZone: TimeZone) throws -> [ShiftPayBreakdown] {
+    func results(
+        _ history: [ShiftPayBreakdown], now: Date, timeZone: TimeZone,
+        workTypeNames: [UUID: String] = [:], searchDates: SearchDates? = nil,
+        locale: Locale = .current
+    ) throws -> [ShiftPayBreakdown] {
         for bound in [minimum, maximum].compactMap({ $0 }) where bound.isNaN || bound < 0 {
             throw ValidationError.amount
         }
         if let minimum, let maximum, minimum > maximum { throw ValidationError.amountRange }
         let bounds = try dateBounds(now: now, timeZone: timeZone)
+        let term = Self.normalized(searchText)
+        let dates = term.isEmpty ? nil
+            : searchDates ?? SearchDates(history: history, timeZone: timeZone, locale: locale)
         return history.filter { row in
             (bounds?.contains(row.shift.start) ?? true)
                 && (workTypeIDs.isEmpty || workTypeIDs.contains(row.shift.workTypeID))
                 && (minimum.map { row.basePay >= $0 } ?? true)
                 && (maximum.map { row.basePay <= $0 } ?? true)
+                && (term.isEmpty
+                    || Self.matches(workTypeNames[row.shift.workTypeID] ?? "", term: term, locale: locale)
+                    || (dates?.matches(row.shift.id, term: term, locale: locale) ?? false))
         }.sorted { lhs, rhs in
             if lhs.basePay != rhs.basePay {
                 if sort == .highest { return lhs.basePay > rhs.basePay }
@@ -82,6 +106,50 @@ struct ShiftHistoryQuery: Equatable {
                 let order = $0.name.compare($1.name, options: [.caseInsensitive, .numeric], locale: locale)
                 return order == .orderedSame ? $0.id.uuidString < $1.id.uuidString : order == .orderedAscending
             }
+    }
+
+    /// Prepared from the current history, shared across all edits to the query.
+    struct SearchDates {
+        private let byShift: [UUID: [String]]
+
+        init(history: [ShiftPayBreakdown], timeZone: TimeZone, locale: Locale) {
+            var calendar = Calendar(identifier: .gregorian)
+            calendar.timeZone = timeZone
+            let formatters = ["MMMMd", "yMMMMd", "MMMd", "yMMMd", "Md", "yMd", nil].map { template in
+                let formatter = DateFormatter()
+                formatter.locale = template == nil ? Locale(identifier: "en_US_POSIX") : locale
+                formatter.calendar = calendar
+                formatter.timeZone = timeZone
+                if let template {
+                    formatter.setLocalizedDateFormatFromTemplate(template)
+                } else {
+                    formatter.dateFormat = "yyyy-MM-dd"
+                }
+                return formatter
+            }
+            var byDay: [Date: [String]] = [:]
+            var byShift: [UUID: [String]] = [:]
+            for row in history {
+                let shift = row.shift
+                let day = calendar.startOfDay(for: shift.start)
+                let terms = byDay[day] ?? formatters.map { $0.string(from: day) }
+                byDay[day] = terms
+                byShift[shift.id] = terms
+            }
+            self.byShift = byShift
+        }
+
+        fileprivate func matches(_ id: UUID, term: String, locale: Locale) -> Bool {
+            byShift[id]?.contains { ShiftHistoryQuery.matches($0, term: term, locale: locale) } ?? false
+        }
+    }
+
+    private static func normalized(_ text: String) -> String {
+        text.split(whereSeparator: \.isWhitespace).joined(separator: " ")
+    }
+
+    private static func matches(_ value: String, term: String, locale: Locale) -> Bool {
+        normalized(value).range(of: term, options: [.caseInsensitive, .diacriticInsensitive], locale: locale) != nil
     }
 
     private static func earlier(_ lhs: Shift, _ rhs: Shift) -> Bool {

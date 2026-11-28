@@ -60,6 +60,14 @@ enum OverviewStrings {
 
 // Shifts history controls and filter form.
 enum ShiftHistoryStrings {
+    static var searchPlaceholder: String { String(localized: "shifts.history.searchPlaceholder") }
+    static var searchLabel: String { String(localized: "shifts.history.searchLabel") }
+    static var searchHint: String { String(localized: "shifts.history.searchHint") }
+    static var options: String { String(localized: "shifts.history.options") }
+    static var settings: String { String(localized: "shifts.history.settings") }
+    static var clearSearch: String { String(localized: "shifts.history.clearSearch") }
+    static var noSearchMatches: String { String(localized: "shifts.history.noSearchMatches") }
+    static var noCombinedMatches: String { String(localized: "shifts.history.noCombinedMatches") }
     static var filters: String { String(localized: "shifts.history.filters") }
     static var sort: String { String(localized: "shifts.history.sort") }
     static var sortCompact: String { String(localized: "shifts.history.sortCompact") }
@@ -87,8 +95,8 @@ enum ShiftHistoryStrings {
     static func active(_ count: Int) -> String {
         String.localizedStringWithFormat(String(localized: "shifts.history.active"), count)
     }
-    static func activeTitle(_ count: Int) -> String {
-        String.localizedStringWithFormat(String(localized: "shifts.history.activeTitle"), count)
+    static func optionsValue(_ count: Int, sort: ShiftHistoryQuery.Sort) -> String {
+        String.localizedStringWithFormat(String(localized: "shifts.history.optionsValue"), active(count), title(for: sort))
     }
     static func count(visible: Int, total: Int) -> String {
         String.localizedStringWithFormat(String(localized: "shifts.history.count"), visible, total)

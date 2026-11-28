@@ -14,6 +14,7 @@ final class OverviewViewController: UIViewController {
     private let shiftCardMapper: OverviewShiftCardMapper
     private let displayedCurrencyValue: (Decimal, String, Locale) -> Decimal?
     private let overviewView = OverviewView(frame: .zero)
+    private var historyCards: [UUID: OverviewView.ShiftCard]?
     var showsShiftHistoryOnly = false
 
     init(
@@ -58,17 +59,20 @@ final class OverviewViewController: UIViewController {
             overviewView.accessibilityIdentifier = "shifts.screen"
             overviewView.showsShiftHistoryOnly = true
             viewModel.showsShiftHistoryOnly = true
+            viewModel.historyDisplayLocale = displayLocale
         } else {
             let brand = OverviewNavigationBrandLabel()
             navigationItem.title = brand.text
             navigationItem.titleView = brand
         }
         bindView()
+        historyCards = nil
         viewModel.load()
         render()
     }
 
     func reload(selectingShiftID: UUID? = nil) {
+        historyCards = nil
         if let selectingShiftID {
             viewModel.reload(selectingShiftID: selectingShiftID)
         } else {
@@ -78,8 +82,9 @@ final class OverviewViewController: UIViewController {
     }
 
     func reload(job: Job) {
+        historyCards = nil
         viewModel.reload(job: job)
-        render()
+        if isViewLoaded { render() }
     }
 
     private func bindView() {
@@ -107,6 +112,15 @@ final class OverviewViewController: UIViewController {
                 render()
             }
         }
+        overviewView.onHistorySearch = { [weak self] text in
+            guard let self, viewModel.updateHistorySearch(text) else { return }
+            render()
+        }
+        overviewView.onHistoryClear = { [weak self] in
+            guard let self, viewModel.updateHistorySearch("") else { return }
+            render()
+            overviewView.announceFilteredCount()
+        }
         overviewView.onHistoryFilters = { [weak self] in self?.showHistoryFilters() }
         overviewView.onHistorySort = { [weak self] sort in
             guard let self else { return }
@@ -116,7 +130,7 @@ final class OverviewViewController: UIViewController {
         }
         overviewView.onHistoryReset = { [weak self] in
             guard let self else { return }
-            if viewModel.applyHistoryQuery(ShiftHistoryQuery(sort: viewModel.history.query.sort)) {
+            if viewModel.updateHistoryFilters(from: .init()) {
                 render()
                 overviewView.focusHistoryFilters()
                 overviewView.announceFilteredCount()
@@ -141,6 +155,7 @@ final class OverviewViewController: UIViewController {
             self?.checkPaycheck()
         }
         overviewView.onRetryTapped = { [weak self] in
+            self?.historyCards = nil
             self?.viewModel.load()
             self?.render()
         }
@@ -161,13 +176,7 @@ final class OverviewViewController: UIViewController {
         if showsShiftHistoryOnly {
             let history = viewModel.history
             do {
-                let mapper = OverviewShiftCardMapper(
-                    currencyCode: viewModel.historyCurrencyCode,
-                    timeZoneIdentifier: viewModel.historyTimeZone?.identifier ?? timeZoneIdentifier,
-                    displayLocale: displayLocale
-                )
-                let cards = try mapper.map(history.visible, workTypeNames: content.workTypeNames,
-                                           selectedShiftID: history.selectedID, expandedShiftID: history.expandedID)
+                let cards = try cardsForVisibleHistory(history, content: content)
                 overviewView.renderHistoryOnly(cards, totalCount: history.totalCount, query: history.query)
             } catch {
                 renderFailure(.calculation)
@@ -231,6 +240,53 @@ final class OverviewViewController: UIViewController {
         }
     }
 
+    private enum HistoryCardError: Error {
+        case inconsistentHistory
+    }
+
+    private func cardsForVisibleHistory(
+        _ history: OverviewViewModel.History, content: OverviewViewModel.Content
+    ) throws -> [OverviewView.ShiftCard] {
+        if let historyCards, let cards = orderedCards(for: history, in: historyCards) {
+            return cards
+        }
+
+        historyCards = nil
+        let mapper = OverviewShiftCardMapper(
+            currencyCode: viewModel.historyCurrencyCode,
+            timeZoneIdentifier: viewModel.historyTimeZone?.identifier ?? timeZoneIdentifier,
+            displayLocale: displayLocale
+        )
+        let mapped = try mapper.map(content.shiftHistoryBreakdowns, workTypeNames: content.workTypeNames,
+                                    selectedShiftID: nil, expandedShiftID: nil)
+        var rebuilt: [UUID: OverviewView.ShiftCard] = [:]
+        rebuilt.reserveCapacity(mapped.count)
+        for card in mapped {
+            guard rebuilt.updateValue(card, forKey: card.id) == nil else {
+                throw HistoryCardError.inconsistentHistory
+            }
+        }
+        guard let cards = orderedCards(for: history, in: rebuilt) else {
+            throw HistoryCardError.inconsistentHistory
+        }
+        historyCards = rebuilt
+        return cards
+    }
+
+    private func orderedCards(
+        for history: OverviewViewModel.History, in cache: [UUID: OverviewView.ShiftCard]
+    ) -> [OverviewView.ShiftCard]? {
+        var cards: [OverviewView.ShiftCard] = []
+        cards.reserveCapacity(history.visible.count)
+        for row in history.visible {
+            guard var card = cache[row.shift.id] else { return nil }
+            card.isSelected = card.id == history.selectedID
+            card.isExpanded = card.id == history.expandedID
+            cards.append(card)
+        }
+        return cards
+    }
+
     private func showHistoryFilters() {
         guard let timeZone = viewModel.historyTimeZone else { return }
         let sheet = ShiftHistoryFiltersViewController(
@@ -240,7 +296,7 @@ final class OverviewViewController: UIViewController {
         )
         var applied = false
         sheet.onApply = { [weak self] query in
-            guard let self, viewModel.applyHistoryQuery(query) else { return false }
+            guard let self, viewModel.updateHistoryFilters(from: query) else { return false }
             applied = true
             render()
             return true
@@ -249,6 +305,7 @@ final class OverviewViewController: UIViewController {
             self?.overviewView.focusHistoryFilters()
             if applied { self?.overviewView.announceFilteredCount() }
         }
+        overviewView.dismissHistoryKeyboard()
         let navigation = UINavigationController(rootViewController: sheet)
         navigation.modalPresentationStyle = .pageSheet
         navigation.sheetPresentationController?.detents = [.large()]

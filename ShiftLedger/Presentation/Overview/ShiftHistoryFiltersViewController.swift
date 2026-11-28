@@ -262,7 +262,7 @@ final class ShiftHistoryFiltersViewController: UIViewController, UIAdaptivePrese
     }
 
     private func resetDraft() {
-        draft = ShiftHistoryQuery(sort: draft.sort)
+        draft.resetFilters()
         dateMode = .all
         first.date = now
         last.date = now

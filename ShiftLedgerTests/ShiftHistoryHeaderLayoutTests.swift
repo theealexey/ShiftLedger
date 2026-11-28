@@ -6,7 +6,7 @@ import Testing
 struct ShiftHistoryHeaderLayoutTests {
     @Test(arguments: [UIContentSizeCategory.large, .accessibilityExtraExtraExtraLarge],
           [false, true])
-    func buttonsUseReadableLayoutAt320(category: UIContentSizeCategory, active: Bool) throws {
+    func searchFieldUsesReadableLayoutAt320(category: UIContentSizeCategory, active: Bool) throws {
         let host = UIViewController()
         host.traitOverrides.preferredContentSizeCategory = category
         let view = OverviewView()
@@ -28,48 +28,34 @@ struct ShiftHistoryHeaderLayoutTests {
             if parent.accessibilityIdentifier == id { return parent }
             return parent.subviews.lazy.compactMap { find(id, in: $0) }.first
         }
-        let filter = try #require(find("shiftHistory.filters", in: view) as? UIButton)
-        let sort = try #require(find("shiftHistory.sort", in: view) as? UIButton)
-        let filterTitle = active ? ShiftHistoryStrings.filters + " (1)" : ShiftHistoryStrings.filters
-        let sortTitle = ShiftHistoryStrings.sort
-        #expect(["Фильтры", "Filters"].contains(ShiftHistoryStrings.filters))
-        #expect(["Сортировка", "Sort"].contains(sortTitle))
-        host.view.setNeedsLayout()
+        let language = try #require(Bundle.main.preferredLocalizations.first)
+        let field = try #require(find("shiftHistory.search", in: view) as? UISearchTextField)
+        view.renderHistoryOnly([], totalCount: 0, query: .init(minimum: active ? 1 : nil, searchText: "Nov"))
         window.layoutIfNeeded()
-        view.setNeedsLayout()
-        window.layoutIfNeeded()
-        let stack = try #require(filter.superview as? UIStackView)
-        let font = UIFont.preferredFont(forTextStyle: .callout, compatibleWith: filter.traitCollection)
-        print("SL567 layout window=\(window.bounds) host=\(host.view.bounds) overview=\(view.bounds) history=\(stack.superview?.bounds ?? .zero) traits=\(host.traitCollection.preferredContentSizeCategory.rawValue)/\(view.traitCollection.preferredContentSizeCategory.rawValue)/\(filter.traitCollection.preferredContentSizeCategory.rawValue)/\(sort.traitCollection.preferredContentSizeCategory.rawValue) font=\(font.pointSize) titles=\(filterTitle),\(sortTitle) widths=\((filterTitle as NSString).size(withAttributes:[.font:font]).width),\((sortTitle as NSString).size(withAttributes:[.font:font]).width) axis=\(stack.axis.rawValue) distribution=\(stack.distribution.rawValue)")
-        #expect(abs(view.bounds.width - 320) < 0.5)
-        #expect(view.traitCollection.preferredContentSizeCategory == category)
-        #expect(filter.traitCollection.preferredContentSizeCategory == category)
-        #expect(sort.traitCollection.preferredContentSizeCategory == category)
-        if category.isAccessibilityCategory {
-            #expect(stack.axis == .vertical)
-            #expect(filter.configuration?.imagePlacement == .top)
-            #expect(sort.configuration?.imagePlacement == .top)
+        let clear = try #require(find("shiftHistory.clearSearch", in: field))
+        let options = try #require(find("shiftHistory.searchOptions", in: field))
+        do {
+            #expect(abs(view.bounds.width - 320) < 0.5)
+            #expect(abs(field.bounds.width - 288) < 0.5)
+            #expect(field.traitCollection.preferredContentSizeCategory == category)
+            let body = UIFont.preferredFont(forTextStyle: .body, compatibleWith: field.traitCollection)
+            #expect(abs((field.font?.pointSize ?? 0) - body.pointSize) < 0.5)
+            #expect(!field.adjustsFontSizeToFitWidth)
+            #expect(!clear.isHidden)
+            #expect(field.placeholder == (language == "ru" ? "Поиск" : "Search"))
+            #expect(options.accessibilityLabel == (language == "ru" ? "Параметры поиска" : "Search options"))
+            #expect(options.accessibilityValue == ShiftHistoryStrings.optionsValue(active ? 1 : 0, sort: .newest))
+            let clearRect = clear.convert(clear.bounds, to: field)
+            let menuRect = options.convert(options.bounds, to: field)
+            for rect in [clearRect, menuRect] {
+                #expect(rect.width >= 43.99 && rect.height >= 43.99)
+                #expect(field.bounds.contains(rect))
+                #expect(!field.editingRect(forBounds: field.bounds).intersects(rect))
+            }
+            #expect(!clearRect.intersects(menuRect))
         }
-        #expect(filter.bounds.width >= 44 && filter.bounds.height >= 44)
-        #expect(sort.bounds.width >= 44 && sort.bounds.height >= 44)
-        #expect(filter.accessibilityLabel == ShiftHistoryStrings.filters)
-        let fullSort = ShiftHistoryStrings.sort
-        let sortWidth = (fullSort as NSString).size(withAttributes: [.font: font]).width
-        let insets = try #require(sort.configuration).contentInsets
-        let expectedSort = sortWidth <= stack.bounds.width - insets.leading - insets.trailing
-            ? fullSort : ShiftHistoryStrings.sortCompact
-        #expect(sort.accessibilityLabel == fullSort)
-        for (button, expected) in [(filter, filterTitle), (sort, expectedSort)] {
-            let label = try #require(button.titleLabel)
-            let frame = button.convert(label.bounds, from: label)
-            print("SL567 button=\(expected) bounds=\(button.bounds) titleFrame=\(frame) font=\(label.font.pointSize) imagePlacement=\(String(describing: button.configuration?.imagePlacement))")
-            #expect(button.configuration?.title == expected)
-            #expect(label.numberOfLines == 0)
-            #expect(abs(label.font.pointSize - font.pointSize) < 0.5)
-            #expect(label.bounds.height + 1 >= label.sizeThatFits(CGSize(width: label.bounds.width, height: .greatestFiniteMagnitude)).height)
-            #expect(frame.minX >= -0.5 && frame.maxX <= button.bounds.width + 0.5)
-            #expect(frame.minY >= -0.5 && frame.maxY <= button.bounds.height + 0.5)
-        }
-        #expect(stack.axis == .vertical ? filter.frame.maxY <= sort.frame.minY : filter.frame.maxX <= sort.frame.minX)
+        view.renderHistoryOnly([], totalCount: 0, query: .init())
+        #expect(clear.isHidden)
+        #expect(!options.isHidden)
     }
 }

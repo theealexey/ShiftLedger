@@ -2892,8 +2892,8 @@ extension ShiftLedgerUITests {
         let newID = try XCTUnwrap(homeIDs.map(ledgerCardID(for:)).first { $0 != oldID })
         app.tabBars.buttons["Shifts"].tap()
 
-        let filters = app.buttons["shiftHistory.filters"]
-        let sort = app.buttons["shiftHistory.sort"]
+        let filters = app.buttons["shiftHistory.searchOptions"]
+        let sort = app.buttons["shiftHistory.searchOptions"]
         let apply = app.buttons["shiftHistory.apply"]
         let filterScroll = app.scrollViews["shiftHistory.filterScroll"]
         let historyScroll = app.scrollViews["overview.pageScroll"]
@@ -2901,14 +2901,14 @@ extension ShiftLedgerUITests {
         func sheetButton(_ id: String) throws -> XCUIElement {
             try scrollToHittable(requerying: { app.buttons["shiftHistory." + id] }, in: app, direction: .towardBottom, scrollView: filterScroll, message: "Filter action \(id)")
         }
-        filters.tap()
+        openHistorySearchSettings(in: app)
         XCTAssertTrue(filterScroll.waitForExistence(timeout: 5))
         attachScreenshot(named: "SL567-en-filters", from: app)
         app.buttons["shiftHistory.date.month"].tap()
         app.navigationBars.buttons["shiftHistory.cancel"].tap()
         XCTAssertEqual(rows.allElementsBoundByIndex.map(\.identifier), [newID, oldID])
 
-        sort.tap()
+        openHistorySort(in: app)
         attachScreenshot(named: "SL567-en-sort", from: app)
         for (index, scenario) in [
             ("Oldest first", [oldID, newID]),
@@ -2916,11 +2916,11 @@ extension ShiftLedgerUITests {
             ("Lowest amount first", [newID, oldID]),
             ("Highest amount first", [oldID, newID])
         ].enumerated() {
-            if index > 0 { sort.tap() }
+            if index > 0 { openHistorySort(in: app) }
             app.buttons[scenario.0].tap()
-            XCTAssertEqual(sort.value as? String, scenario.0)
+            XCTAssertTrue((sort.value as? String)?.contains(scenario.0) == true)
             XCTAssertEqual(rows.allElementsBoundByIndex.map(\.identifier), scenario.1)
-            sort.tap()
+            openHistorySort(in: app)
             let selected = app.buttons[scenario.0]
             XCTAssertTrue(selected.exists)
             XCTAssertTrue(selected.isSelected, "Current sort should expose its selected state")
@@ -2931,7 +2931,8 @@ extension ShiftLedgerUITests {
         try scrollToHittable(requerying: { app.buttons[newID] }, in: app, direction: .towardBottom, scrollView: historyScroll, message: "Next sorted shift").tap()
         XCTAssertTrue(app.buttons[newID + ".edit"].exists)
         XCTAssertFalse(app.buttons[oldID + ".edit"].exists)
-        try scrollToHittable(filters, in: app, direction: .towardTop, message: "Filters after expansion").tap()
+        _ = try scrollToHittable(filters, in: app, direction: .towardTop, message: "Filters after expansion")
+        openHistorySearchSettings(in: app)
         let field = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND label == %@",
                                                       "shiftHistory.workType.", "Field")).firstMatch
         XCTAssertTrue(field.exists)
@@ -2942,8 +2943,12 @@ extension ShiftLedgerUITests {
         app.toolbars.buttons["Done"].tap()
         try sheetButton("apply").tap()
         XCTAssertTrue(app.staticTexts["Showing 1 of 2"].waitForExistence(timeout: 5))
-        XCTAssertEqual(filters.value as? String, "2 active filter groups")
+        XCTAssertTrue((filters.value as? String)?.contains("2 active filter groups") == true)
         XCTAssertEqual(rows.allElementsBoundByIndex.map(\.identifier), [newID])
+        let search = app.textFields["shiftHistory.search"]
+        search.tap()
+        search.typeText("Field\n")
+        XCTAssertTrue(app.staticTexts["Showing 1 of 2"].exists)
         attachScreenshot(named: "SL567-en-active", from: app)
         let edit = try scrollToHittable(requerying: { app.buttons[newID + ".edit"] }, in: app,
                                         direction: .towardBottom, scrollView: historyScroll, message: "Filtered edit")
@@ -2953,11 +2958,14 @@ extension ShiftLedgerUITests {
         app.cells["Desk"].tap()
         app.navigationBars.buttons["Save"].tap()
         XCTAssertTrue(app.staticTexts["Showing 0 of 2"].waitForExistence(timeout: 5))
-        XCTAssertEqual(filters.value as? String, "2 active filter groups")
+        XCTAssertTrue((filters.value as? String)?.contains("2 active filter groups") == true)
         XCTAssertFalse(app.buttons[newID].exists)
         XCTAssertFalse(app.buttons[newID + ".edit"].exists)
         attachScreenshot(named: "SL567-en-edit-exits", from: app)
         app.buttons["shiftHistory.reset"].tap()
+        XCTAssertEqual(search.value as? String, "Field")
+        XCTAssertTrue(app.staticTexts["No shifts match your search"].exists)
+        app.buttons["shiftHistory.clearResults"].tap()
         XCTAssertTrue(app.buttons[newID].exists)
         attachScreenshot(named: "SL567-en-edit-restored", from: app)
         XCTAssertEqual(rows.allElementsBoundByIndex.map(\.identifier), [newID, oldID])
@@ -2973,7 +2981,8 @@ extension ShiftLedgerUITests {
             XCTAssertTrue(description.contains("Exact contribution: €1.004"), description)
         }
 
-        try scrollToHittable(filters, in: app, direction: .towardTop, message: "Filters after edit").tap()
+        _ = try scrollToHittable(filters, in: app, direction: .towardTop, message: "Filters after edit")
+        openHistorySearchSettings(in: app)
         app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND label == %@", "shiftHistory.workType.", "Desk")).firstMatch.tap()
         let minAfterEdit = app.textFields["shiftHistory.amount.minimum"]
         try scrollToHittable(requerying: { minAfterEdit }, in: app, direction: .towardBottom, scrollView: filterScroll, message: "Minimum after edit").tap()
@@ -2981,11 +2990,12 @@ extension ShiftLedgerUITests {
         app.toolbars.buttons["Done"].tap()
         try sheetButton("apply").tap()
         XCTAssertTrue(app.staticTexts["Showing 2 of 2"].waitForExistence(timeout: 5))
-        try scrollToHittable(filters, in: app, direction: .towardTop, message: "Filters before draft reset").tap()
+        _ = try scrollToHittable(filters, in: app, direction: .towardTop, message: "Filters before draft reset")
+        openHistorySearchSettings(in: app)
         try sheetButton("resetDraft").tap()
         app.navigationBars.buttons["shiftHistory.cancel"].tap()
         XCTAssertTrue(app.staticTexts["Showing 2 of 2"].exists)
-        filters.tap()
+        openHistorySearchSettings(in: app)
         let maximum = app.textFields["shiftHistory.amount.maximum"]
         try scrollToHittable(requerying: { maximum }, in: app, direction: .towardBottom, scrollView: filterScroll, message: "Maximum amount").tap()
         maximum.typeText("0")
@@ -3002,7 +3012,7 @@ extension ShiftLedgerUITests {
         attachScreenshot(named: "SL567-en-empty", from: app)
         app.buttons["shiftHistory.reset"].tap()
         XCTAssertEqual(rows.allElementsBoundByIndex.map(\.identifier), [newID, oldID])
-        XCTAssertEqual(sort.value as? String, "Highest amount first")
+        XCTAssertTrue((sort.value as? String)?.contains("Highest amount first") == true)
         app.tabBars.buttons["Home"].tap()
         XCTAssertEqual(homeRecentCards(in: app).map(\.identifier), homeIDs)
         app.terminate()
@@ -3010,10 +3020,10 @@ extension ShiftLedgerUITests {
         for size in ["L", "AccessibilityXXXL"] {
             let russian = launchRussianTabs(size: size)
             russian.tabBars.buttons["Смены"].tap()
-            let button = russian.buttons["shiftHistory.filters"]
+            let button = russian.buttons["shiftHistory.searchOptions"]
             _ = try scrollToHittable(button, in: russian, direction: .towardBottom, message: "RU filter controls")
             attachScreenshot(named: "SL567-ru-\(size)-header", from: russian)
-            button.tap()
+            openHistorySearchSettings(in: russian, russian: true)
             let form = russian.scrollViews["shiftHistory.filterScroll"]
             XCTAssertTrue(form.waitForExistence(timeout: 5))
             XCTAssertTrue(russian.buttons["shiftHistory.date.all"].exists)
@@ -3036,7 +3046,7 @@ extension ShiftLedgerUITests {
         let fixtureStart = try XCTUnwrap(calendar.date(bySettingHour: 8, minute: 0, second: 0, of: .now))
         try addCalendarShift(start: fixtureStart, calendar: calendar, in: app)
         app.tabBars.buttons["Shifts"].tap()
-        XCTAssertTrue(app.buttons["shiftHistory.filters"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["shiftHistory.searchOptions"].waitForExistence(timeout: 10))
         attachScreenshot(named: "SL567-en-L-header", from: app)
         app.terminate()
 
@@ -3045,16 +3055,34 @@ extension ShiftLedgerUITests {
                                    "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"]
         english.launch()
         english.tabBars.buttons["Shifts"].tap()
-        let enFilter = english.buttons["shiftHistory.filters"]
+        let enFilter = english.buttons["shiftHistory.searchOptions"]
         _ = try scrollToHittable(enFilter, in: english, direction: .towardBottom, message: "English AXXXL controls")
         attachScreenshot(named: "SL567-en-AXXXL-header", from: english)
         english.terminate()
 
+        let ruLarge = launchRussianTabs(size: "L")
+        ruLarge.tabBars.buttons["Смены"].tap()
+        XCTAssertTrue(ruLarge.textFields["shiftHistory.search"].waitForExistence(timeout: 5))
+        attachScreenshot(named: "SL568-ru-large-empty", from: ruLarge)
+        ruLarge.terminate()
+
         let appRU = launchRussianTabs(size: "AccessibilityXXXL")
         appRU.tabBars.buttons["Смены"].tap()
-        let filter = appRU.buttons["shiftHistory.filters"]
+        let filter = appRU.buttons["shiftHistory.searchOptions"]
         _ = try scrollToHittable(filter, in: appRU, direction: .towardBottom, message: "RU AXXXL filters")
+        let search = appRU.textFields["shiftHistory.search"]
+        search.tap()
+        search.typeText("смена")
+        XCTAssertTrue(appRU.buttons["shiftHistory.clearSearch"].isHittable)
+        let searchShot = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+        searchShot.name = "SL568-ru-AXXXL-search-keyboard"
+        searchShot.lifetime = .keepAlways
+        add(searchShot)
         filter.tap()
+        let settings = appRU.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Настройки поиска")).firstMatch
+        XCTAssertTrue(settings.waitForExistence(timeout: 5))
+        attachScreenshot(named: "SL568-ru-AXXXL-menu", from: appRU)
+        settings.tap()
         let scroll = appRU.scrollViews["shiftHistory.filterScroll"]
         XCTAssertTrue(scroll.waitForExistence(timeout: 5))
         let custom = appRU.buttons["shiftHistory.date.custom"]
@@ -3091,6 +3119,93 @@ extension ShiftLedgerUITests {
         _ = try scrollToHittable(filter, in: appRU, direction: .towardTop, message: "Active RU filter")
         attachScreenshot(named: "SL567-ru-AXXXL-active", from: appRU)
         appRU.terminate()
+    }
+
+    @MainActor
+    private func openHistorySearchSettings(in app: XCUIApplication, russian: Bool = false) {
+        app.buttons["shiftHistory.searchOptions"].tap()
+        let title = russian ? "Настройки поиска" : "Search settings"
+        let settings = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", title)).firstMatch
+        XCTAssertTrue(settings.waitForExistence(timeout: 5))
+        settings.tap()
+    }
+
+    @MainActor
+    private func openHistorySort(in app: XCUIApplication, title: String = "Sort") {
+        app.buttons["shiftHistory.searchOptions"].tap()
+        app.buttons[title].tap()
+    }
+
+    @MainActor
+    func testSL568SearchWithPersistedShift() throws {
+        let app = makeApplication(resetStore: true)
+        app.launch()
+        try completeFixedPerShiftOnboarding(in: app, scheduledPayroll: false, name: "Night Desk", pay: "12")
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = .autoupdatingCurrent
+        let start = try XCTUnwrap(calendar.date(bySettingHour: 8, minute: 0, second: 0, of: .now))
+        try addCalendarShift(start: start, calendar: calendar, in: app)
+        let id = try firstShiftCardIdentifier(in: app)
+        app.tabBars.buttons["Shifts"].tap()
+        let search = app.textFields["shiftHistory.search"]
+        XCTAssertTrue(search.waitForExistence(timeout: 5))
+        attachScreenshot(named: "SL568-en-empty", from: app)
+        search.tap()
+        search.typeText("night")
+        XCTAssertTrue(app.staticTexts["Showing 1 of 1"].exists)
+        let keyboard = XCUIScreen.main.screenshot()
+        let screenshot = XCTAttachment(screenshot: keyboard)
+        screenshot.name = "SL568-en-keyboard"
+        screenshot.lifetime = .keepAlways
+        add(screenshot)
+        XCTAssertTrue(app.buttons["shiftHistory.clearSearch"].isHittable)
+        XCTAssertTrue(app.buttons["shiftHistory.searchOptions"].isHittable)
+        openHistorySearchSettings(in: app)
+        let scroll = app.scrollViews["shiftHistory.filterScroll"]
+        XCTAssertTrue(scroll.waitForExistence(timeout: 5))
+        attachScreenshot(named: "SL568-en-filter-sheet", from: app)
+        let maximum = app.textFields["shiftHistory.amount.maximum"]
+        try scrollToHittable(requerying: { maximum }, in: app, direction: .towardBottom,
+                             scrollView: scroll, message: "Combined search maximum").tap()
+        maximum.typeText("0")
+        app.toolbars.buttons["Done"].tap()
+        try scrollToHittable(requerying: { app.buttons["shiftHistory.apply"] }, in: app,
+                             direction: .towardBottom, scrollView: scroll, message: "Apply").tap()
+        XCTAssertEqual(search.value as? String, "night")
+        XCTAssertTrue(app.staticTexts["No shifts match your search and filters"].exists)
+        XCTAssertTrue(app.buttons["shiftHistory.clearResults"].exists)
+        attachScreenshot(named: "SL568-en-combined-empty", from: app)
+        app.buttons["shiftHistory.reset"].tap()
+        XCTAssertEqual(search.value as? String, "night")
+        XCTAssertTrue(app.buttons[id].exists)
+        openHistorySort(in: app)
+        XCTAssertTrue(app.buttons["Newest first"].isSelected)
+        attachScreenshot(named: "SL568-en-sort", from: app)
+        app.buttons["Oldest first"].tap()
+        XCTAssertEqual(search.value as? String, "night")
+        app.buttons["shiftHistory.clearSearch"].tap()
+        search.tap()
+        let date = DateFormatter()
+        date.calendar = calendar
+        date.timeZone = calendar.timeZone
+        date.locale = Locale(identifier: "en_US_POSIX")
+        date.dateFormat = "yyyy-MM-dd"
+        search.typeText(date.string(from: start))
+        XCTAssertTrue(app.buttons[id].exists)
+        XCTAssertTrue(app.staticTexts["Showing 1 of 1"].exists)
+        attachScreenshot(named: "SL568-en-date-results", from: app)
+        app.buttons["shiftHistory.clearSearch"].tap()
+        search.typeText("unmatched")
+        XCTAssertTrue(app.staticTexts["No shifts match your search"].exists)
+        XCTAssertFalse(app.buttons["shiftHistory.reset"].exists)
+        search.typeText("\n")
+        XCTAssertTrue(app.keyboards.firstMatch.waitForNonExistence(timeout: 5))
+        attachScreenshot(named: "SL568-en-search-empty", from: app)
+        app.buttons["shiftHistory.clearResults"].tap()
+        XCTAssertTrue(app.buttons[id].exists)
+        app.buttons[id].tap()
+        app.buttons[id + ".edit"].tap()
+        XCTAssertTrue(app.scrollViews["editShift.screen"].waitForExistence(timeout: 5))
     }
 
 }

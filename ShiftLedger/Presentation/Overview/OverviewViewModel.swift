@@ -46,6 +46,11 @@ final class OverviewViewModel {
     var historyCurrencyCode: String { job.currencyCode }
     var historyReferenceDate: Date { currentDate() }
 
+    var historyDisplayLocale = CurrencySelectionItem.applicationDisplayLocale {
+        didSet { if oldValue != historyDisplayLocale { historySearchDates = nil } }
+    }
+    private var historySearchDates: ShiftHistoryQuery.SearchDates?
+
     private var job: Job
     private let loadShifts: @MainActor (UUID) throws -> [Shift]
     private let currentDate: @MainActor () -> Date
@@ -101,9 +106,16 @@ final class OverviewViewModel {
 
     @discardableResult
     func applyHistoryQuery(_ query: ShiftHistoryQuery) -> Bool {
-        guard showsShiftHistoryOnly, case let .content(content) = state, let timeZone = historyTimeZone,
-              let visible = try? query.results(content.shiftHistoryBreakdowns, now: currentDate(), timeZone: timeZone)
-        else { return false }
+        guard showsShiftHistoryOnly, case let .content(content) = state,
+              let timeZone = historyTimeZone else { return false }
+        if query.hasSearch, historySearchDates == nil {
+            historySearchDates = .init(history: content.shiftHistoryBreakdowns, timeZone: timeZone,
+                                       locale: historyDisplayLocale)
+        }
+        guard let visible = try? query.results(
+            content.shiftHistoryBreakdowns, now: currentDate(), timeZone: timeZone,
+            workTypeNames: content.workTypeNames, searchDates: historySearchDates, locale: historyDisplayLocale
+        ) else { return false }
         history.query = query
         history.visible = visible
         history.totalCount = content.shiftHistoryBreakdowns.count
@@ -112,6 +124,21 @@ final class OverviewViewModel {
             history.expandedID = nil
         }
         return true
+    }
+
+    @discardableResult
+    func updateHistorySearch(_ text: String) -> Bool {
+        guard text != history.query.searchText else { return false }
+        var query = history.query
+        query.searchText = text
+        return applyHistoryQuery(query)
+    }
+
+    @discardableResult
+    func updateHistoryFilters(from draft: ShiftHistoryQuery) -> Bool {
+        var query = history.query
+        query.applyFilters(from: draft)
+        return applyHistoryQuery(query)
     }
 
     func tapHistoryRow(_ id: UUID) {
@@ -240,6 +267,7 @@ final class OverviewViewModel {
         preservingSelection: Bool,
         selectingShiftID: UUID? = nil
     ) {
+        historySearchDates = nil
         let loadedShifts: [Shift]
         do {
             loadedShifts = try loadShifts(job.id)

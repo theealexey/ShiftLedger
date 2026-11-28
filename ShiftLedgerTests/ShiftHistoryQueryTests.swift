@@ -66,6 +66,41 @@ struct ShiftHistoryQueryTests {
         }
     }
 
+    @Test(arguments: [
+        ("ru_RU", "27 ноября"), ("ru_RU", "27 ноя"), ("ru_RU", "27.11.2026"),
+        ("en_US", "November 27"), ("en_US", "Nov 27"), ("en_US", "11/27/2026"),
+        ("en_US", "2026-11-27")
+    ])
+    func localizedStartDatesUseJobTimeZone(localeID: String, term: String) throws {
+        let zone = try #require(TimeZone(identifier: "Europe/Stockholm"))
+        let day = try LocalDate(year: 2026, month: 11, day: 27).startOfDay(in: zone)
+        let localMorning = try row(id: 1, start: day.timeIntervalSince1970 + 60, amount: "1")
+        let overnight = try row(id: 2, start: day.timeIntervalSince1970 - 60, amount: "1")
+        let matches = try ShiftHistoryQuery(searchText: term).results(
+            [localMorning, overnight], now: day, timeZone: zone, locale: Locale(identifier: localeID)
+        )
+        #expect(matches == [localMorning])
+    }
+
+    @Test func workTypeMatchingAndFiltersUseExactAmounts() throws {
+        let low = try row(id: 1, start: 0, amount: "1.003")
+        let high = try row(id: 2, start: 3600, amount: "1.004")
+        let unnamed = try row(id: 3, start: 7200, amount: "2", workType: otherWorkID)
+        let names = [workID: "Café   Ночь", otherWorkID: AddShiftStrings.unnamedWorkType]
+        let rows = [low, high, unnamed]
+        let start = Date(timeIntervalSince1970: 0)
+        var query = ShiftHistoryQuery(workTypeIDs: [workID], sort: .highest, searchText: "  CAFE\nНОЧЬ  ")
+        #expect(query.activeGroups == 1)
+        #expect(try query.results(rows, now: start, timeZone: .gmt, workTypeNames: names, locale: locale) == [high, low])
+        query.minimum = high.basePay
+        #expect(try query.results(rows, now: start, timeZone: .gmt, workTypeNames: names, locale: locale) == [high])
+        query.resetFilters()
+        #expect(query.sort == .highest)
+        #expect(query.searchText == "  CAFE\nНОЧЬ  ")
+        query.searchText = AddShiftStrings.unnamedWorkType
+        #expect(try query.results(rows, now: start, timeZone: .gmt, workTypeNames: names, locale: locale) == [unnamed])
+    }
+
     private func row(id: UInt8, start: TimeInterval, duration: TimeInterval = 3600, amount: String,
                      workType: UUID? = nil) throws -> ShiftPayBreakdown {
         let date = Date(timeIntervalSince1970: start)

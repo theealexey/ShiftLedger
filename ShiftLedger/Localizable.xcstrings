@@ -1339,11 +1339,67 @@
         "ru" : { "stringUnit" : { "state" : "translated", "value" : "Активных групп фильтров: %lld" } }
       }
     },
-    "shifts.history.activeTitle" : {
+    "shifts.history.optionsValue" : {
       "extractionState" : "manual",
       "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Filters (%lld)" } },
-        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Фильтры (%lld)" } }
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "%1$@. Sort: %2$@" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "%1$@. Сортировка: %2$@" } }
+      }
+    },
+    "shifts.history.noCombinedMatches" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "No shifts match your search and filters" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Нет смен по этому запросу и фильтрам" } }
+      }
+    },
+    "shifts.history.noSearchMatches" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "No shifts match your search" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Нет смен по этому запросу" } }
+      }
+    },
+    "shifts.history.clearSearch" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Clear search" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Очистить поиск" } }
+      }
+    },
+    "shifts.history.settings" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Search settings" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Настройки поиска" } }
+      }
+    },
+    "shifts.history.options" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Search options" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Параметры поиска" } }
+      }
+    },
+    "shifts.history.searchHint" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Search by work type or start date" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Поиск по виду работы или дате начала" } }
+      }
+    },
+    "shifts.history.searchLabel" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Search shifts" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Поиск смен" } }
+      }
+    },
+    "shifts.history.searchPlaceholder" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Search" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Поиск" } }
       }
     },
     "shifts.history.count" : {
